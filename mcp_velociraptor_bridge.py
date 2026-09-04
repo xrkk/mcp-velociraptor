@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 import os
 import asyncio
@@ -7,17 +7,20 @@ import json
 import logging
 import re
 from velociraptor_api import *
+from velociraptor_mcp_core import TargetContext, VelociraptorBackend
 
 
 # Keep stdio responses clean by suppressing chatty MCP library info logs.
 logging.getLogger("mcp").setLevel(logging.WARNING)
 
-mcp = FastMCP("velociraptor-mcp")
+mcp = MCPServer("velociraptor-mcp")
 
 # velociraptor_api loads repo-local .env before resolving VELOCIRAPTOR_API_CONFIG,
 # ./api_client.yaml, or ~/.config/api_client.yaml.
 init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
 api_list_orgs = list_orgs
+velociraptor_backend = VelociraptorBackend()
+target_context = TargetContext(velociraptor_backend)
 
 ArtifactParameters = dict[str, ParameterValue]
 ENABLE_DANGEROUS_TOOLS = os.environ.get("ENABLE_DANGEROUS_TOOLS", "").strip().lower() in {

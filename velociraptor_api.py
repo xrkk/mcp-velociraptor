@@ -300,11 +300,16 @@ def resolve_org_id(org_id: str | None = None) -> str | None:
     return resolved or None
 
 
-def run_vql_query(vql: str, org_id: str | None = None):
+def run_vql_query(
+    vql: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+):
     if stub is None:
         raise RuntimeError("Stub not initialized. Call init_stub() first.")
     request = api_pb2.VQLCollectorArgs(Query=[api_pb2.VQLRequest(VQL=vql)])
-    resolved_org_id = resolve_org_id(org_id)
+    resolved_org_id = None if root_org else resolve_org_id(org_id)
     if resolved_org_id:
         request.org_id = resolved_org_id
     results = []
@@ -401,6 +406,28 @@ def list_all_clients(
         f"ORDER BY LastSeen DESC LIMIT {int(limit)}"
     )
     return run_vql_query(vql, org_id=org_id)
+
+
+def list_windows_clients_strict() -> list[dict]:
+    """Return every root-org client whose reported OS is exactly Windows."""
+    vql = (
+        "SELECT client_id, os_info.system AS system, "
+        "os_info.hostname AS hostname, os_info.fqdn AS fqdn "
+        "FROM clients() "
+        "WHERE os_info.system =~ '(?i)^windows$' "
+        "ORDER BY client_id"
+    )
+    return run_vql_query(vql, root_org=True)
+
+
+def client_id_exists(client_id: str) -> bool:
+    """Check one exact client id in the root org without guessing a replacement."""
+    rows = run_vql_query(
+        "SELECT client_id FROM clients() "
+        f"WHERE client_id = {vql_literal(client_id)} LIMIT 2",
+        root_org=True,
+    )
+    return bool(rows)
 
 
 def start_hunt(
@@ -569,6 +596,8 @@ def start_collection(
     parameters: Mapping[str, ParameterValue] | None = None,
     timeout: int | None = None,
     org_id: str | None = None,
+    *,
+    root_org: bool = False,
 ) -> list[dict]:
     normalized_artifact = normalize_artifact_name(artifact)
     normalized_parameters = normalize_env_dict(parameters)
@@ -582,7 +611,7 @@ def start_collection(
         "request.specs[0] as specs FROM foreach(row=collection) "
     )
 
-    return run_vql_query(vql, org_id=org_id)
+    return run_vql_query(vql, org_id=org_id, root_org=root_org)
 
 
 def get_flow_status(client_id: str, flow_id: str, artifact: str, org_id: str | None = None) -> str:
@@ -599,6 +628,26 @@ def get_flow_status(client_id: str, flow_id: str, artifact: str, org_id: str | N
         return "FINISHED"
 
     return "RUNNING"
+
+
+def get_flow_details(
+    client_id: str,
+    flow_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> dict | None:
+    """Read the backend's current state for one exact client collection."""
+    rows = run_vql_query(
+        "SELECT session_id, state, status, create_time, start_time, active_time, "
+        "total_collected_rows, total_logs, total_uploaded_files, "
+        "total_uploaded_bytes, artifacts_with_results "
+        f"FROM flows(client_id={vql_literal(client_id)}) "
+        f"WHERE session_id = {vql_literal(flow_id)} LIMIT 1",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    return rows[0] if rows else None
 
 
 def get_flow_results(

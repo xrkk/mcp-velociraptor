@@ -1,5 +1,10 @@
 # Velociraptor Agent POC
 
+> Historical prototype only. `agent_poc` is not supported by the new
+> Windows-only MCP bridge contract and is excluded from the current acceptance
+> scope. The commands and architecture below document the existing prototype;
+> they are not a compatibility promise for the bridge migration.
+
 ### Setup
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
@@ -175,10 +180,11 @@ pass `org_id` directly to MCP tools such as `client_info`, `windows_pslist`,
 Set `ENABLE_DANGEROUS_TOOLS=true` only when you explicitly want to enable raw
 VQL, quarantine, and remote process-kill tools.
 
-The MCP bridge returns JSON text envelopes in the form
+The legacy MCP tools used by this prototype return JSON text envelopes in the form
 `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. Consumers
 that call MCP tools directly should decode the JSON payload before reading the
-tool result.
+tool result. New bridge tools will instead use MCP-native `structuredContent`;
+this prototype has not been migrated to that contract.
 For `collect_artifact`, use the `parameters` argument as a structured JSON
 object with scalar values or lists of scalar values, such as
 `{"PathRegex": ".*", "Targets": ["_BasicCollection"]}`. Legacy compatibility

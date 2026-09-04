@@ -1,6 +1,13 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
+> Development status: the bridge now starts on MCP Python SDK 2.1.1 through
+> `MCPServer`, and the shared Windows-only target/result/pagination foundation is
+> in place. The existing product tools are still the legacy transition surface;
+> their replacement by the evaluated Windows tool set is handled in the next
+> implementation stages. Do not interpret the current legacy inventory or JSON
+> text envelopes as the final interface.
+
 Initial version has several Windows orientated triage tools deployed. Best use is querying usecase to target machine name.
 
 e.g 
@@ -13,6 +20,18 @@ e.g
 
 
 ## Installation
+
+This project currently supports Windows acceptance only. Linux is a future TODO;
+macOS is not supported. `requirements.lock` is the exact Windows acceptance
+environment, while `requirements.txt` pins the direct project dependencies.
+
+Create a virtual environment and install the reproducible set with:
+
+```text
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.lock
+```
+
 ### 1. Setup an API account
 https://docs.velociraptor.app/docs/server_automation/server_api/
 
@@ -77,7 +96,9 @@ Config precedence is: direct environment values from the MCP client or shell,
 then `VELOCIRAPTOR_ENV_FILE` if set, then repo-local `.env`, then fallback
 paths such as `./api_client.yaml` and `~/.config/api_client.yaml`.
 
-The separate agent proof-of-concept now lives under `agent_poc/`. It now
+The separate agent proof-of-concept lives under `agent_poc/`, but it is not
+supported by the new Windows bridge contract and is excluded from current
+acceptance. Its historical prototype behavior
 includes an engagement manager that fans out to isolated, dynamically
 allowlisted analysts in parallel. The `engagement` profile runs bounded
 process, network, persistence, execution, user-activity, and system-inventory
@@ -91,8 +112,15 @@ including verbose collection progress output with artifact names and row counts.
 
 ### 4. Tool Response Format
 
-MCP tool responses are emitted as JSON text envelopes so stdio clients do not
-need to parse Python `repr()` output:
+The new shared contract returns MCP-native `structuredContent`, an empty
+`content` list, and the protocol `isError` flag. Success models contain only
+fields that apply to that operation; errors use stable
+`code/message/retryable/details` fields. Paged results use opaque canonical
+`v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
+245554-byte limit on the complete serialized `structuredContent` object.
+
+The legacy product tools have not yet been migrated in this stage. They still
+emit transitional JSON text envelopes:
 
 ```json
 {"ok": true, "data": {...}}
@@ -118,8 +146,10 @@ tool returns an error.
 
 ### 5. Tool Inventory
 
-The bridge now exposes the original Windows/Linux triage tools plus expanded
-fleet, Linux, macOS, Windows, YARA, and response helpers:
+The current source still exposes the old Windows/Linux/macOS/fleet helpers
+listed below. This is a transition inventory, not the approved final product
+surface. Later stages replace it with the evaluated Windows-only tools and
+remove obsolete registrations; Linux remains TODO and macOS will not be kept.
 
 - Fleet: `list_orgs`, `client_info`, `list_clients`, `hunt_across_fleet`, `get_hunt_results_tool`, `run_vql`.
 - Artifact discovery: `list_windows_artifacts`, `list_linux_artifacts`, and `list_macos_artifacts` accept `name_regex` filters and `include_parameter_details=true` for full live parameter metadata from `artifact_definitions()`.
