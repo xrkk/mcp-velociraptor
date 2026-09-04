@@ -1,0 +1,50 @@
+{
+  "cancel_flow": {
+    "input": {"fields": {"flow_id": {"minLength": 1, "types": ["string"]}}, "required": ["flow_id"]},
+    "output": {"fields": {"flow_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "state_after": {"types": ["string"]}, "state_before": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["flow_id", "operation", "state_after", "state_before", "status", "warnings"]}
+  },
+  "collect_file": {
+    "input": {"fields": {"path": {"minLength": 1, "types": ["string"]}}, "required": ["path"]},
+    "output": {"fields": {"flow_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["flow_id", "operation", "status", "warnings"]}
+  },
+  "collect_forensic_triage": {
+    "input": {"fields": {}, "required": []},
+    "output": {"fields": {"flow_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["flow_id", "operation", "status", "warnings"]}
+  },
+  "download_flow_file": {
+    "input": {"fields": {"file_id": {"minLength": 1, "types": ["string"]}, "flow_id": {"minLength": 1, "types": ["string"]}}, "required": ["file_id", "flow_id"]},
+    "output": {"fields": {"file_id": {"types": ["string"]}, "flow_id": {"types": ["string"]}, "local_path": {"types": ["string"]}, "operation": {"types": ["string"]}, "original_path": {"types": ["string"]}, "sha256": {"types": ["string"]}, "size": {"minimum": 0, "types": ["integer"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["file_id", "flow_id", "local_path", "operation", "original_path", "sha256", "size", "status", "warnings"]}
+  },
+  "get_flow_results": {
+    "input": {"fields": {"cursor": {"types": ["null", "string"]}, "flow_id": {"minLength": 1, "types": ["string"]}, "page_size": {"maximum": 250, "minimum": 1, "types": ["integer", "null"]}, "source": {"types": ["null", "string"]}}, "required": ["flow_id"]},
+    "output": {"fields": {"data": {"items": {"open_object": true, "types": ["object"]}, "types": ["array"]}, "operation": {"types": ["string"]}, "pagination": {"fields": {"cursor": {"types": ["string"]}, "next_cursor": {"types": ["null", "string"]}, "page_size": {"maximum": 250, "minimum": 1, "types": ["integer"]}, "returned": {"minimum": 0, "types": ["integer"]}, "truncated": {"types": ["boolean"]}}, "required": ["cursor", "page_size", "returned", "truncated"], "types": ["object"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["data", "operation", "pagination", "status", "warnings"]}
+  },
+  "get_flow_status": {
+    "input": {"fields": {"flow_id": {"minLength": 1, "types": ["string"]}}, "required": ["flow_id"]},
+    "output": {"fields": {"active_time": {"minimum": 0, "types": ["integer"]}, "artifacts": {"items": {"types": ["string"]}, "types": ["array"]}, "artifacts_with_results": {"items": {"types": ["string"]}, "types": ["array"]}, "create_time": {"minimum": 0, "types": ["integer"]}, "flow_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "start_time": {"minimum": 0, "types": ["integer"]}, "state": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "status_message": {"types": ["string"]}, "total_collected_rows": {"minimum": 0, "types": ["integer"]}, "total_logs": {"minimum": 0, "types": ["integer"]}, "total_uploaded_bytes": {"minimum": 0, "types": ["integer"]}, "total_uploaded_files": {"minimum": 0, "types": ["integer"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["active_time", "artifacts", "artifacts_with_results", "create_time", "flow_id", "operation", "start_time", "state", "status", "status_message", "total_collected_rows", "total_logs", "total_uploaded_bytes", "total_uploaded_files", "warnings"]}
+  },
+  "get_hunt_status": {
+    "input": {"fields": {"hunt_id": {"minLength": 1, "types": ["string"]}}, "required": ["hunt_id"]},
+    "output": {"fields": {"client_id": {"types": ["null", "string"]}, "flow_id": {"types": ["null", "string"]}, "flow_state": {"types": ["null", "string"]}, "hunt_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "state": {"types": ["string"]}, "stats": {"open_object": true, "types": ["object"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["hunt_id", "operation", "state", "stats", "status", "warnings"]}
+  },
+  "kill_process": {
+    "input": {"fields": {"pid": {"maximum": 2147483647, "minimum": 1, "types": ["integer"]}}, "required": ["pid"]},
+    "output": {"fields": {"flow_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["flow_id", "operation", "status", "warnings"]}
+  },
+  "list_flow_files": {
+    "input": {"fields": {"flow_id": {"minLength": 1, "types": ["string"]}}, "required": ["flow_id"]},
+    "output": {"fields": {"data": {"items": {"fields": {"accessor": {"types": ["string"]}, "file_id": {"types": ["string"]}, "file_size": {"minimum": 0, "types": ["integer"]}, "original_path": {"types": ["string"]}, "uploaded_size": {"minimum": 0, "types": ["integer"]}}, "required": ["accessor", "file_id", "file_size", "original_path", "uploaded_size"], "types": ["object"]}, "types": ["array"]}, "operation": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "truncated": {"types": ["boolean"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["data", "operation", "status", "truncated", "warnings"]}
+  },
+  "run_vql": {
+    "input": {"fields": {"query": {"minLength": 1, "types": ["string"]}}, "required": ["query"]},
+    "output": {"fields": {"data": {"items": {"open_object": true, "types": ["object"]}, "types": ["array"]}, "operation": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "truncated": {"types": ["boolean"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["data", "operation", "status", "truncated", "warnings"]}
+  },
+  "start_hunt": {
+    "input": {"fields": {"artifact": {"minLength": 1, "types": ["string"]}, "description": {"types": ["null", "string"]}, "parameters": {"open_object": true, "types": ["null", "object"]}}, "required": ["artifact"]},
+    "output": {"fields": {"client_id": {"types": ["string"]}, "flow_id": {"types": ["string"]}, "hunt_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "state": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["client_id", "flow_id", "hunt_id", "operation", "state", "status", "warnings"]}
+  },
+  "stop_hunt": {
+    "input": {"fields": {"hunt_id": {"minLength": 1, "types": ["string"]}}, "required": ["hunt_id"]},
+    "output": {"fields": {"flow_id": {"types": ["null", "string"]}, "flow_state_after": {"types": ["null", "string"]}, "flow_state_before": {"types": ["null", "string"]}, "hunt_id": {"types": ["string"]}, "operation": {"types": ["string"]}, "state": {"types": ["string"]}, "status": {"const": "success", "types": ["string"]}, "warnings": {"items": {"types": ["string"]}, "types": ["array"]}}, "required": ["hunt_id", "operation", "state", "status", "warnings"]}
+  }
+}

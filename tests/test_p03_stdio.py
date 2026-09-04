@@ -28,18 +28,19 @@ REMOVED_TOOLS = {
     "list_linux_artifacts",
     "list_macos_artifacts",
 }
-TRANSITIONAL_TOOLS = {
-    "list_orgs",
-    "client_info",
-    "list_clients",
-    "get_hunt_results_tool",
+FIXED_TOOLS = {
     "run_vql",
-    "quarantine_host",
-    "unquarantine_host",
-    "kill_process",
+    "start_hunt",
+    "get_hunt_status",
+    "stop_hunt",
+    "get_flow_status",
+    "get_flow_results",
+    "list_flow_files",
+    "download_flow_file",
+    "cancel_flow",
     "collect_file",
-    "get_collection_results",
     "collect_forensic_triage",
+    "kill_process",
 }
 
 
@@ -185,8 +186,8 @@ class RealBridgeDynamicTests(unittest.TestCase):
         )
         self.assertEqual(initialized.server_info.name, "velociraptor-mcp")
         names = {tool.name for tool in first}
-        self.assertEqual(names, set(APPROVED_WINDOWS_ARTIFACTS) | TRANSITIONAL_TOOLS)
-        self.assertEqual(len(names), 129)
+        self.assertEqual(names, set(APPROVED_WINDOWS_ARTIFACTS) | FIXED_TOOLS)
+        self.assertEqual(len(names), 130)
         self.assertTrue(names.isdisjoint(REMOVED_TOOLS))
         self.assertFalse(any(name.startswith(("linux_", "macos_", "windows_")) for name in names))
         self.assertEqual(tool_list_digest(first), tool_list_digest(second))

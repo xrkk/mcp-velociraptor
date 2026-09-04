@@ -12,6 +12,7 @@ from velociraptor_dynamic_artifacts import (
     ArtifactRegistryError,
     register_dynamic_artifact_tools,
 )
+from velociraptor_fixed_tools import register_fixed_tools, validate_combined_registry
 from velociraptor_mcp_core import TargetContext, VelociraptorBackend
 
 
@@ -248,7 +249,7 @@ def _run_dangerous_collection(
         return _json_error(DANGEROUS_TOOLS_WARNING)
     return _start_collection_tool(client_id, artifact, parameters, org_id=org_id)
 
-@mcp.tool()
+@_unregistered_source
 def list_orgs() -> str:
     """
     List available Velociraptor orgs for multi-tenant deployments.
@@ -259,7 +260,7 @@ def list_orgs() -> str:
     return _run_json_tool(api_list_orgs)
 
 
-@mcp.tool()
+@_unregistered_source
 def client_info(
     hostname: str,
     org_id: str = "",
@@ -293,7 +294,7 @@ def client_info(
     return _json_success(result)
 
 
-@mcp.tool()
+@_unregistered_source
 def list_clients(
     search: str = ".",
     os_filter: str = ".",
@@ -357,7 +358,7 @@ async def hunt_across_fleet(
     return _json_success(result[0] if result else {})
 
 
-@mcp.tool()
+@_unregistered_source
 async def get_hunt_results_tool(
     hunt_id: str,
     artifact: str,
@@ -371,7 +372,7 @@ async def get_hunt_results_tool(
     return _run_json_tool(get_hunt_results, hunt_id, artifact, fields, limit, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 def run_vql(query: str, org_id: str = "") -> str:
     """
     Run arbitrary VQL. Disabled unless ENABLE_DANGEROUS_TOOLS=true.
@@ -1917,7 +1918,7 @@ async def linux_yara_scan(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def quarantine_host(client_id: str, org_id: str = "") -> str:
     """
     Quarantine a Windows host. Disabled unless ENABLE_DANGEROUS_TOOLS=true.
@@ -1930,7 +1931,7 @@ async def quarantine_host(client_id: str, org_id: str = "") -> str:
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def unquarantine_host(client_id: str, org_id: str = "") -> str:
     """
     Remove a Windows quarantine policy.
@@ -1943,7 +1944,7 @@ async def unquarantine_host(client_id: str, org_id: str = "") -> str:
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def kill_process(client_id: str, pid: int, org_id: str = "") -> str:
     """
     Kill a remote process by PID. Disabled unless ENABLE_DANGEROUS_TOOLS=true.
@@ -1956,7 +1957,7 @@ async def kill_process(client_id: str, pid: int, org_id: str = "") -> str:
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def collect_file(client_id: str, path: str, org_id: str = "") -> str:
     """
     Start a Generic.Collectors.File collection for a path or glob.
@@ -1969,7 +1970,7 @@ async def collect_file(client_id: str, path: str, org_id: str = "") -> str:
         org_id=org_id,
     )
 
-@mcp.tool()
+@_unregistered_source
 async def get_collection_results(
     client_id: str,
     flow_id: str,
@@ -2054,7 +2055,7 @@ async def collect_artifact(
     return _start_collection_tool(client_id, artifact, parsed_parameters, org_id=org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def collect_forensic_triage(
     client_id: str,
     org_id: str = "",
@@ -2154,16 +2155,27 @@ async def list_macos_artifacts(
 
 def main() -> int:
     """Validate and register the complete public toolset before opening stdio."""
+    global mcp
     try:
         # velociraptor_api loads repo-local .env before resolving this setting.
         init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
         rows = read_root_artifact_definitions()
-        register_dynamic_artifact_tools(
-            mcp,
+        candidate = MCPServer("velociraptor-mcp")
+        specs = register_dynamic_artifact_tools(
+            candidate,
             rows,
             target_context,
             velociraptor_backend,
         )
+        register_fixed_tools(
+            candidate,
+            specs,
+            target_context,
+            velociraptor_backend,
+            download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
+        )
+        validate_combined_registry(candidate, specs)
+        mcp = candidate
     except ArtifactRegistryError as exc:
         print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
         return 2

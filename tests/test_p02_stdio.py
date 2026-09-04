@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 import tempfile
@@ -80,8 +79,6 @@ class RealBridgeStdioTests(unittest.TestCase):
         velociraptor_api.init_stub(config)
         clients = velociraptor_api.list_windows_clients_strict()
         self.assertEqual(len(clients), 1)
-        hostname = clients[0]["hostname"]
-
         from velociraptor_mcp_core import TargetContext, VelociraptorBackend
 
         backend = VelociraptorBackend()
@@ -102,7 +99,7 @@ class RealBridgeStdioTests(unittest.TestCase):
         env["VELOCIRAPTOR_API_CONFIG"] = config
         calls = [
             ("Windows.System.Pslist", {"ProcessRegex": "^__mcp_p02_no_match__$"}),
-            ("client_info", {"hostname": hostname}),
+            ("get_flow_status", {"flow_id": flow.flow_id}),
         ]
         initialized, tools, results, stderr = asyncio.run(
             run_session(REPO_ROOT / "mcp_velociraptor_bridge.py", calls, env=env)
@@ -111,16 +108,18 @@ class RealBridgeStdioTests(unittest.TestCase):
         names = {tool.name for tool in tools}
         self.assertIn("Windows.System.Pslist", names)
         self.assertNotIn("list_windows_artifacts", names)
-        self.assertIn("client_info", names)
-        self.assertEqual(len(names), 129)
-        dynamic, legacy = results
+        self.assertNotIn("client_info", names)
+        self.assertIn("get_flow_status", names)
+        self.assertEqual(len(names), 130)
+        dynamic, lifecycle = results
         self.assertFalse(dynamic.is_error)
         self.assertEqual(dynamic.content, [])
         self.assertTrue(dynamic.structured_content["flow_id"].startswith("F."))
         self.assertEqual(dynamic.structured_content["operation"], "start_artifact_collection")
-        self.assertFalse(legacy.is_error)
-        self.assertTrue(legacy.content)
-        self.assertTrue(json.loads(legacy.content[0].text)["ok"])
+        self.assertFalse(lifecycle.is_error)
+        self.assertEqual(lifecycle.content, [])
+        self.assertEqual(lifecycle.structured_content["flow_id"], flow.flow_id)
+        self.assertTrue(lifecycle.structured_content["state"])
         self.assertNotIn("ImportError", stderr)
         self.assertNotIn("Traceback", stderr)
 

@@ -1,12 +1,12 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
-> Development status: P03 exposes 118 reviewed Windows CLIENT artifacts as
+> Development status: P04 exposes 118 reviewed Windows CLIENT artifacts as
 > dynamically generated MCP tools. Their names, descriptions, parameters, and
 > definition hashes are checked against the connected root organization before
-> stdio starts. Eleven fixed tools remain a temporary transition surface until
-> the next implementation stage; do not treat those legacy JSON responses as the
-> final fixed-tool contract.
+> stdio starts. Twelve fixed tools provide bounded VQL, single-endpoint Hunt,
+> Flow lifecycle, one-file collection/download, basic triage, and process
+> termination. All 130 schemas are validated together before stdio starts.
 
 Initial version has several Windows orientated triage tools deployed. Best use is querying usecase to target machine name.
 
@@ -53,9 +53,10 @@ Generate an api config file:
 - Run `.venv\Scripts\python.exe test_api.py` to confirm the API works when `.env` is configured.
 - The MCP bridge reads the same `VELOCIRAPTOR_API_CONFIG` environment variable after loading dotenv config.
 - Set `VELOCIRAPTOR_DEBUG_VQL=1` only when you want raw VQL request logging on stderr for debugging.
-- `ENABLE_DANGEROUS_TOOLS` applies only to fixed legacy transition tools. It is
-  not part of the 118 dynamic artifact tools and will be removed when the fixed
-  tool surface is replaced.
+- `ENABLE_DANGEROUS_TOOLS` is legacy source only and does not control or expose
+  any P04 tool. P07 removes that dead compatibility source.
+- Set `VELOCIRAPTOR_DOWNLOAD_ROOT` to an existing absolute directory before
+  calling `download_flow_file`. Completed files are never overwritten.
 - The agent POC defaults to local Ollama summaries. Set `VELOCIRAPTOR_MODEL_PROVIDER=azure`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_MODEL` when you explicitly want Azure OpenAI summaries.
 
 ### 3. Connect to MCP client of choice
@@ -118,42 +119,31 @@ including verbose collection progress output with artifact names and row counts.
 
 ### 4. Tool Response Format
 
-Each of the 118 dynamic tools returns MCP-native `structuredContent`, an empty
+All 130 tools return MCP-native `structuredContent`, an empty
 `content` list, and the protocol `isError` flag. Success models contain only
-`operation`, the real initial `status`, public `warnings`, and the real
-`flow_id`. Errors use stable
+the documented operation fields, real backend identifiers/states, and public
+warnings. Errors use stable
 `code/message/retryable/details` fields. Paged results use opaque canonical
 `v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
 245554-byte limit on the complete serialized `structuredContent` object.
 
-The eleven fixed transition tools have not yet been migrated in this stage. They still
-emit transitional JSON text envelopes:
-
-```json
-{"ok": true, "data": {...}}
-```
-
-or
-
-```json
-{"ok": false, "error": "message"}
-```
-
-`collect_forensic_triage` wraps `Windows.Triage.Targets` with
-`Targets='["_BasicCollection"]'` and a collection timeout of `2400` seconds.
+`collect_forensic_triage` and `kill_process` return `DEPENDENCY_MISSING` on the
+pre-install snapshot; this is an honest deployment state, not a successful
+collection. P05 installs and validates their locked artifact definitions before
+creating the required post-install snapshot.
 
 ### 5. Tool Inventory
 
-The public surface at P03 contains exactly 129 tools:
+The public surface at P04 contains exactly 130 tools:
 
 - 118 dynamic Windows tools. Each tool name is the exact Velociraptor artifact
   name, such as `Windows.System.Pslist`. The approved names and definition
   hashes are maintained in `APPROVED_WINDOWS_ARTIFACTS` in
   `velociraptor_dynamic_artifacts.py`.
-- 11 fixed transition tools: `list_orgs`, `client_info`, `list_clients`,
-  `get_hunt_results_tool`, `run_vql`, `quarantine_host`, `unquarantine_host`,
-  `kill_process`, `collect_file`, `get_collection_results`, and
-  `collect_forensic_triage`.
+- 12 fixed tools: `run_vql`, `start_hunt`, `get_hunt_status`, `stop_hunt`,
+  `get_flow_status`, `get_flow_results`, `list_flow_files`,
+  `download_flow_file`, `cancel_flow`, `collect_file`,
+  `collect_forensic_triage`, and `kill_process`.
 
 `collect_artifact`, `hunt_across_fleet`, all three `list_*_artifacts` tools,
 and the old `windows_*`, `linux_*`, and `macos_*` wrappers are not registered.
@@ -187,9 +177,11 @@ that expanded available tools and some of the newer cross-platform additions.
 
 Due to the nature of DFIR, results depend on amount of data returned, model use and context window.
 
-Artifact collection is asynchronous. Use the returned Flow reference with the
-fixed lifecycle tools added in the next implementation stage; broad artifacts
-can run for a long time or produce many rows.
+Artifact collection is asynchronous. Use `get_flow_status` and bounded
+`get_flow_results` pages. For uploaded evidence, call `list_flow_files` first,
+then pass one returned `file_id` to `download_flow_file`. A Hunt is a container
+for the unique endpoint's real Flow: stopping the Hunt does not cancel that
+Flow, so call `cancel_flow` separately when that is intended.
 
 If a separate hosted AI service is connected, review that service's licensing
 and data-processing terms before sending endpoint evidence. This is independent

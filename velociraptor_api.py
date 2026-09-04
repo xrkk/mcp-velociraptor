@@ -328,8 +328,49 @@ def run_vql_query(
     for resp in stub.Query(request):
         if hasattr(resp, "error") and resp.error:
             raise RuntimeError(f"Velociraptor API error: {resp.error}")
+        if hasattr(resp, "log") and "VQL Error:" in resp.log:
+            raise RuntimeError("Velociraptor rejected the VQL query.")
         if hasattr(resp, "Response") and resp.Response:
             results.extend(json.loads(resp.Response))
+    return results
+
+
+def run_vql_query_bounded(
+    vql: str,
+    *,
+    max_rows: int,
+    org_id: str | None = None,
+    root_org: bool = False,
+) -> list[dict]:
+    """Read no more than ``max_rows`` from a root or selected-org VQL stream."""
+    if stub is None:
+        raise RuntimeError("Stub not initialized. Call init_stub() first.")
+    if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows < 1:
+        raise ValueError("max_rows must be a positive integer")
+    request = api_pb2.VQLCollectorArgs(Query=[api_pb2.VQLRequest(VQL=vql)])
+    resolved_org_id = None if root_org else resolve_org_id(org_id)
+    if resolved_org_id:
+        request.org_id = resolved_org_id
+
+    results: list[dict] = []
+    responses = stub.Query(request)
+    try:
+        for resp in responses:
+            if hasattr(resp, "error") and resp.error:
+                raise RuntimeError(f"Velociraptor API error: {resp.error}")
+            if hasattr(resp, "log") and "VQL Error:" in resp.log:
+                raise RuntimeError("Velociraptor rejected the VQL query.")
+            if not (hasattr(resp, "Response") and resp.Response):
+                continue
+            decoded = json.loads(resp.Response)
+            remaining = max_rows - len(results)
+            results.extend(decoded[:remaining])
+            if len(results) >= max_rows:
+                break
+    finally:
+        cancel = getattr(responses, "cancel", None)
+        if len(results) >= max_rows and callable(cancel):
+            cancel()
     return results
 
 
@@ -449,6 +490,16 @@ def read_root_artifact_definitions() -> list[dict]:
         "ORDER BY name",
         root_org=True,
     )
+
+
+def artifact_exists(artifact: str) -> bool:
+    normalized = normalize_artifact_name(artifact)
+    rows = run_vql_query(
+        "SELECT name FROM artifact_definitions() "
+        f"WHERE name = {vql_literal(normalized)} LIMIT 2",
+        root_org=True,
+    )
+    return len(rows) == 1
 
 
 def start_hunt(
@@ -662,7 +713,7 @@ def get_flow_details(
     rows = run_vql_query(
         "SELECT session_id, state, status, create_time, start_time, active_time, "
         "total_collected_rows, total_logs, total_uploaded_files, "
-        "total_uploaded_bytes, artifacts_with_results "
+        "total_uploaded_bytes, artifacts_with_results, request, request.artifacts AS artifacts "
         f"FROM flows(client_id={vql_literal(client_id)}) "
         f"WHERE session_id = {vql_literal(flow_id)} LIMIT 1",
         org_id=org_id,
@@ -686,6 +737,236 @@ def get_flow_results(
     )
 
     return run_vql_query(vql, org_id=org_id)
+
+
+def get_flow_results_window(
+    client_id: str,
+    flow_id: str,
+    artifact: str,
+    *,
+    source: str | None,
+    start_row: int,
+    count: int,
+    org_id: str | None = None,
+    root_org: bool = False,
+) -> list[dict]:
+    normalized_artifact = normalize_artifact_name(artifact)
+    if not isinstance(start_row, int) or start_row < 0:
+        raise ValueError("start_row must be a non-negative integer")
+    if not isinstance(count, int) or count < 1:
+        raise ValueError("count must be a positive integer")
+    source_arg = ""
+    if source is not None:
+        cleaned_source = source.strip()
+        if not cleaned_source or any(ord(character) < 32 for character in cleaned_source):
+            raise ValueError("source contains unsupported characters")
+        source_arg = f", source={vql_literal(cleaned_source)}"
+    vql = (
+        "SELECT * FROM source("
+        f"client_id={vql_literal(client_id)}, flow_id={vql_literal(flow_id)}, "
+        f"artifact={vql_literal(normalized_artifact)}{source_arg}, "
+        f"start_row={start_row}, count={count})"
+    )
+    return run_vql_query(vql, org_id=org_id, root_org=root_org)
+
+
+def get_flow_result_count(
+    client_id: str,
+    flow_id: str,
+    artifact: str,
+    *,
+    source: str | None,
+    org_id: str | None = None,
+    root_org: bool = False,
+) -> int:
+    normalized_artifact = normalize_artifact_name(artifact)
+    source_arg = ""
+    if source is not None:
+        cleaned_source = source.strip()
+        if not cleaned_source or any(ord(character) < 32 for character in cleaned_source):
+            raise ValueError("source contains unsupported characters")
+        source_arg = f", source={vql_literal(cleaned_source)}"
+    rows = run_vql_query(
+        "SELECT count() AS Count FROM source("
+        f"client_id={vql_literal(client_id)}, flow_id={vql_literal(flow_id)}, "
+        f"artifact={vql_literal(normalized_artifact)}{source_arg})",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    if not rows:
+        return 0
+    # VQL's count() is emitted as a running aggregate (1, 2, ...), so the
+    # final row is the total for the selected result source.
+    value = rows[-1].get("Count")
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise RuntimeError("Velociraptor returned an invalid flow result count")
+    return value
+
+
+def list_flow_uploads(
+    client_id: str,
+    flow_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> list[dict]:
+    return run_vql_query(
+        "SELECT * FROM uploads("
+        f"client_id={vql_literal(client_id)}, flow_id={vql_literal(flow_id)})",
+        org_id=org_id,
+        root_org=root_org,
+    )
+
+
+def read_vfs_buffer(
+    components: list[str] | tuple[str, ...],
+    *,
+    offset: int,
+    length: int,
+) -> bytes:
+    if stub is None:
+        raise RuntimeError("Stub not initialized. Call init_stub() first.")
+    if not components or any(not isinstance(item, str) for item in components):
+        raise ValueError("components must be a non-empty sequence of strings")
+    if offset < 0 or length < 1:
+        raise ValueError("invalid VFS buffer window")
+    response = stub.VFSGetBuffer(
+        api_pb2.VFSFileBuffer(
+            components=list(components),
+            offset=offset,
+            length=length,
+        )
+    )
+    return bytes(response.data)
+
+
+def cancel_flow_by_id(
+    client_id: str,
+    flow_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> None:
+    rows = run_vql_query(
+        "SELECT cancel_flow("
+        f"client_id={vql_literal(client_id)}, flow_id={vql_literal(flow_id)}) "
+        "AS Result FROM scope()",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    if not rows or rows[0].get("Result") is None:
+        raise RuntimeError("Velociraptor cancel_flow returned no result")
+
+
+def create_paused_hunt(
+    artifact: str,
+    parameters: Mapping[str, ParameterValue] | None,
+    description: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> str:
+    normalized_artifact = normalize_artifact_name(artifact)
+    normalized_parameters = normalize_parameter_dict(parameters)
+    spec = hunt_spec_vql(normalized_artifact, normalized_parameters)
+    args = [
+        f"description={vql_literal(description)}",
+        f"artifacts={vql_literal(normalized_artifact)}",
+    ]
+    if spec:
+        args.append(f"spec={spec}")
+    args.append("pause=TRUE")
+    rows = run_vql_query(
+        "SELECT hunt(" + ", ".join(args) + ") AS HuntResult FROM scope()",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    result = rows[0].get("HuntResult") if rows else None
+    hunt_id = ""
+    if isinstance(result, dict):
+        request = result.get("Request") if isinstance(result.get("Request"), dict) else {}
+        hunt_id = str(
+            result.get("HuntId")
+            or result.get("hunt_id")
+            or request.get("hunt_id")
+            or ""
+        )
+    if not hunt_id:
+        matches = run_vql_query(
+            "SELECT hunt_id FROM hunts() "
+            f"WHERE hunt_description = {vql_literal(description)} "
+            "ORDER BY create_time DESC LIMIT 1",
+            org_id=org_id,
+            root_org=root_org,
+        )
+        hunt_id = str(matches[0].get("hunt_id") or "") if matches else ""
+    if not hunt_id:
+        raise RuntimeError("Velociraptor hunt() did not return a hunt id")
+    return hunt_id
+
+
+def add_hunt_flow(
+    client_id: str,
+    hunt_id: str,
+    flow_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> None:
+    rows = run_vql_query(
+        "SELECT hunt_add("
+        f"client_id={vql_literal(client_id)}, hunt_id={vql_literal(hunt_id)}, "
+        f"flow_id={vql_literal(flow_id)}) AS Result FROM scope()",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    if not rows or str(rows[0].get("Result") or "") != client_id:
+        raise RuntimeError("Velociraptor hunt_add did not confirm the client")
+
+
+def get_hunt_details(
+    hunt_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> dict | None:
+    rows = run_vql_query(
+        "SELECT hunt_id, hunt_description, state, stats, artifacts, artifact_sources "
+        f"FROM hunts(hunt_id={vql_literal(hunt_id)}) LIMIT 1",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    return rows[0] if rows else None
+
+
+def list_hunt_flows(
+    hunt_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> list[dict]:
+    return run_vql_query(
+        "SELECT HuntId, ClientId, FlowId, Flow.state AS FlowState "
+        f"FROM hunt_flows(hunt_id={vql_literal(hunt_id)})",
+        org_id=org_id,
+        root_org=root_org,
+    )
+
+
+def stop_hunt_by_id(
+    hunt_id: str,
+    org_id: str | None = None,
+    *,
+    root_org: bool = False,
+) -> None:
+    rows = run_vql_query(
+        "SELECT hunt_update("
+        f"hunt_id={vql_literal(hunt_id)}, stop=TRUE) AS Result FROM scope()",
+        org_id=org_id,
+        root_org=root_org,
+    )
+    if not rows or str(rows[0].get("Result") or "") != hunt_id:
+        raise RuntimeError("Velociraptor hunt_update did not confirm the hunt")
 
 
 def list_orgs() -> list[dict]:

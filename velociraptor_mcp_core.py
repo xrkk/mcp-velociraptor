@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 import grpc
 from mcp.types import CallToolResult
@@ -60,6 +60,94 @@ class FlowReferenceResult(ResultBase):
 class HuntReferenceResult(ResultBase):
     hunt_id: str
     flow_id: str | None = None
+
+
+class FixedResultBase(ResultBase):
+    status: Literal["success"]
+    warnings: list[str]
+
+
+class FixedDataResult(FixedResultBase):
+    data: list[dict[str, Any]]
+    pagination: Pagination
+
+
+class FixedUnpagedDataResult(FixedResultBase):
+    data: list[dict[str, Any]]
+    truncated: bool
+
+
+class FixedFlowReferenceResult(FixedResultBase):
+    flow_id: str
+
+
+class HuntStartedResult(FixedResultBase):
+    hunt_id: str
+    flow_id: str
+    client_id: str
+    state: str
+
+
+class HuntStatusResult(FixedResultBase):
+    hunt_id: str
+    state: str
+    flow_id: str | None = None
+    flow_state: str | None = None
+    client_id: str | None = None
+    stats: dict[str, Any]
+
+
+class HuntStoppedResult(FixedResultBase):
+    hunt_id: str
+    state: str
+    flow_id: str | None = None
+    flow_state_before: str | None = None
+    flow_state_after: str | None = None
+
+
+class FlowStatusResult(FixedResultBase):
+    flow_id: str
+    state: str
+    status_message: str
+    artifacts: list[str]
+    artifacts_with_results: list[str]
+    create_time: int = Field(ge=0)
+    start_time: int = Field(ge=0)
+    active_time: int = Field(ge=0)
+    total_collected_rows: int = Field(ge=0)
+    total_logs: int = Field(ge=0)
+    total_uploaded_files: int = Field(ge=0)
+    total_uploaded_bytes: int = Field(ge=0)
+
+
+class CancelFlowResult(FixedResultBase):
+    flow_id: str
+    state_before: str
+    state_after: str
+
+
+class DownloadResult(FixedResultBase):
+    flow_id: str
+    file_id: str
+    local_path: str
+    size: int = Field(ge=0)
+    sha256: str
+    original_path: str
+
+
+class FlowFileEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_id: str
+    original_path: str
+    file_size: int = Field(ge=0)
+    uploaded_size: int = Field(ge=0)
+    accessor: str
+
+
+class FlowFileListResult(FixedResultBase):
+    data: list[FlowFileEntry]
+    truncated: bool
 
 
 class ErrorResult(BaseModel):
@@ -147,6 +235,16 @@ class NotCancellableError(PublicError):
     default_message = "The flow cannot be cancelled in its current state."
 
 
+class DependencyMissingError(PublicError):
+    code = "DEPENDENCY_MISSING"
+    default_message = "A required Velociraptor artifact is not installed."
+
+
+class AlreadyExistsError(PublicError):
+    code = "ALREADY_EXISTS"
+    default_message = "The requested output already exists and was not overwritten."
+
+
 class RowTooLargeError(PublicError):
     code = "ROW_TOO_LARGE"
     default_message = "A single result row exceeds the MCP response byte limit."
@@ -167,6 +265,8 @@ ERROR_DETAIL_FIELDS: dict[str, frozenset[str]] = {
     "INVALID_ARGUMENT": frozenset({"field", "reason", "minimum", "maximum"}),
     "NOT_FOUND": frozenset({"object_type", "object_id"}),
     "NOT_CANCELLABLE": frozenset({"object_type", "state"}),
+    "DEPENDENCY_MISSING": frozenset({"artifact"}),
+    "ALREADY_EXISTS": frozenset({"object_type", "object_id"}),
     "ROW_TOO_LARGE": frozenset({"actual_bytes", "limit_bytes", "row_index"}),
     "BACKEND_ERROR": frozenset({"operation", "grpc_status", "reason"}),
     "INTERNAL_ERROR": frozenset({"exception_type", "correlation_id"}),
@@ -328,6 +428,10 @@ def _page_size(value: int | None) -> int:
     return value
 
 
+def normalize_page_size(value: int | None) -> int:
+    return _page_size(value)
+
+
 def _base_values(base_result: ResultBase | Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(base_result, ResultBase):
         return base_result.model_dump(mode="json", exclude_none=True)
@@ -398,6 +502,62 @@ def paginate_result(
             page_size=size,
             total=total,
         )
+        actual = len(
+            canonical_json_bytes(first.model_dump(mode="json", exclude_none=True))
+        )
+        raise RowTooLargeError(
+            details={
+                "actual_bytes": actual,
+                "limit_bytes": RESPONSE_BYTE_LIMIT,
+                "row_index": offset,
+            }
+        )
+    return best
+
+
+def paginate_window_result(
+    base_result: ResultBase | Mapping[str, Any],
+    rows: Sequence[dict[str, Any]],
+    *,
+    cursor: str | None = None,
+    page_size: int | None = None,
+) -> DataResult:
+    """Build one bounded page from a backend ``page_size + 1`` window."""
+    size = _page_size(page_size)
+    offset = decode_cursor(cursor)
+    window = list(rows)
+    has_more = len(window) > size
+    candidate = window[:size]
+    base = _base_values(base_result)
+
+    def build(count: int) -> DataResult:
+        returned = candidate[:count]
+        truncated = has_more or count < len(candidate)
+        end = offset + len(returned)
+        return DataResult(
+            **base,
+            data=returned,
+            pagination=Pagination(
+                cursor=encode_cursor(offset),
+                next_cursor=encode_cursor(end) if truncated else None,
+                page_size=size,
+                returned=len(returned),
+                truncated=truncated,
+            ),
+        )
+
+    if not candidate:
+        return build(0)
+
+    best: DataResult | None = None
+    for count in range(1, len(candidate) + 1):
+        current = build(count)
+        payload = current.model_dump(mode="json", exclude_none=True)
+        if len(canonical_json_bytes(payload)) <= RESPONSE_BYTE_LIMIT:
+            best = current
+
+    if best is None:
+        first = build(1)
         actual = len(
             canonical_json_bytes(first.model_dump(mode="json", exclude_none=True))
         )
@@ -564,3 +724,111 @@ class VelociraptorBackend:
             warnings=[],
             flow_id=flow_id,
         )
+
+    def run_vql(self, query: str, *, max_rows: int) -> list[dict[str, Any]]:
+        from velociraptor_api import run_vql_query_bounded
+
+        return run_vql_query_bounded(query, max_rows=max_rows, root_org=True)
+
+    def artifact_exists(self, artifact: str) -> bool:
+        from velociraptor_api import artifact_exists
+
+        return artifact_exists(artifact)
+
+    def get_flow_details(self, client_id: str, flow_id: str) -> dict[str, Any] | None:
+        from velociraptor_api import get_flow_details
+
+        return get_flow_details(client_id, flow_id, root_org=True)
+
+    def get_flow_results_window(
+        self,
+        client_id: str,
+        flow_id: str,
+        artifact: str,
+        *,
+        source: str | None,
+        start_row: int,
+        count: int,
+    ) -> list[dict[str, Any]]:
+        from velociraptor_api import get_flow_results_window
+
+        return get_flow_results_window(
+            client_id,
+            flow_id,
+            artifact,
+            source=source,
+            start_row=start_row,
+            count=count,
+            root_org=True,
+        )
+
+    def get_flow_result_count(
+        self,
+        client_id: str,
+        flow_id: str,
+        artifact: str,
+        *,
+        source: str | None,
+    ) -> int:
+        from velociraptor_api import get_flow_result_count
+
+        return get_flow_result_count(
+            client_id,
+            flow_id,
+            artifact,
+            source=source,
+            root_org=True,
+        )
+
+    def list_flow_uploads(
+        self, client_id: str, flow_id: str
+    ) -> list[dict[str, Any]]:
+        from velociraptor_api import list_flow_uploads
+
+        return list_flow_uploads(client_id, flow_id, root_org=True)
+
+    def read_vfs_buffer(
+        self,
+        components: Sequence[str],
+        *,
+        offset: int,
+        length: int,
+    ) -> bytes:
+        from velociraptor_api import read_vfs_buffer
+
+        return read_vfs_buffer(components, offset=offset, length=length)
+
+    def cancel_flow(self, client_id: str, flow_id: str) -> None:
+        from velociraptor_api import cancel_flow_by_id
+
+        cancel_flow_by_id(client_id, flow_id, root_org=True)
+
+    def create_paused_hunt(
+        self,
+        artifact: str,
+        parameters: Mapping[str, Any] | None,
+        description: str,
+    ) -> str:
+        from velociraptor_api import create_paused_hunt
+
+        return create_paused_hunt(artifact, parameters, description, root_org=True)
+
+    def add_hunt_flow(self, client_id: str, hunt_id: str, flow_id: str) -> None:
+        from velociraptor_api import add_hunt_flow
+
+        add_hunt_flow(client_id, hunt_id, flow_id, root_org=True)
+
+    def get_hunt_details(self, hunt_id: str) -> dict[str, Any] | None:
+        from velociraptor_api import get_hunt_details
+
+        return get_hunt_details(hunt_id, root_org=True)
+
+    def list_hunt_flows(self, hunt_id: str) -> list[dict[str, Any]]:
+        from velociraptor_api import list_hunt_flows
+
+        return list_hunt_flows(hunt_id, root_org=True)
+
+    def stop_hunt(self, hunt_id: str) -> None:
+        from velociraptor_api import stop_hunt_by_id
+
+        stop_hunt_by_id(hunt_id, root_org=True)

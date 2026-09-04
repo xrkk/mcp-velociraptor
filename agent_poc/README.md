@@ -5,7 +5,8 @@
 > scope. The commands and architecture below document the existing prototype;
 > they are not a compatibility promise for the bridge migration.
 
-The P03 bridge itself now has 118 dynamic Windows artifact tools. “Dynamic”
+The P04 bridge itself has 118 dynamic Windows artifact tools plus 12 fixed
+lifecycle tools. “Dynamic”
 means their MCP schemas are generated from live Velociraptor metadata at process
 startup, but only for an exact reviewed allowlist. They use the root organization
 and the one Windows endpoint, start a Flow (one collection job), and communicate
@@ -24,7 +25,7 @@ The historical agent code has not been migrated to those generated names or the
 new structured result contract, so do not run it against the P03 bridge as a
 compatibility test.
 
-The current P03 snapshot also lacks the external binaries required by
+The current pre-install snapshot also lacks the external binaries required by
 `Windows.Network.PacketCapture` and `Windows.Sysinternals.Autoruns`; their
 pre-Flow errors are not successful calls. Dependency preparation and a verified
 post-install snapshot belong to the later test-infrastructure stage.
@@ -203,18 +204,19 @@ uses its own isolated MCP session and conversation history.
 The current bridge fixes dynamic artifact calls to the root organization and
 internally resolves the one Windows endpoint. Old `org_id`/hostname/client
 examples in this historical prototype are not supported by that contract.
-`ENABLE_DANGEROUS_TOOLS` currently affects only fixed transition tools and is
-scheduled for removal with that legacy surface.
+`ENABLE_DANGEROUS_TOOLS` is dead legacy source and affects no registered P04
+tool. P07 removes it physically.
 
-The legacy MCP tools used by this prototype return JSON text envelopes in the form
-`{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. Consumers
-that call MCP tools directly should decode the JSON payload before reading the
-tool result. New bridge tools will instead use MCP-native `structuredContent`;
-this prototype has not been migrated to that contract.
+The current bridge returns MCP-native `structuredContent` from both dynamic and
+fixed tools. This historical agent still expects older tool names and response
+handling, so it is not a compatibility client for P04.
 `collect_artifact` is no longer registered. Call the exact approved Windows
 artifact tool and pass its generated structured arguments instead.
-The `collect_forensic_triage` helper wraps `Windows.Triage.Targets` with
-`Targets='["_BasicCollection"]'` and a collection timeout of `2400` seconds.
+The fixed surface includes bounded VQL, Hunt and Flow lifecycle, one-file
+collection/download, basic triage, and process termination. File retrieval is
+explicit: list a Flow's uploads, then download one `file_id` beneath the
+existing absolute `VELOCIRAPTOR_DOWNLOAD_ROOT`; completed files are not
+overwritten. Hunt stop and Flow cancel are separate operations.
 The bridge no longer exposes the old Linux, macOS, generic collection, or
-artifact-discovery wrappers. Some fixed Windows lifecycle/response helpers are
-still transitional at P03 and are not a compatibility guarantee for this agent.
+artifact-discovery wrappers. The 12 P04 fixed tools are not a compatibility
+guarantee for this historical agent.
