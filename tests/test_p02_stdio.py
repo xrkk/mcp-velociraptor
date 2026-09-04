@@ -101,7 +101,7 @@ class RealBridgeStdioTests(unittest.TestCase):
         env = dict(os.environ)
         env["VELOCIRAPTOR_API_CONFIG"] = config
         calls = [
-            ("list_windows_artifacts", {"name_regex": "^Windows\\.System\\.Pslist$"}),
+            ("Windows.System.Pslist", {"ProcessRegex": "^__mcp_p02_no_match__$"}),
             ("client_info", {"hostname": hostname}),
         ]
         initialized, tools, results, stderr = asyncio.run(
@@ -109,14 +109,18 @@ class RealBridgeStdioTests(unittest.TestCase):
         )
         self.assertEqual(initialized.server_info.name, "velociraptor-mcp")
         names = {tool.name for tool in tools}
-        self.assertIn("list_windows_artifacts", names)
+        self.assertIn("Windows.System.Pslist", names)
+        self.assertNotIn("list_windows_artifacts", names)
         self.assertIn("client_info", names)
-        self.assertGreater(len(names), 0)
-        for result in results:
-            self.assertFalse(result.is_error)
-            self.assertTrue(result.content)
-            envelope = json.loads(result.content[0].text)
-            self.assertTrue(envelope["ok"])
+        self.assertEqual(len(names), 129)
+        dynamic, legacy = results
+        self.assertFalse(dynamic.is_error)
+        self.assertEqual(dynamic.content, [])
+        self.assertTrue(dynamic.structured_content["flow_id"].startswith("F."))
+        self.assertEqual(dynamic.structured_content["operation"], "start_artifact_collection")
+        self.assertFalse(legacy.is_error)
+        self.assertTrue(legacy.content)
+        self.assertTrue(json.loads(legacy.content[0].text)["ok"])
         self.assertNotIn("ImportError", stderr)
         self.assertNotIn("Traceback", stderr)
 

@@ -1,0 +1,967 @@
+[
+  {
+    "artifact": "Windows.Analysis.EvidenceOfDownload",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Applications.Chrome.Cookies",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Applications.Chrome.Extensions",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Applications.Chrome.History",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Applications.Edge.History",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Applications.OfficeMacros",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Attack.Prefetch",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Attack.UnexpectedImagePath",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Carving.CobaltStrike",
+    "parameters": {
+      "PidRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.Amcache",
+    "parameters": {
+      "SHA1Regex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.BinaryHunter",
+    "parameters": {
+      "AuthenticodeRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.BinaryRename",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Detection.EnvironmentVariables",
+    "parameters": {
+      "ProcessNameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.ForwardedImports",
+    "parameters": {
+      "ExcludeRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.Impersonation",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Detection.Mutants",
+    "parameters": {
+      "processRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.TemplateInjection",
+    "parameters": {
+      "TemplateFileRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Detection.Yara.NTFS",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Detection.Yara.PhysicalMemory",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Detection.Yara.Process",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.ETW.DotNetRundown",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.AlternateLogon",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.EventLogs.Cleared",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.EventLogs.Evtx",
+    "parameters": {
+      "PathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.EvtxHunter",
+    "parameters": {
+      "IocRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.ExplicitLogon",
+    "parameters": {
+      "UsernameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.Modifications",
+    "parameters": {
+      "ProviderRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.PowershellModule",
+    "parameters": {
+      "ContextRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.PowershellScriptblock",
+    "parameters": {
+      "SearchStrings": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.RDPAuth",
+    "parameters": {
+      "SourceIPRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.ScheduledTasks",
+    "parameters": {
+      "TaskSchedulerEventRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.EventLogs.ServiceCreationComspec",
+    "parameters": {
+      "ComspecRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.Amcache",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.Bam",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.CertUtil",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.FilenameSearch",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.JumpLists",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.Lnk",
+    "parameters": {
+      "IocRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.Prefetch",
+    "parameters": {
+      "binaryRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.RecentApps",
+    "parameters": {
+      "UserFilter": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.RecycleBin",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.SAM.Enriched",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.SRUM",
+    "parameters": {
+      "UserRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.Shellbags",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Forensics.Timeline",
+    "parameters": {
+      "UserFilter": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Forensics.Usn",
+    "parameters": {
+      "PathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Memory.Acquisition",
+    "parameters": {
+      "Compression": "Snappy"
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Use approved compression while cancelling immediately."
+  },
+  {
+    "artifact": "Windows.Memory.PEDump",
+    "parameters": {
+      "Pid": 0,
+      "BaseOffset": 0,
+      "FilenameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Impossible process/base target plus no-match filename."
+  },
+  {
+    "artifact": "Windows.Memory.ProcessDump",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$",
+      "PidRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No-match process and PID filters."
+  },
+  {
+    "artifact": "Windows.Memory.ProcessInfo",
+    "parameters": {
+      "ProcessNameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.NTFS.ADSHunter",
+    "parameters": {
+      "AdsNameExclusion": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.NTFS.ExtendedAttributes",
+    "parameters": {
+      "HostPathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.NTFS.I30",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.NTFS.MFT",
+    "parameters": {
+      "PathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.NTFS.Recover",
+    "parameters": {
+      "MFTId": "9223372036854775807"
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Use a deterministic non-existent MFT id."
+  },
+  {
+    "artifact": "Windows.Network.ArpCache",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Network.ListeningPorts",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Network.Netstat",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Network.NetstatEnriched",
+    "parameters": {
+      "IPRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Network.PacketCapture",
+    "parameters": {
+      "StartTrace": false
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Do not start packet tracing or enable networking."
+  },
+  {
+    "artifact": "Windows.Packs.Persistence",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Persistence.Debug",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Persistence.PermanentWMIEvents",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Persistence.PowershellProfile",
+    "parameters": {
+      "SearchStrings": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Persistence.PowershellRegistry",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Persistence.Wow64cpu",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Registry.AppCompatCache",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Registry.BackupRestore",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Registry.EnableUnsafeClientMailRules",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.EnabledMacro",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.NTUser",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.NTUser.Upload",
+    "parameters": {
+      "userRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.PortProxy",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Registry.RDP",
+    "parameters": {
+      "UserRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.RecentDocs",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Registry.UserAssist",
+    "parameters": {
+      "UserFilter": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Registry.WDigest",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Search.FileFinder",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Search.VSS",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Search.Yara",
+    "parameters": {
+      "nameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Sys.AllUsers",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.AppcompatShims",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.CertificateAuthorities",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.DiskInfo",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.Drivers",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.FirewallRules",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.Interfaces",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.Programs",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.StartupItems",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sys.Users",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Sysinternals.Autoruns",
+    "parameters": {},
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.AuditPolicy",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.CatFiles",
+    "parameters": {
+      "SignerExcludeRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.CmdShell",
+    "parameters": {
+      "Command": "exit 0",
+      "Timeout": 30,
+      "Stateful": false
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Run only the inert exit command."
+  },
+  {
+    "artifact": "Windows.System.CriticalServices",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.DLLs",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.DNSCache",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.DomainRole",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.Handles",
+    "parameters": {
+      "processRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.HostsFile",
+    "parameters": {
+      "HostnameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.LocalAdmins",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.PowerShell",
+    "parameters": {
+      "Command": "exit 0",
+      "Timeout": 30,
+      "Stateful": false
+    },
+    "risk_class": "resource_sensitive",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Run only the inert exit command."
+  },
+  {
+    "artifact": "Windows.System.Powershell.ModuleAnalysisCache",
+    "parameters": {
+      "ModulePathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.Powershell.PSReadline",
+    "parameters": {
+      "SearchStrings": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.Pslist",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.RootCAStore",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.SVCHost",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.Services",
+    "parameters": {
+      "NameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.Shares",
+    "parameters": {
+      "NameRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.Signers",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.System.TaskScheduler",
+    "parameters": {
+      "Username": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.Threads",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.UntrustedBinaries",
+    "parameters": {
+      "processNamesRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.VAD",
+    "parameters": {
+      "ProcessRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.System.WMIQuery",
+    "parameters": {},
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "No safe narrowing regex is exposed; invoke with no explicit parameters and cancel immediately."
+  },
+  {
+    "artifact": "Windows.Timeline.MFT",
+    "parameters": {
+      "PathRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Timeline.Prefetch",
+    "parameters": {
+      "binaryRegex": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  },
+  {
+    "artifact": "Windows.Timeline.Registry.RunMRU",
+    "parameters": {
+      "targetUser": "^__mcp_p03_no_match__$"
+    },
+    "risk_class": "bounded",
+    "cancel_policy": "cancel_if_running",
+    "reason": "Constrain the first public regex to a deterministic no-match value."
+  }
+]

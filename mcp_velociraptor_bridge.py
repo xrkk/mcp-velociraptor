@@ -6,7 +6,12 @@ import ast
 import json
 import logging
 import re
+import sys
 from velociraptor_api import *
+from velociraptor_dynamic_artifacts import (
+    ArtifactRegistryError,
+    register_dynamic_artifact_tools,
+)
 from velociraptor_mcp_core import TargetContext, VelociraptorBackend
 
 
@@ -15,12 +20,14 @@ logging.getLogger("mcp").setLevel(logging.WARNING)
 
 mcp = MCPServer("velociraptor-mcp")
 
-# velociraptor_api loads repo-local .env before resolving VELOCIRAPTOR_API_CONFIG,
-# ./api_client.yaml, or ~/.config/api_client.yaml.
-init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
 api_list_orgs = list_orgs
 velociraptor_backend = VelociraptorBackend()
 target_context = TargetContext(velociraptor_backend)
+
+
+def _unregistered_source(function):
+    """Keep a legacy implementation available to migrate without exposing it."""
+    return function
 
 ArtifactParameters = dict[str, ParameterValue]
 ENABLE_DANGEROUS_TOOLS = os.environ.get("ENABLE_DANGEROUS_TOOLS", "").strip().lower() in {
@@ -305,7 +312,7 @@ def list_clients(
     return _run_json_tool(list_all_clients, search, os_filter, limit, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def hunt_across_fleet(
     artifact: str,
     org_id: str = "",
@@ -373,7 +380,7 @@ def run_vql(query: str, org_id: str = "") -> str:
         return _json_error(DANGEROUS_TOOLS_WARNING)
     return _run_json_tool(run_vql_query, query, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def linux_pslist(
     client_id: str,
     org_id: str = "",
@@ -399,7 +406,7 @@ async def linux_pslist(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def linux_groups(
     client_id: str,
     org_id: str = "",
@@ -425,7 +432,7 @@ async def linux_groups(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def linux_mounts(
     client_id: str,
     org_id: str = "",
@@ -449,7 +456,7 @@ async def linux_mounts(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def linux_netstat_enriched(
     client_id: str,
     org_id: str = "",
@@ -498,7 +505,7 @@ async def linux_netstat_enriched(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def linux_users(
     client_id: str,
     org_id: str = "",
@@ -523,7 +530,7 @@ async def linux_users(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_crontab(
     client_id: str,
     org_id: str = "",
@@ -535,7 +542,7 @@ async def linux_crontab(
     return _run_collection_tool(client_id, "Linux.Sys.Crontab", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_services(
     client_id: str,
     org_id: str = "",
@@ -547,7 +554,7 @@ async def linux_services(
     return _run_collection_tool(client_id, "Linux.Sys.Services", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_ssh_authorized_keys(
     client_id: str,
     org_id: str = "",
@@ -566,7 +573,7 @@ async def linux_ssh_authorized_keys(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_bash_history(
     client_id: str,
     org_id: str = "",
@@ -578,7 +585,7 @@ async def linux_bash_history(
     return _run_collection_tool(client_id, "Linux.Sys.BashHistory", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_ssh_logins(
     client_id: str,
     org_id: str = "",
@@ -590,7 +597,7 @@ async def linux_ssh_logins(
     return _run_collection_tool(client_id, "Linux.Syslog.SSHLogin", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_last_user_login(
     client_id: str,
     org_id: str = "",
@@ -609,7 +616,7 @@ async def linux_last_user_login(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_arp_cache(
     client_id: str,
     org_id: str = "",
@@ -621,7 +628,7 @@ async def linux_arp_cache(
     return _run_collection_tool(client_id, "Linux.Network.ArpCache", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_journal_logs(
     client_id: str,
     org_id: str = "",
@@ -648,7 +655,7 @@ async def linux_journal_logs(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_file_finder(
     client_id: str,
     org_id: str = "",
@@ -696,7 +703,7 @@ async def linux_file_finder(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_pslist(
     client_id: str,
     org_id: str = "",
@@ -716,7 +723,7 @@ async def macos_pslist(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_users(
     client_id: str,
     org_id: str = "",
@@ -728,7 +735,7 @@ async def macos_users(
     return _run_collection_tool(client_id, "MacOS.Sys.Users", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_netstat(
     client_id: str,
     org_id: str = "",
@@ -740,7 +747,7 @@ async def macos_netstat(
     return _run_collection_tool(client_id, "MacOS.Network.Netstat", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_launch_agents(
     client_id: str,
     org_id: str = "",
@@ -759,7 +766,7 @@ async def macos_launch_agents(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_login_items(
     client_id: str,
     org_id: str = "",
@@ -771,7 +778,7 @@ async def macos_login_items(
     return _run_collection_tool(client_id, "MacOS.Sys.LoginItems", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_bash_history(
     client_id: str,
     org_id: str = "",
@@ -783,7 +790,7 @@ async def macos_bash_history(
     return _run_collection_tool(client_id, "MacOS.Sys.BashHistory", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_browser_history(
     client_id: str,
     org_id: str = "",
@@ -816,7 +823,7 @@ async def macos_browser_history(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_quarantine_events(
     client_id: str,
     org_id: str = "",
@@ -835,7 +842,7 @@ async def macos_quarantine_events(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_tcc_database(
     client_id: str,
     org_id: str = "",
@@ -847,7 +854,7 @@ async def macos_tcc_database(
     return _run_collection_tool(client_id, "MacOS.System.TCC", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def macos_file_finder(
     client_id: str,
     org_id: str = "",
@@ -890,7 +897,7 @@ async def macos_file_finder(
         org_id,
     )
 
-@mcp.tool()
+@_unregistered_source
 async def windows_pslist(
     client_id: str,
     org_id: str = "",
@@ -929,7 +936,7 @@ async def windows_pslist(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_netstat_enriched(
     client_id: str,
     org_id: str = "",
@@ -973,7 +980,7 @@ async def windows_netstat_enriched(
 
 ##
 ## Persistence 
-@mcp.tool()
+@_unregistered_source
 async def windows_scheduled_tasks(
     client_id: str,
     org_id: str = "",
@@ -997,7 +1004,7 @@ async def windows_scheduled_tasks(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_services(
     client_id: str,
     org_id: str = "",
@@ -1024,7 +1031,7 @@ async def windows_services(
 ##
 ## User Activity 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_recentdocs(
     client_id: str,
     org_id: str = "",
@@ -1048,7 +1055,7 @@ async def windows_recentdocs(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_shellbags(
     client_id: str,
     org_id: str = "",
@@ -1072,7 +1079,7 @@ async def windows_shellbags(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_mounted_mass_storage_usb(
     client_id: str,
     org_id: str = "",
@@ -1095,7 +1102,7 @@ async def windows_mounted_mass_storage_usb(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_evidence_of_download(
     client_id: str,
     org_id: str = "",
@@ -1118,7 +1125,7 @@ async def windows_evidence_of_download(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_mountpoints2(
     client_id: str,
     org_id: str = "",
@@ -1142,7 +1149,7 @@ async def windows_mountpoints2(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_event_log_cleared(
     client_id: str,
     org_id: str = "",
@@ -1169,7 +1176,7 @@ async def windows_event_log_cleared(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_timestomp(
     client_id: str,
     org_id: str = "",
@@ -1194,7 +1201,7 @@ async def windows_timestomp(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_shadow_copies(
     client_id: str,
     org_id: str = "",
@@ -1214,7 +1221,7 @@ async def windows_shadow_copies(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_malfind(
     client_id: str,
     org_id: str = "",
@@ -1236,7 +1243,7 @@ async def windows_malfind(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_mutants(
     client_id: str,
     org_id: str = "",
@@ -1267,7 +1274,7 @@ async def windows_mutants(
 
 ##
 ## Evidence of execution
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_amcache(
     client_id: str,
     org_id: str = "",
@@ -1291,7 +1298,7 @@ async def windows_execution_amcache(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_bam(
     client_id: str,
     org_id: str = "",
@@ -1314,7 +1321,7 @@ async def windows_execution_bam(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_activitiesCache(
     client_id: str,
     org_id: str = "",
@@ -1337,7 +1344,7 @@ async def windows_execution_activitiesCache(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_userassist(
     client_id: str,
     org_id: str = "",
@@ -1360,7 +1367,7 @@ async def windows_execution_userassist(
 
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_shimcache(
     client_id: str,
     org_id: str = "",
@@ -1387,7 +1394,7 @@ async def windows_execution_shimcache(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_execution_prefetch(
     client_id: str,
     org_id: str = "",
@@ -1412,7 +1419,7 @@ async def windows_execution_prefetch(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_ntfs_mft_search(
     client_id: str,
     org_id: str = "",
@@ -1443,7 +1450,7 @@ async def windows_ntfs_mft_search(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_event_logs(
     client_id: str,
     org_id: str = "",
@@ -1493,7 +1500,7 @@ async def windows_event_logs(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_logon_events(
     client_id: str,
     org_id: str = "",
@@ -1512,7 +1519,7 @@ async def windows_logon_events(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_powershell_scriptblock(
     client_id: str,
     org_id: str = "",
@@ -1541,7 +1548,7 @@ async def windows_powershell_scriptblock(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_powershell_history(
     client_id: str,
     org_id: str = "",
@@ -1573,7 +1580,7 @@ async def windows_powershell_history(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_autoruns(
     client_id: str,
     org_id: str = "",
@@ -1585,7 +1592,7 @@ async def windows_autoruns(
     return _run_collection_tool(client_id, "Windows.Sys.StartupItems", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_wmi_persistence(
     client_id: str,
     org_id: str = "",
@@ -1604,7 +1611,7 @@ async def windows_wmi_persistence(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_rdp_sessions(
     client_id: str,
     org_id: str = "",
@@ -1616,7 +1623,7 @@ async def windows_rdp_sessions(
     return _run_collection_tool(client_id, "Windows.EventLogs.RDPAuth", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_dns_cache(
     client_id: str,
     org_id: str = "",
@@ -1628,7 +1635,7 @@ async def windows_dns_cache(
     return _run_collection_tool(client_id, "Windows.System.DNSCache", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_hash_search(
     client_id: str,
     org_id: str = "",
@@ -1675,7 +1682,7 @@ async def windows_hash_search(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_recycle_bin(
     client_id: str,
     org_id: str = "",
@@ -1687,7 +1694,7 @@ async def windows_recycle_bin(
     return _run_collection_tool(client_id, "Windows.Forensics.RecycleBin", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_ntfs_mft(
     client_id: str,
     org_id: str = "",
@@ -1738,7 +1745,7 @@ async def windows_ntfs_mft(
     return _run_collection_tool(client_id, artifact, parameters, Fields, result_scope, org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_usn_journal(
     client_id: str,
     org_id: str = "",
@@ -1786,7 +1793,7 @@ async def windows_usn_journal(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_srum(
     client_id: str,
     org_id: str = "",
@@ -1798,7 +1805,7 @@ async def windows_srum(
     return _run_collection_tool(client_id, "Windows.Forensics.SRUM", None, Fields, "", org_id)
 
 
-@mcp.tool()
+@_unregistered_source
 async def windows_browser_history(
     client_id: str,
     org_id: str = "",
@@ -1827,7 +1834,7 @@ async def windows_browser_history(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def yara_scan_files(
     client_id: str,
     YaraRule: str,
@@ -1856,7 +1863,7 @@ async def yara_scan_files(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def yara_scan_process(
     client_id: str,
     YaraRule: str,
@@ -1883,7 +1890,7 @@ async def yara_scan_process(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def linux_yara_scan(
     client_id: str,
     YaraRule: str,
@@ -2003,7 +2010,7 @@ async def get_collection_results(
     return _json_error("No results found after multiple retries or the flow did not finish.")
 
 
-@mcp.tool()
+@_unregistered_source
 async def collect_artifact(
     client_id: str,
     artifact: str,
@@ -2074,7 +2081,7 @@ async def collect_forensic_triage(
         org_id=org_id,
     )
 
-@mcp.tool()
+@_unregistered_source
 async def list_windows_artifacts(
     org_id: str = "",
     name_regex: str = ".",
@@ -2099,7 +2106,7 @@ async def list_windows_artifacts(
         name_regex,
     )
 
-@mcp.tool()
+@_unregistered_source
 async def list_linux_artifacts(
     org_id: str = "",
     name_regex: str = ".",
@@ -2122,7 +2129,7 @@ async def list_linux_artifacts(
     )
 
 
-@mcp.tool()
+@_unregistered_source
 async def list_macos_artifacts(
     org_id: str = "",
     name_regex: str = ".",
@@ -2145,5 +2152,32 @@ async def list_macos_artifacts(
     )
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Validate and register the complete public toolset before opening stdio."""
+    try:
+        # velociraptor_api loads repo-local .env before resolving this setting.
+        init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
+        rows = read_root_artifact_definitions()
+        register_dynamic_artifact_tools(
+            mcp,
+            rows,
+            target_context,
+            velociraptor_backend,
+        )
+    except ArtifactRegistryError as exc:
+        print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(
+            "Velociraptor MCP startup failed: backend initialization or metadata "
+            f"read failed ({type(exc).__name__})",
+            file=sys.stderr,
+        )
+        return 2
+
     mcp.run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

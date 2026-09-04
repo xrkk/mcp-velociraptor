@@ -95,10 +95,9 @@ def normalize_env_dict(parameters: Mapping[str, ParameterValue] | None = None) -
 
     items = []
     for key, value in parameters.items():
-        if not VALID_PARAMETER_NAME_RE.fullmatch(key):
-            raise ValueError(f"Invalid parameter name: {key!r}")
+        encoded_key = vql_identifier(key)
         normalized_value = normalize_parameter_value(value)
-        items.append(f"{key}={vql_literal(normalized_value)}")
+        items.append(f"{encoded_key}={vql_literal(normalized_value)}")
 
     return ",".join(items)
 
@@ -113,10 +112,20 @@ def normalize_parameter_dict(
 
     normalized = {}
     for key, value in parameters.items():
-        if not VALID_PARAMETER_NAME_RE.fullmatch(key):
-            raise ValueError(f"Invalid parameter name: {key!r}")
+        vql_identifier(key)
         normalized[key] = normalize_parameter_value(value)
     return normalized
+
+
+def vql_identifier(value: str) -> str:
+    """Encode one VQL identifier without allowing syntax to escape it."""
+    if not isinstance(value, str) or not value:
+        raise ValueError("VQL identifier must be a non-empty string.")
+    if VALID_PARAMETER_NAME_RE.fullmatch(value):
+        return value
+    if "`" in value or any(ord(character) < 32 for character in value):
+        raise ValueError("VQL identifier contains unsupported characters.")
+    return f"`{value}`"
 
 
 def _artifact_spec_key(artifact: str) -> str:
@@ -135,7 +144,7 @@ def hunt_spec_vql(
 
     env_items = []
     for key, value in sorted(normalized_parameters.items()):
-        env_items.append(f"{key}={vql_literal(value)}")
+        env_items.append(f"{vql_identifier(key)}={vql_literal(value)}")
     return (
         "dict("
         f"{_artifact_spec_key(normalized_artifact)}=dict("
@@ -428,6 +437,18 @@ def client_id_exists(client_id: str) -> bool:
         root_org=True,
     )
     return bool(rows)
+
+
+def read_root_artifact_definitions() -> list[dict]:
+    """Read the exact Windows artifact metadata used for atomic registration."""
+    name_pattern = r"^Windows\."
+    return run_vql_query(
+        "SELECT name, type, description, parameters, raw "
+        "FROM artifact_definitions() "
+        f"WHERE name =~ {vql_literal(name_pattern)} "
+        "ORDER BY name",
+        root_org=True,
+    )
 
 
 def start_hunt(

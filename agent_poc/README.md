@@ -5,6 +5,30 @@
 > scope. The commands and architecture below document the existing prototype;
 > they are not a compatibility promise for the bridge migration.
 
+The P03 bridge itself now has 118 dynamic Windows artifact tools. “Dynamic”
+means their MCP schemas are generated from live Velociraptor metadata at process
+startup, but only for an exact reviewed allowlist. They use the root organization
+and the one Windows endpoint, start a Flow (one collection job), and communicate
+over stdio (the MCP client's process pipes). The practical impact is:
+
+| Term | Action and impact |
+| --- | --- |
+| Dynamic artifact tool | Starts its named artifact on the Windows VM and immediately returns a Flow reference. |
+| Allowlist | Blocks unreviewed names or changed definitions before the bridge starts. |
+| Root organization | Keeps metadata and collection operations in the bridge's fixed Velociraptor organization. |
+| Flow | Identifies the endpoint job that later tools can inspect, page, or cancel. |
+| Windows-only | Linux remains an unregistered TODO and macOS is unsupported. |
+| stdio | Reserves stdout for MCP protocol data and sends startup diagnostics to stderr. |
+
+The historical agent code has not been migrated to those generated names or the
+new structured result contract, so do not run it against the P03 bridge as a
+compatibility test.
+
+The current P03 snapshot also lacks the external binaries required by
+`Windows.Network.PacketCapture` and `Windows.Sysinternals.Autoruns`; their
+pre-Flow errors are not successful calls. Dependency preparation and a verified
+post-install snapshot belong to the later test-infrastructure stage.
+
 ### Setup
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
@@ -34,7 +58,7 @@ the API. Azure OpenAI mode sends the pre-collected evidence bundle to the
 configured Azure API account for model summarization. Keep
 `VELOCIRAPTOR_MODEL_PROVIDER=ollama` when endpoint evidence must remain local.
 
-Optional for multi-tenant deployments:
+Historical prototype option only (not part of the new fixed-root contract):
 ```bash
 export VELOCIRAPTOR_ORG_ID=O123
 ```
@@ -76,7 +100,9 @@ Enable verbose MCP client diagnostics with role labels, collection names, row co
 - Each analyst runs in a separate MCP session with its own conversation history.
 - Evidence collection is deterministic in code. The model is used to summarize a pre-collected evidence bundle rather than choose tools free-form.
 - Tool access is filtered dynamically per analysis type. For example, `execution` only gets execution tools, `engagement` gets bounded analyst roles, and `deep` opts into heavier filesystem and security roles.
-- The agent supports Windows, Linux, and macOS role sets where the bridge has deterministic artifact helpers. Parameter-heavy tools such as hunts, arbitrary `collect_artifact`, YARA scans, quarantine, process kill, and broad file collection remain direct MCP tools rather than automatic agent steps.
+- The historical agent source contains Windows, Linux, and macOS role sets, but
+  the current bridge registers only the reviewed Windows surface. Those old role
+  sets and their generic collection calls are not compatible with P03.
 
 ### Integration Examples
 
@@ -174,26 +200,21 @@ and defaults to `ollama`. Ollama mode reads `OLLAMA_MODEL` and defaults to
 `AZURE_OPENAI_API_KEY`, and defaults to `gpt-5.4-mini`.
 Each `analyze_endpoint()` run resets prior manager chat state, and each analyst
 uses its own isolated MCP session and conversation history.
-For multi-tenant deployments, set `VELOCIRAPTOR_ORG_ID` for the default org, or
-pass `org_id` directly to MCP tools such as `client_info`, `windows_pslist`,
-`collect_artifact`, and `get_collection_results`.
-Set `ENABLE_DANGEROUS_TOOLS=true` only when you explicitly want to enable raw
-VQL, quarantine, and remote process-kill tools.
+The current bridge fixes dynamic artifact calls to the root organization and
+internally resolves the one Windows endpoint. Old `org_id`/hostname/client
+examples in this historical prototype are not supported by that contract.
+`ENABLE_DANGEROUS_TOOLS` currently affects only fixed transition tools and is
+scheduled for removal with that legacy surface.
 
 The legacy MCP tools used by this prototype return JSON text envelopes in the form
 `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. Consumers
 that call MCP tools directly should decode the JSON payload before reading the
 tool result. New bridge tools will instead use MCP-native `structuredContent`;
 this prototype has not been migrated to that contract.
-For `collect_artifact`, use the `parameters` argument as a structured JSON
-object with scalar values or lists of scalar values, such as
-`{"PathRegex": ".*", "Targets": ["_BasicCollection"]}`. Legacy compatibility
-input can be passed via `legacy_parameters` and is limited to simple scalar
-assignments or list literals like `Targets=['_BasicCollection']`; raw VQL
-fragments are rejected.
+`collect_artifact` is no longer registered. Call the exact approved Windows
+artifact tool and pass its generated structured arguments instead.
 The `collect_forensic_triage` helper wraps `Windows.Triage.Targets` with
 `Targets='["_BasicCollection"]'` and a collection timeout of `2400` seconds.
-The MCP server also exposes expanded fleet, Linux, macOS, Windows, YARA, and
-response helpers. The POC agent models deterministic Windows, Linux, and macOS
-helpers as bounded analyst roles. Parameter-heavy or disruptive helpers remain
-available to direct MCP clients and are not run automatically by agent profiles.
+The bridge no longer exposes the old Linux, macOS, generic collection, or
+artifact-discovery wrappers. Some fixed Windows lifecycle/response helpers are
+still transitional at P03 and are not a compatibility guarantee for this agent.
