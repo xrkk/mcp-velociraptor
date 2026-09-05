@@ -183,7 +183,8 @@ These terms describe what a call does and what it changes:
 | Root organization | The single Velociraptor organization used by this bridge | Metadata reads and collections stay in that organization; callers cannot select another organization on dynamic tools. |
 | Flow | One concrete collection job on the Windows client | May read endpoint evidence or run the artifact's documented action; later lifecycle tools inspect or stop it. |
 | Windows-only | Only the one Windows endpoint and Windows artifacts are in scope | Linux tools are not registered yet and macOS tools will not be added. |
-| stdio | MCP messages travel through the bridge process's standard input/output | stdout is reserved for protocol messages; startup diagnostics go to stderr and failed validation exposes no partial server. |
+| stdio | MCP messages travel through the bridge process's standard input/output | Reserved for internal testing; stdout carries only protocol messages, startup diagnostics go to stderr, and failed validation exposes no partial server. |
+| Formal HTTP entry | The production transport: one stateful Streamable HTTP server on the exact guest host-only address, port 28790, path `/mcp` | Selected with `VELOCIRAPTOR_MCP_TRANSPORT=http` plus an exact host, a non-empty bearer token, and optional allowed origins; wildcard binds, other ports or paths, or an empty token are rejected before any socket opens. Requests must pass a constant-time bearer check and Host/Origin allowlists (DNS rebinding protection stays on) before any tool runs. Every response carries a process-scoped `X-MCP-Server-Instance` value that changes on restart and cannot be forged by clients. |
 
 Thanks to [@snoe-findley](https://github.com/snoe-findley) for sharing a fork
 that expanded available tools and some of the newer cross-platform additions.

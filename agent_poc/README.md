@@ -19,7 +19,7 @@ over stdio (the MCP client's process pipes). The practical impact is:
 | Root organization | Keeps metadata and collection operations in the bridge's fixed Velociraptor organization. |
 | Flow | Identifies the endpoint job that later tools can inspect, page, or cancel. |
 | Windows-only | Linux remains an unregistered TODO and macOS is unsupported. |
-| stdio | Reserves stdout for MCP protocol data and sends startup diagnostics to stderr. |
+| stdio | Reserves stdout for MCP protocol data and sends startup diagnostics to stderr; it is the internal test transport. The production transport is a separate stateful Streamable HTTP entry on port 28790 with bearer authentication, which the agent code does not use. |
 
 The historical agent code has not been migrated to those generated names or the
 new structured result contract, so do not run it against the P03 bridge as a

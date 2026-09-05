@@ -14,12 +14,16 @@ from velociraptor_dynamic_artifacts import (
 )
 from velociraptor_fixed_tools import register_fixed_tools, validate_combined_registry
 from velociraptor_mcp_core import TargetContext, VelociraptorBackend
+from velociraptor_transport import (
+    FORMAL_TRANSPORT,
+    TransportConfigError,
+    resolve_transport_config,
+    run_formal_http,
+)
 
 
 # Keep stdio responses clean by suppressing chatty MCP library info logs.
 logging.getLogger("mcp").setLevel(logging.WARNING)
-
-mcp = MCPServer("velociraptor-mcp")
 
 api_list_orgs = list_orgs
 velociraptor_backend = VelociraptorBackend()
@@ -2153,41 +2157,61 @@ async def list_macos_artifacts(
     )
 
 
+def create_server() -> MCPServer:
+    """Construct the single MCPServer instance and register the toolset once.
+
+    Both entry transports share this one registration; no second server is
+    constructed and no tool is registered twice.
+    """
+    # velociraptor_api loads repo-local .env before resolving this setting.
+    init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
+    rows = read_root_artifact_definitions()
+    server = MCPServer("velociraptor-mcp")
+    specs = register_dynamic_artifact_tools(
+        server,
+        rows,
+        target_context,
+        velociraptor_backend,
+    )
+    register_fixed_tools(
+        server,
+        specs,
+        target_context,
+        velociraptor_backend,
+        download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
+    )
+    validate_combined_registry(server, specs)
+    return server
+
+
 def main() -> int:
-    """Validate and register the complete public toolset before opening stdio."""
-    global mcp
+    """Resolve the fail-closed transport seam, then run the single server."""
     try:
-        # velociraptor_api loads repo-local .env before resolving this setting.
-        init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
-        rows = read_root_artifact_definitions()
-        candidate = MCPServer("velociraptor-mcp")
-        specs = register_dynamic_artifact_tools(
-            candidate,
-            rows,
-            target_context,
-            velociraptor_backend,
-        )
-        register_fixed_tools(
-            candidate,
-            specs,
-            target_context,
-            velociraptor_backend,
-            download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
-        )
-        validate_combined_registry(candidate, specs)
-        mcp = candidate
-    except ArtifactRegistryError as exc:
-        print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
-        return 2
-    except Exception as exc:
+        config = resolve_transport_config()
+    except TransportConfigError as exc:
         print(
-            "Velociraptor MCP startup failed: backend initialization or metadata "
-            f"read failed ({type(exc).__name__})",
+            f"Velociraptor MCP transport configuration rejected: {exc}",
             file=sys.stderr,
         )
         return 2
 
-    mcp.run()
+    try:
+        server = create_server()
+    except ArtifactRegistryError as exc:
+        print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
+        return 2
+    except Exception:
+        print(
+            "Velociraptor MCP startup failed: backend initialization or metadata "
+            f"read failed ({type(sys.exc_info()[1]).__name__})",
+            file=sys.stderr,
+        )
+        return 2
+
+    if config.mode == FORMAL_TRANSPORT:
+        run_formal_http(server, config)
+    else:
+        server.run("stdio")
     return 0
 
 
