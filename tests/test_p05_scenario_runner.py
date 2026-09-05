@@ -94,12 +94,13 @@ class PointerAndAssertionTests(unittest.TestCase):
                 runner.validate_assertion_spec(assertion)
 
     def test_indexed_representative_scenario_loads(self):
-        scenario, row, digest = runner.load_indexed_scenario("p05-flow-triage")
+        scenario, row, digest, index_path = runner.load_indexed_scenario("p05-flow-triage")
         self.assertEqual(scenario["scenario_id"], row["scenario_id"])
         self.assertEqual(digest, row["sha256"])
+        self.assertEqual(index_path, runner.P05_INDEX_PATH)
 
     def test_forward_reference_and_command_cleanup_are_rejected(self):
-        scenario, _, _ = runner.load_indexed_scenario("p05-flow-triage")
+        scenario, _, _, _ = runner.load_indexed_scenario("p05-flow-triage")
         invalid = copy.deepcopy(scenario)
         invalid["steps"][0]["arguments"] = {
             "flow_id": {"$ref": "/steps/wait_ascii/structuredContent/flow_id"}

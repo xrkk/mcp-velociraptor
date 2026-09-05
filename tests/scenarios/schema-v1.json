@@ -1,6 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mcp-velociraptor.invalid/tests/scenarios/schema-v1.json",
   "$defs": {
     "assertion": {
       "additionalProperties": false,
@@ -10,6 +8,9 @@
           "type": "string"
         },
         "expected": {},
+        "id": {
+          "$ref": "#/$defs/id"
+        },
         "op": {
           "enum": [
             "exists",
@@ -25,23 +26,50 @@
           ]
         }
       },
-      "required": ["actual", "op"],
+      "required": [
+        "actual",
+        "op"
+      ],
       "type": "object"
     },
     "cleanup": {
       "additionalProperties": false,
       "properties": {
-        "arguments": {"type": "object"},
+        "arguments": {
+          "type": "object"
+        },
         "assertions": {
-          "items": {"$ref": "#/$defs/assertion"},
+          "items": {
+            "$ref": "#/$defs/assertion"
+          },
           "type": "array"
         },
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"const": "tool"},
-        "tool": {"minLength": 1, "type": "string"},
-        "when": {"enum": ["always", "on_success", "on_failure"]}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "tool"
+        },
+        "tool": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "when": {
+          "enum": [
+            "always",
+            "on_success",
+            "on_failure"
+          ]
+        }
       },
-      "required": ["kind", "id", "tool", "arguments", "assertions", "when"],
+      "required": [
+        "kind",
+        "id",
+        "tool",
+        "arguments",
+        "assertions",
+        "when"
+      ],
       "type": "object"
     },
     "id": {
@@ -52,61 +80,130 @@
       "additionalProperties": false,
       "properties": {
         "assertions": {
-          "items": {"$ref": "#/$defs/assertion"},
+          "items": {
+            "$ref": "#/$defs/assertion"
+          },
           "minItems": 1,
           "type": "array"
         },
-        "interval_seconds": {"maximum": 30, "minimum": 0, "type": "number"},
-        "max_attempts": {"maximum": 240, "minimum": 1, "type": "integer"}
+        "interval_seconds": {
+          "maximum": 30,
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_attempts": {
+          "maximum": 240,
+          "minimum": 1,
+          "type": "integer"
+        }
       },
-      "required": ["max_attempts", "interval_seconds", "assertions"],
+      "required": [
+        "max_attempts",
+        "interval_seconds",
+        "assertions"
+      ],
       "type": "object"
     },
     "sleep": {
       "additionalProperties": false,
       "properties": {
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"const": "sleep"},
-        "seconds": {"maximum": 30, "minimum": 0, "type": "number"}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "sleep"
+        },
+        "seconds": {
+          "maximum": 30,
+          "minimum": 0,
+          "type": "number"
+        }
       },
-      "required": ["kind", "id", "seconds"],
+      "required": [
+        "kind",
+        "id",
+        "seconds"
+      ],
       "type": "object"
     },
     "tool": {
       "additionalProperties": false,
       "properties": {
-        "arguments": {"type": "object"},
+        "arguments": {
+          "type": "object"
+        },
         "assertions": {
-          "items": {"$ref": "#/$defs/assertion"},
+          "items": {
+            "$ref": "#/$defs/assertion"
+          },
           "type": "array"
         },
-        "id": {"$ref": "#/$defs/id"},
-        "kind": {"const": "tool"},
-        "repeat_until": {"$ref": "#/$defs/repeat"},
-        "tool": {"minLength": 1, "type": "string"}
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "const": "tool"
+        },
+        "repeat_until": {
+          "$ref": "#/$defs/repeat"
+        },
+        "tool": {
+          "minLength": 1,
+          "type": "string"
+        }
       },
-      "required": ["kind", "id", "tool", "arguments", "assertions"],
+      "required": [
+        "kind",
+        "id",
+        "tool",
+        "arguments",
+        "assertions"
+      ],
       "type": "object"
     }
   },
+  "$id": "https://mcp-velociraptor.invalid/tests/scenarios/schema-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "business_purpose": {"minLength": 1, "type": "string"},
+    "business_purpose": {
+      "minLength": 1,
+      "type": "string"
+    },
     "cleanup": {
-      "items": {"$ref": "#/$defs/cleanup"},
+      "items": {
+        "$ref": "#/$defs/cleanup"
+      },
       "type": "array"
     },
-    "fixture_spec_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+    "fixture_spec_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
     "required_snapshot": {
-      "const": "Snapshot 185-Velociraptor-MCP依赖与情景基线"
+      "enum": [
+        "Snapshot 185-Velociraptor-MCP依赖与情景基线",
+        "Snapshot 186-Velociraptor-MCP网络部署基线"
+      ]
     },
     "scenario_id": {
       "pattern": "^[a-z0-9][a-z0-9_-]{2,63}$",
       "type": "string"
     },
-    "schema_version": {"const": 1},
+    "schema_version": {
+      "const": 1
+    },
     "steps": {
-      "items": {"oneOf": [{"$ref": "#/$defs/tool"}, {"$ref": "#/$defs/sleep"}]},
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/tool"
+          },
+          {
+            "$ref": "#/$defs/sleep"
+          }
+        ]
+      },
       "minItems": 10,
       "type": "array"
     }

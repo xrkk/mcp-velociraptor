@@ -1,0 +1,45 @@
+{
+  "scenarios": [
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "full/p06-compromise-scope.json",
+      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "scenario_id": "p06-compromise-scope",
+      "sha256": "9c8d6af2d1f33b53b89518e3ae4e0af9b5ca790ef79f9108738188d9765b0905",
+      "snapshot_stage": "P06_ACTIVE"
+    },
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "full/p06-ransomware-root-cause.json",
+      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "scenario_id": "p06-ransomware-root-cause",
+      "sha256": "04f27035fbccc748cce9fc2a692a86fb8ea42dd0d6506f13e71ce5aff4486973",
+      "snapshot_stage": "P06_ACTIVE"
+    },
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "full/p06-credential-lateral-movement.json",
+      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "scenario_id": "p06-credential-lateral-movement",
+      "sha256": "633ec7cfa2edccce2b6e634be71dbd2fb569280ca144845c4c854a0aeab271d8",
+      "snapshot_stage": "P06_ACTIVE"
+    },
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "full/p06-data-exfiltration.json",
+      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "scenario_id": "p06-data-exfiltration",
+      "sha256": "2532c9048dfcbd9d4bcdeec8437ee4ab108a6cbed4d6f05a90c51724cb0cc56a",
+      "snapshot_stage": "P06_ACTIVE"
+    },
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "full/p06-remediation-validation.json",
+      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "scenario_id": "p06-remediation-validation",
+      "sha256": "288187a9b1b3a83d4f4cbe051adc859ede1bafc515274b44510fc0067194aca9",
+      "snapshot_stage": "P06_ACTIVE"
+    }
+  ],
+  "schema_version": 1
+}
