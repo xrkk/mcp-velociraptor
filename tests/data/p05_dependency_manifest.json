@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "dependencies": [
+    {
+      "filename": "etl2pcapng.zip",
+      "name": "etl2pcapng",
+      "sha256": "2acda1a09c8d2f54086c05cc53f0a120f7ac16ae8ee691154e9bf9f44a8970a9",
+      "size": 151414,
+      "source": "https://github.com/microsoft/etl2pcapng/releases/download/v1.4.0/etl2pcapng.zip",
+      "version": "1.4.0"
+    },
+    {
+      "authenticode_subject": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+      "filename": "autorunsc.exe",
+      "name": "Autorun_386",
+      "sha256": "a2394a11272ae38e7fb6ea862e783daa6d704a3d9c73a51dfe978b7692df6b1f",
+      "size": 1317184,
+      "source": "https://live.sysinternals.com/tools/autorunsc.exe",
+      "version": "14.3"
+    },
+    {
+      "authenticode_subject": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+      "filename": "autorunsc64.exe",
+      "name": "Autorun_amd64",
+      "sha256": "093d1c6b91d280c9644635c667753e0aa0e78c656eb4082147bf30364787d96f",
+      "size": 1460024,
+      "source": "https://live.sysinternals.com/tools/autorunsc64.exe",
+      "version": "14.3"
+    }
+  ],
+  "triage_artifact": {
+    "name": "Windows.Triage.Targets",
+    "source": "https://triage.velocidex.com/docs/windows.triage.targets/Windows.Triage.Targets.zip",
+    "yaml_sha256": "1a699aa9d5346fe342fb7c646bdfc755e110cf745658fab35499980fc0bbbb1c",
+    "yaml_size": 80977,
+    "zip_sha256": "44e59ea3a35db2b1e582cfe589c1f511b69eabc5931c4db96928bb7ba147acbb",
+    "zip_size": 44427
+  }
+}

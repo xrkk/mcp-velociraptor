@@ -1,0 +1,12 @@
+{
+  "scenarios": [
+    {
+      "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+      "path": "representative/p05-flow-triage.json",
+      "required_snapshot": "Snapshot 185-Velociraptor-MCP依赖与情景基线",
+      "scenario_id": "p05-flow-triage",
+      "sha256": "e2deaedc85c68ce1cf84cbfcc5b05d8c975e005f68d1b7dc38548a64e93569a7"
+    }
+  ],
+  "schema_version": 1
+}

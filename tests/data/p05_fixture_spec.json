@@ -1,0 +1,66 @@
+{
+  "event": {
+    "entry_type": "Information",
+    "event_id": 42005,
+    "message_template": "{workflow_id}|{attempt_id}|fixture-v1",
+    "source": "VelociraptorMCP-P05"
+  },
+  "files": [
+    {
+      "encoding": "ascii",
+      "path": "files/ascii.txt",
+      "payload": "mcp-p05-ascii\r\n",
+      "sha256": "c5f62dbea043e5876df14972a076097b0389196b20c2db0df0eece76fcc92179",
+      "size": 15
+    },
+    {
+      "encoding": "utf-8",
+      "path": "files/utf8 空格.txt",
+      "payload": "mcp-p05-你好\r\n",
+      "sha256": "f9932b5a7d3f6311e4b1602082c0af2bc0f26e1f21490c5e801b5d94cc8b28a2",
+      "size": 16
+    },
+    {
+      "encoding": "ascii",
+      "path": "files/dir-a/same-name.txt",
+      "payload": "p05-same-a\r\n",
+      "sha256": "24e1aff9b7577b66106f39533145d86f775d19eee69359168989f8d37159afdd",
+      "size": 12
+    },
+    {
+      "encoding": "ascii",
+      "path": "files/dir-b/same-name.txt",
+      "payload": "p05-same-b\r\n",
+      "sha256": "62a3068f8bf786f06bc6e57056740f0a96b6710352c235dd5688056746321341",
+      "size": 12
+    },
+    {
+      "encoding": "byte-sequence-0-255-repeat-4",
+      "path": "files/fixed.bin",
+      "sha256": "785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9",
+      "size": 1024
+    }
+  ],
+  "generator_version": 1,
+  "ownership": "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2",
+  "process": {
+    "minimum_remaining_seconds_at_snapshot": 7200,
+    "sleep_seconds": 86400
+  },
+  "registry": {
+    "key_template": "HKLM:\\SOFTWARE\\VelociraptorMCP\\P05\\{workflow_id}",
+    "values": {
+      "Attempt": "{attempt_id}",
+      "FixtureVersion": 1,
+      "Owner": "{workflow_id}"
+    }
+  },
+  "schema_version": 1,
+  "task": {
+    "action": "%SystemRoot%\\System32\\cmd.exe /d /c exit 0",
+    "enabled": false,
+    "name": "P05-Fixture",
+    "path": "\\VelociraptorMCP\\",
+    "triggers": []
+  }
+}

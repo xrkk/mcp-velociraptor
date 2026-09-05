@@ -1,12 +1,15 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
-> Development status: P04 exposes 118 reviewed Windows CLIENT artifacts as
+> Development status: P05 exposes 118 reviewed Windows CLIENT artifacts as
 > dynamically generated MCP tools. Their names, descriptions, parameters, and
 > definition hashes are checked against the connected root organization before
 > stdio starts. Twelve fixed tools provide bounded VQL, single-endpoint Hunt,
 > Flow lifecycle, one-file collection/download, basic triage, and process
 > termination. All 130 schemas are validated together before stdio starts.
+> P05 also supplies the locked test-only dependencies, deterministic Windows
+> fixture, and an indexed official-SDK scenario runner used for repeatable
+> acceptance on the post-install VM snapshot.
 
 Initial version has several Windows orientated triage tools deployed. Best use is querying usecase to target machine name.
 
@@ -127,10 +130,11 @@ warnings. Errors use stable
 `v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
 245554-byte limit on the complete serialized `structuredContent` object.
 
-`collect_forensic_triage` and `kill_process` return `DEPENDENCY_MISSING` on the
-pre-install snapshot; this is an honest deployment state, not a successful
-collection. P05 installs and validates their locked artifact definitions before
-creating the required post-install snapshot.
+The accepted Windows environment uses the post-install Snapshot 185 baseline.
+It contains the hash-locked local dependencies for PacketCapture and Autoruns,
+plus the reviewed `Windows.Triage.Targets` and
+`Generic.Utils.KillProcess` definitions. Dependency preparation is an operator
+test-environment step; the MCP product surface has no download or install tool.
 
 ### 5. Tool Inventory
 
@@ -149,12 +153,26 @@ The public surface at P04 contains exactly 130 tools:
 and the old `windows_*`, `linux_*`, and `macos_*` wrappers are not registered.
 Linux implementation remains a TODO. macOS is not supported.
 
-On the current P03 test snapshot, 116 dynamic tools can create a Flow directly.
-`Windows.Network.PacketCapture` and `Windows.Sysinternals.Autoruns` are registered
-with accurate schemas but Velociraptor rejects them before Flow creation until
-their external binaries are prepared. That error is not counted as a successful
-call. The test-infrastructure stage owns dependency preparation and must create,
-verify, and activate a new post-install snapshot before final all-tool testing.
+On the accepted Snapshot 185 environment, all 118 dynamic tools have their
+required local dependencies. PacketCapture and Autoruns resolve their binaries
+from Velociraptor's local public filestore; the locked SHA-256 values are
+verified before acceptance and no runtime tool fetches them from their original
+Internet URLs.
+
+The P05 test infrastructure is intentionally separate from the MCP API:
+
+```text
+.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\p05_prepare_fixtures.ps1 -WorkflowId <workflow-id> -AttemptId <attempt-id>
+.venv\Scripts\python.exe tests\p05_dependency_acceptance.py --mode verify --attempt-id <attempt-id>
+.venv\Scripts\python.exe tests\scenario_runner.py --scenario-id p05-flow-triage
+```
+
+The fixture script and real dependency checks are Windows-VM acceptance tools,
+not general host setup commands. Scenario files must be ordinary indexed files
+under `tests/scenarios/`; their reviewed hashes prevent command-line or
+environment overrides from turning the runner into an arbitrary execution
+proxy.
 
 These terms describe what a call does and what it changes:
 

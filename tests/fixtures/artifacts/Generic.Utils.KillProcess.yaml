@@ -1,0 +1,14 @@
+name: Generic.Utils.KillProcess
+description: |
+  Test-deployment artifact that terminates exactly one caller-supplied process ID.
+type: CLIENT
+required_permissions:
+  - EXECVE
+precondition: SELECT OS FROM info() WHERE OS = 'windows'
+parameters:
+  - name: Pid
+    type: int
+sources:
+  - name: KillProcess
+    query: |
+      SELECT Pid, pskill(pid=Pid) AS Killed FROM scope()

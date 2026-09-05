@@ -25,10 +25,16 @@ The historical agent code has not been migrated to those generated names or the
 new structured result contract, so do not run it against the P03 bridge as a
 compatibility test.
 
-The current pre-install snapshot also lacks the external binaries required by
-`Windows.Network.PacketCapture` and `Windows.Sysinternals.Autoruns`; their
-pre-Flow errors are not successful calls. Dependency preparation and a verified
-post-install snapshot belong to the later test-infrastructure stage.
+The accepted Windows test environment now uses the verified post-install
+Snapshot 185 baseline. PacketCapture and Autoruns resolve hash-locked binaries
+from Velociraptor's local filestore, and the reviewed triage and process-ending
+artifacts are installed there. This does not make dependency management part of
+the MCP API: preparation remains an operator-owned test-infrastructure step.
+
+P05's deterministic fixture and indexed scenario runner validate the bridge
+through the official MCP Python SDK. They test the 130-tool bridge contract; the
+historical agent in this directory is still excluded and should not be treated
+as a compatibility client.
 
 ### Setup
 ```bash
