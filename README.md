@@ -159,6 +159,14 @@ from Velociraptor's local public filestore; the locked SHA-256 values are
 verified before acceptance and no runtime tool fetches them from their original
 Internet URLs.
 
+`Windows.Memory.Acquisition` is the one reviewed exception to the ordinary
+collection resource defaults. The bridge internally requests a 3600-second
+timeout and an 8 GiB upload ceiling because a complete image of the accepted
+4 GiB VM cannot fit under Velociraptor's default 1 GiB per-collection limit.
+This is not a public tool parameter and does not let callers raise limits for
+other artifacts. P06 resource qualification still checks available memory and
+disk before admitting the full execution scenarios.
+
 The P05 test infrastructure is intentionally separate from the MCP API:
 
 ```text

@@ -679,6 +679,12 @@ class TargetContext:
 class VelociraptorBackend:
     """Thin production adapter over the existing gRPC/VQL helpers."""
 
+    # A full physical-memory image can exceed Velociraptor's default 1 GiB
+    # per-collection upload limit.  Keep this policy internal to the exact
+    # reviewed artifact so callers cannot raise resource limits arbitrarily.
+    MEMORY_ACQUISITION_TIMEOUT_SECONDS = 3600
+    MEMORY_ACQUISITION_MAX_UPLOAD_BYTES = 8 * 1024**3
+
     def list_windows_clients(self) -> list[dict[str, Any]]:
         from velociraptor_api import list_windows_clients_strict
 
@@ -699,11 +705,17 @@ class VelociraptorBackend:
     ) -> FlowReferenceResult:
         from velociraptor_api import get_flow_details, start_collection
 
+        max_bytes = None
+        if artifact == "Windows.Memory.Acquisition":
+            timeout = max(timeout or 0, self.MEMORY_ACQUISITION_TIMEOUT_SECONDS)
+            max_bytes = self.MEMORY_ACQUISITION_MAX_UPLOAD_BYTES
+
         rows = start_collection(
             client_id,
             artifact,
             parameters,
             timeout=timeout,
+            max_bytes=max_bytes,
             org_id=None,
             root_org=True,
         )

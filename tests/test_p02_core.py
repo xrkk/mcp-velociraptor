@@ -270,7 +270,10 @@ class BackendAdapterTests(unittest.TestCase):
     def test_collection_returns_real_id_and_state(self):
         backend = VelociraptorBackend()
         with (
-            patch("velociraptor_api.start_collection", return_value=[{"flow_id": "F.real"}]),
+            patch(
+                "velociraptor_api.start_collection",
+                return_value=[{"flow_id": "F.real"}],
+            ) as start,
             patch("velociraptor_api.get_flow_details", return_value={"state": "RUNNING"}),
         ):
             result = backend.start_collection(
@@ -278,6 +281,8 @@ class BackendAdapterTests(unittest.TestCase):
             )
         self.assertEqual(result.flow_id, "F.real")
         self.assertEqual(result.status, "RUNNING")
+        self.assertIsNone(start.call_args.kwargs["timeout"])
+        self.assertIsNone(start.call_args.kwargs["max_bytes"])
 
     def test_collection_rejects_missing_real_id_or_state(self):
         backend = VelociraptorBackend()
@@ -290,6 +295,25 @@ class BackendAdapterTests(unittest.TestCase):
         ):
             with self.assertRaises(BackendError):
                 backend.start_collection("C.real", "Windows.System.Pslist")
+
+    def test_memory_acquisition_uses_fixed_internal_resource_override(self):
+        backend = VelociraptorBackend()
+        with (
+            patch(
+                "velociraptor_api.start_collection",
+                return_value=[{"flow_id": "F.memory"}],
+            ) as start,
+            patch(
+                "velociraptor_api.get_flow_details", return_value={"state": "WAITING"}
+            ),
+        ):
+            backend.start_collection(
+                "C.real",
+                "Windows.Memory.Acquisition",
+                {"Compression": "Snappy"},
+            )
+        self.assertEqual(start.call_args.kwargs["timeout"], 3600)
+        self.assertEqual(start.call_args.kwargs["max_bytes"], 8 * 1024**3)
 
 
 if __name__ == "__main__":

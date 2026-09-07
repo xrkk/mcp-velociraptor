@@ -667,20 +667,28 @@ def start_collection(
     artifact: str,
     parameters: Mapping[str, ParameterValue] | None = None,
     timeout: int | None = None,
+    max_bytes: int | None = None,
     org_id: str | None = None,
     *,
     root_org: bool = False,
 ) -> list[dict]:
     normalized_artifact = normalize_artifact_name(artifact)
     normalized_parameters = normalize_env_dict(parameters)
-    timeout_arg = ""
+    resource_args = ""
     if timeout is not None:
-        timeout_arg = f", timeout={int(timeout)}"
+        if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout < 1:
+            raise ValueError("timeout must be a positive integer")
+        resource_args += f", timeout={timeout}"
+    if max_bytes is not None:
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+            raise ValueError("max_bytes must be a positive integer")
+        resource_args += f", max_bytes={max_bytes}"
     vql = (
         f"LET collection <= collect_client(urgent='TRUE',client_id={vql_literal(client_id)}, "
-        f"artifacts={vql_literal(normalized_artifact)}, env=dict({normalized_parameters}){timeout_arg}) "
+        f"artifacts={vql_literal(normalized_artifact)}, env=dict({normalized_parameters}){resource_args}) "
         "SELECT flow_id, request.artifacts as artifacts, request.timeout as timeout, "
-        "request.specs[0] as specs FROM foreach(row=collection) "
+        "request.max_upload_bytes as max_upload_bytes, request.specs[0] as specs "
+        "FROM foreach(row=collection) "
     )
 
     return run_vql_query(vql, org_id=org_id, root_org=root_org)

@@ -36,6 +36,13 @@ through the official MCP Python SDK. They test the 130-tool bridge contract; the
 historical agent in this directory is still excluded and should not be treated
 as a compatibility client.
 
+For the reviewed `Windows.Memory.Acquisition` tool only, the bridge internally
+requests a 3600-second collection timeout and an 8 GiB upload ceiling so a full
+image of the accepted 4 GiB VM is not cancelled by Velociraptor's default 1 GiB
+per-collection limit. Callers cannot change this ceiling, and other artifacts
+retain their ordinary resource defaults. P06 admits this resource-heavy tool
+only after its VM memory and disk checks pass.
+
 ### Setup
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
