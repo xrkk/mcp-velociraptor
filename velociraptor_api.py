@@ -13,6 +13,8 @@ from velociraptor_env import load_environment
 load_environment()
 
 stub = None
+_stub_created_at = 0.0
+_STUB_MAX_AGE_SECONDS = 900.0
 DEFAULT_ORG_ID = os.environ.get("VELOCIRAPTOR_ORG_ID", "").strip()
 DEBUG_VQL = os.environ.get("VELOCIRAPTOR_DEBUG_VQL", "").strip().lower() in {
     "1",
@@ -302,6 +304,10 @@ def init_stub(config_path: str | None = None):
     channel_opts = (('grpc.ssl_target_name_override', "VelociraptorServer"),)
     channel = grpc.secure_channel(config["api_connection_string"], creds, options=channel_opts)
     stub = api_pb2_grpc.APIStub(channel)
+
+    global _stub_created_at
+    import time as _time
+    _stub_created_at = _time.monotonic()
 
 
 def resolve_org_id(org_id: str | None = None) -> str | None:
@@ -662,6 +668,29 @@ def realtime_collection(
 
     return run_vql_query(vql, org_id=org_id)
 
+
+def _ensure_fresh_collection_channel() -> None:
+    """Recreate the gRPC channel ahead of long-lived stream degradation.
+
+    Velociraptor server-side stream limits can silently empty a collect_client
+    response after ~20 minutes of one long-lived channel.  Reconnecting before
+    a collection start is preemptive, idempotent, and never duplicates a flow.
+    """
+    global stub, _stub_created_at
+    import time as _time
+
+    if stub is None:
+        return
+    if _time.monotonic() - _stub_created_at < _STUB_MAX_AGE_SECONDS:
+        return
+    try:
+        channel = getattr(stub, "channel", None)
+        if channel is not None:
+            channel.close()
+    except Exception:
+        pass
+    init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
+
 def start_collection(
     client_id: str,
     artifact: str,
@@ -672,6 +701,7 @@ def start_collection(
     *,
     root_org: bool = False,
 ) -> list[dict]:
+    _ensure_fresh_collection_channel()
     normalized_artifact = normalize_artifact_name(artifact)
     normalized_parameters = normalize_env_dict(parameters)
     resource_args = ""

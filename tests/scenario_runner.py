@@ -21,6 +21,9 @@ from jsonschema import Draft202012Validator
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+# Allow direct script execution from any working directory (tests/ layout).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCENARIO_ROOT = REPO_ROOT / "tests" / "scenarios"
@@ -727,6 +730,18 @@ def verify_server_observation(observation_path: Path, instance_id: str) -> dict[
     return observation
 
 
+def _exception_chain(exc: BaseException) -> list[dict[str, str]]:
+    chain: list[dict[str, str]] = []
+    seen: set[int] = set()
+    current = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        chain.append({"type": type(current).__name__, "message": str(current)[:400]})
+        nested = getattr(current, "exceptions", None)
+        current = nested[0] if nested else current.__cause__
+    return chain
+
+
 def _runner_executable_sha256() -> str | None:
     try:
         return sha256_file(Path(sys.executable))
@@ -996,6 +1011,7 @@ async def run_scenario(
                 "message": str(exc),
                 "step_id": None,
                 "type": type(exc).__name__,
+                "chain": _exception_chain(exc),
             }
     finally:
         stderr_file.close()
