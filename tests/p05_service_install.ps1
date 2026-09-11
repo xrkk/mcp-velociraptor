@@ -100,13 +100,17 @@ function Invoke-Install {
         }
         Write-Output "service: already installed; install is a no-op"
     } else {
-        # The command line carries only paths; the token stays in the protected env.
+        # The command line carries only paths; the token stays in the protected env
+        # referenced through the service-scoped VELOCIRAPTOR_ENV_FILE variable.
         $binPath = "`"$python`" `"$bridge`""
-        New-Service -Name $ServiceName -DisplayName $ServiceDisplayName `
-            -BinaryPathName $binPath -StartupType Manual `
-            -Credential (New-Object System.Management.Automation.PSCredential(
-                $RunAsAccount, (New-Object System.Security.SecureString))) | Out-Null
-        Write-Output "service: created as $RunAsAccount"
+        sc.exe create $ServiceName binPath= $binPath obj= $RunAsAccount start= demand DisplayName= $ServiceDisplayName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "sc.exe create failed with exit code $LASTEXITCODE"
+        }
+        $serviceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName\Environment"
+        New-Item -Path $serviceKey -Force | Out-Null
+        Set-ItemProperty -Path $serviceKey -Name VELOCIRAPTOR_ENV_FILE -Value ([string[]]@($ProtectedEnvFile))
+        Write-Output "service: created as $RunAsAccount with protected env reference"
     }
 
     $rule = Get-RuleOrNull

@@ -182,7 +182,7 @@
     },
     "required_snapshot": {
       "enum": [
-        "Snapshot 185-Velociraptor-MCP依赖与情景基线",
+        "Snapshot 1-开启Windows-MCP",
         "Snapshot 186-Velociraptor-MCP网络部署基线"
       ]
     },

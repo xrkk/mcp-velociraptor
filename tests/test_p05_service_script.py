@@ -30,7 +30,8 @@ class ServiceScriptContractTests(unittest.TestCase):
             any("LocalSystem" in line for line in code_lines),
             "LocalSystem must not appear in executable lines",
         )
-        self.assertIn("-Credential (New-Object System.Management.Automation.PSCredential(", self.text)
+        self.assertIn("sc.exe create $ServiceName binPath= $binPath obj= $RunAsAccount start= demand", self.text)
+        self.assertIn("Set-ItemProperty -Path $serviceKey -Name VELOCIRAPTOR_ENV_FILE", self.text)
 
     def test_firewall_rule_is_single_and_port_exact(self) -> None:
         self.assertEqual(self.text.count("New-NetFirewallRule"), 1)

@@ -32,7 +32,7 @@ FIXTURE_SPEC_PATH = REPO_ROOT / "tests" / "data" / "p05_fixture_spec.json"
 FIXTURE_INSTANCE_PATH = Path(r"C:\VelociraptorMCP\fixtures-p05\fixture-instance-v1.json")
 P05_REPORT_ROOT = REPO_ROOT / "Logs" / "P05" / "wf-01a05d1d-p05"
 P06_REPORT_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06"
-SNAPSHOT_185 = "Snapshot 185-Velociraptor-MCP依赖与情景基线"
+SNAPSHOT_185 = "Snapshot 1-开启Windows-MCP"
 SNAPSHOT_186 = "Snapshot 186-Velociraptor-MCP网络部署基线"
 SNAPSHOT_STAGES = {
     ("P05_INITIAL", SNAPSHOT_185),
@@ -791,12 +791,17 @@ async def run_scenario(
     token_env: str = "VELOCIRAPTOR_MCP_BEARER_TOKEN",
     evidence_root: Path | None = None,
     server_observation: Path | None = None,
+    run_id: str | None = None,
 ) -> tuple[dict[str, Any], Path]:
     scenario, index_row, source_hash, index_path = load_indexed_scenario(scenario_id)
     fixture, fixture_hash = load_fixture(scenario)
     if transport not in {"stdio", "streamable-http"}:
         raise ScenarioInputError("transport must be 'stdio' or 'streamable-http'")
-    run_id = str(uuid.uuid4())
+    # The outer workflow pre-reserves the run id in current-restore.json (0.5);
+    # a caller-provided id must be a canonical uuid to keep reports addressable.
+    if run_id is not None and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", run_id):
+        raise ScenarioInputError("reserved run id must be a lowercase uuid")
+    run_id = run_id or str(uuid.uuid4())
     report_root = P06_REPORT_ROOT / scenario_id if scenario_id.startswith("p06-") else P05_REPORT_ROOT
     run_dir = report_root / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -1053,6 +1058,7 @@ def main() -> int:
     parser.add_argument("--token-env", default="VELOCIRAPTOR_MCP_BEARER_TOKEN")
     parser.add_argument("--evidence-root", default=None)
     parser.add_argument("--server-observation", default=None)
+    parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
     try:
         report, path = asyncio.run(
@@ -1063,6 +1069,7 @@ def main() -> int:
                 token_env=args.token_env,
                 evidence_root=Path(args.evidence_root) if args.evidence_root else None,
                 server_observation=Path(args.server_observation) if args.server_observation else None,
+                run_id=args.run_id,
             )
         )
     except (ScenarioInputError, SnapshotEvidenceError, OSError, json.JSONDecodeError) as exc:
