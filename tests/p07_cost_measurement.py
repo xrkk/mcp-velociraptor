@@ -134,7 +134,7 @@ def main() -> int:
             "canonical_serialization": "json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))",
             "token_estimate": "canonical JSON characters divided by 4; documented approximation, not a tokenizer measurement",
             "upstream_rendering": (
-                "unchanged upstream source (git 9dc804) executed on the same VM/venv/mcp-2.x SDK "
+                "unchanged upstream source (git 9dc8054) executed on the same VM/venv/mcp-2.x SDK "
                 "via the FastMCP->MCPServer alias shim (Logs/P07/upstream78-launcher.py, "
                 "content-addressed); P01 evidence shows mcp v1 was never installed in this "
                 "environment, so both sides are rendered by the same installed SDK"
