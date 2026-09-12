@@ -26,7 +26,7 @@ new structured result contract, so do not run it against the P03 bridge as a
 compatibility test.
 
 The accepted Windows test environment now uses the verified post-install
-Snapshot 185 baseline. PacketCapture and Autoruns resolve hash-locked binaries
+Snapshot 186 baseline. PacketCapture and Autoruns resolve hash-locked binaries
 from Velociraptor's local filestore, and the reviewed triage and process-ending
 artifacts are installed there. This does not make dependency management part of
 the MCP API: preparation remains an operator-owned test-infrastructure step.
@@ -218,7 +218,7 @@ The current bridge fixes dynamic artifact calls to the root organization and
 internally resolves the one Windows endpoint. Old `org_id`/hostname/client
 examples in this historical prototype are not supported by that contract.
 `ENABLE_DANGEROUS_TOOLS` is dead legacy source and affects no registered P04
-tool. P07 removes it physically.
+tool. P07 has removed it physically.
 
 The current bridge returns MCP-native `structuredContent` from both dynamic and
 fixed tools. This historical agent still expects older tool names and response

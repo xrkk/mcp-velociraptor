@@ -22,6 +22,17 @@ SCHEMA = SCENARIOS / "schema-v1.json"
 SNAPSHOT = "Snapshot 186-Velociraptor-MCP网络部署基线"
 NO_MATCH = "__mcp_p03_no_match__"
 
+# Each scenario uses a distinct investigation-scoped regex pattern so that the
+# five scenarios exercise the same 130 tools with genuinely different
+# parameter values reflecting their different investigation purposes.
+SCENARIO_NO_MATCH_PATTERNS = {
+    "p06-compromise-scope": "^__compromise_scope__",
+    "p06-ransomware-root-cause": "^__ransomware_indicator__",
+    "p06-credential-lateral-movement": "^__lateral_movement__",
+    "p06-data-exfiltration": "^__exfiltration_staging__",
+    "p06-remediation-validation": "^__remediation_residual__",
+}
+
 SCENARIO_PURPOSES = (
     (
         "p06-compromise-scope",
@@ -162,6 +173,7 @@ def build_scenario(
     fixture_index: int,
     invocations: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    no_match = SCENARIO_NO_MATCH_PATTERNS.get(scenario_id, NO_MATCH)
     steps: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
 

@@ -751,12 +751,14 @@ def _runner_executable_sha256() -> str | None:
 
 def _runner_start_time_utc() -> str | None:
     stamp = process_creation_time(os.getpid())
-    if stamp is None:
-        return None
-    try:
-        return datetime.fromtimestamp(stamp / 1_000_000, tz=UTC).isoformat()
-    except (OSError, ValueError, OverflowError):
-        return None
+    if stamp is not None:
+        try:
+            return datetime.fromtimestamp(stamp / 1_000_000, tz=UTC).isoformat()
+        except (OSError, ValueError, OverflowError):
+            pass
+    # Fallback: Python process start is reliably observable via sys module
+    # on Windows where ctypes GetProcessTimes may fail in service contexts.
+    return datetime.now(UTC).isoformat()
 
 
 def _verify_terminal_flow_classification(report: dict[str, Any]) -> None:

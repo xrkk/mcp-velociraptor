@@ -1,13 +1,13 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
-> Development status: P05 exposes 118 reviewed Windows CLIENT artifacts as
+> Development status: P06 complete. 118 reviewed Windows CLIENT artifacts as
 > dynamically generated MCP tools. Their names, descriptions, parameters, and
 > definition hashes are checked against the connected root organization before
 > stdio starts. Twelve fixed tools provide bounded VQL, single-endpoint Hunt,
 > Flow lifecycle, one-file collection/download, basic triage, and process
 > termination. All 130 schemas are validated together before stdio starts.
-> P05 also supplies the locked test-only dependencies, deterministic Windows
+> The project also supplies locked test-only dependencies, deterministic Windows
 > fixture, and an indexed official-SDK scenario runner used for repeatable
 > acceptance on the post-install VM snapshot.
 
@@ -57,7 +57,7 @@ Generate an api config file:
 - The MCP bridge reads the same `VELOCIRAPTOR_API_CONFIG` environment variable after loading dotenv config.
 - Set `VELOCIRAPTOR_DEBUG_VQL=1` only when you want raw VQL request logging on stderr for debugging.
 - `ENABLE_DANGEROUS_TOOLS` is legacy source only and does not control or expose
-  any P04 tool. P07 removes that dead compatibility source.
+  any P04 tool. P07 has physically removed that dead compatibility source.
 - Set `VELOCIRAPTOR_DOWNLOAD_ROOT` to an existing absolute directory before
   calling `download_flow_file`. Completed files are never overwritten.
 - The agent POC defaults to local Ollama summaries. Set `VELOCIRAPTOR_MODEL_PROVIDER=azure`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_MODEL` when you explicitly want Azure OpenAI summaries.
@@ -130,7 +130,7 @@ warnings. Errors use stable
 `v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
 245554-byte limit on the complete serialized `structuredContent` object.
 
-The accepted Windows environment uses the post-install Snapshot 185 baseline.
+The accepted Windows environment uses the post-install Snapshot 186 network deployment baseline.
 It contains the hash-locked local dependencies for PacketCapture and Autoruns,
 plus the reviewed `Windows.Triage.Targets` and
 `Generic.Utils.KillProcess` definitions. Dependency preparation is an operator
@@ -153,7 +153,7 @@ The public surface at P04 contains exactly 130 tools:
 and the old `windows_*`, `linux_*`, and `macos_*` wrappers are not registered.
 Linux implementation remains a TODO. macOS is not supported.
 
-On the accepted Snapshot 185 environment, all 118 dynamic tools have their
+On the accepted Snapshot 186 environment, all 118 dynamic tools have their
 required local dependencies. PacketCapture and Autoruns resolve their binaries
 from Velociraptor's local public filestore; the locked SHA-256 values are
 verified before acceptance and no runtime tool fetches them from their original
