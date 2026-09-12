@@ -25,7 +25,11 @@ INVOCATIONS = REPO_ROOT / "tests" / "data" / "p03_invocations.json"
 FIXTURE = Path(r"C:\VelociraptorMCP\fixtures-p05\fixture-instance-v1.json")
 DATASTORE = Path(r"C:\VelociraptorMCP\datastore")
 DOWNLOAD_ROOT = Path(os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT", r"C:\VelociraptorMCP\downloads"))
-OUT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06" / "resource-qualification.json"
+OUT = Path(
+    os.environ.get(
+        "P06_EVIDENCE_ROOT", str(REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06")
+    )
+) / "resource-qualification.json"
 STATIC_EXTRA = 4 * 1024**3
 MEMORY_MARGIN = 64 * 1024**2
 MIN_FINAL_FREE = 4 * 1024**3

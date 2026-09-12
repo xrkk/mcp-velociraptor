@@ -17,7 +17,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE_ROOT = ROOT / "Logs" / "P06" / "wf-01a05d1d-p06"
+EVIDENCE_ROOT = ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r2"
 LEDGER = EVIDENCE_ROOT / "接收清单.jsonl"
 SELECTION = EVIDENCE_ROOT / "final-selection.json"
 MANIFEST = ROOT / "tests" / "data" / "p06_coverage_manifest.json"
@@ -101,7 +101,19 @@ def contained_plain_file(root: Path, relative: str) -> Path:
     return resolved
 
 
-def load_ledger(path: Path = LEDGER) -> list[dict[str, Any]]:
+LEDGER_STATUSES = {"success", "failed", "superseded"}
+
+
+def package_hash(run_dir: Path) -> str:
+    """Deterministic evidence-package hash over the run directory files."""
+    names = sorted(
+        item.name for item in run_dir.iterdir() if item.is_file() and not item.is_symlink()
+    )
+    material = "\n".join(f"{name}:{sha256_file(run_dir / name)}" for name in names)
+    return sha256_bytes(material.encode("utf-8"))
+
+
+def load_ledger(path: Path = LEDGER, evidence_root: Path | None = None) -> list[dict[str, Any]]:
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
     attempts = [row.get("monotonic_attempt") for row in rows]
     if attempts != list(range(1, len(rows) + 1)):
@@ -113,6 +125,21 @@ def load_ledger(path: Path = LEDGER) -> list[dict[str, Any]]:
         raise AggregateError("ledger contains duplicate report identity")
     if len(package_hashes) != len(set(package_hashes)):
         raise AggregateError("ledger contains duplicate evidence package")
+    root = evidence_root or path.parent
+    for row in rows:
+        if row.get("status") not in LEDGER_STATUSES:
+            raise AggregateError(
+                f"ledger attempt {row.get('monotonic_attempt')} lacks a valid status"
+            )
+        report_path = contained_plain_file(root, row["report_relative_path"])
+        if sha256_file(report_path) != row["report_sha256"]:
+            raise AggregateError(
+                f"ledger attempt {row['monotonic_attempt']} report bytes differ"
+            )
+        if package_hash(report_path.parent) != row["package_sha256"]:
+            raise AggregateError(
+                f"ledger attempt {row['monotonic_attempt']} package bytes differ"
+            )
     return rows
 
 
@@ -218,11 +245,14 @@ def aggregate(
     selection_path: Path = SELECTION,
     manifest_path: Path = MANIFEST,
 ) -> dict[str, Any]:
-    ledger = load_ledger(ledger_path)
+    ledger = load_ledger(ledger_path, evidence_root=evidence_root)
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     expected_scenarios = manifest["scenario_ids"]
-    if set(selection) != {"schema_version", "all_attempts", "selected"} or selection["schema_version"] != 1:
+    if (
+        set(selection) != {"schema_version", "all_attempts", "selected", "rejected"}
+        or selection["schema_version"] != 2
+    ):
         raise AggregateError("invalid final selection shape")
     if selection["all_attempts"] != [row["monotonic_attempt"] for row in ledger]:
         raise AggregateError("final selection omits or reorders attempt history")
@@ -230,6 +260,24 @@ def aggregate(
     if set(selected) != set(expected_scenarios) or len(selected) != 5:
         raise AggregateError("final selection must choose each reviewed scenario exactly once")
     ledger_by_attempt = {row["monotonic_attempt"]: row for row in ledger}
+    rejected = selection["rejected"]
+    selected_attempts = {chosen["monotonic_attempt"] for chosen in selected.values()}
+    expected_rejected = {
+        str(attempt)
+        for attempt in (row["monotonic_attempt"] for row in ledger)
+        if attempt not in selected_attempts
+    }
+    if set(rejected) != expected_rejected:
+        raise AggregateError("final selection does not adjudicate every unselected attempt")
+    for attempt, reason in rejected.items():
+        if not isinstance(reason, str) or not reason.strip():
+            raise AggregateError(f"rejection reason is empty for attempt {attempt}")
+    for scenario, chosen in selected.items():
+        ledger_row = ledger_by_attempt.get(chosen["monotonic_attempt"])
+        if ledger_row is None or ledger_row["scenario"] != scenario:
+            raise AggregateError("selected attempt belongs to another scenario")
+        if ledger_row["status"] != "success":
+            raise AggregateError("final selection must choose successful attempts")
     reports: list[dict[str, Any]] = []
     input_hashes: list[dict[str, Any]] = []
     coverage: set[tuple[str, str]] = set()

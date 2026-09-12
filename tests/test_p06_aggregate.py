@@ -149,9 +149,10 @@ class AggregateFixture:
                 {
                     "monotonic_attempt": index,
                     "scenario": scenario,
+                    "status": "success",
                     "report_relative_path": f"run-{index}/report.json",
                     "report_sha256": sha_bytes(report_bytes),
-                    "package_sha256": f"p{index:064d}"[-64:],
+                    "package_sha256": aggregate.package_hash(run_dir),
                     "source_sha256": report["source_sha256"],
                     "index_sha256": report["index_sha256"],
                     "fixture_instance_sha256": report["fixture_instance_sha256"],
@@ -159,19 +160,59 @@ class AggregateFixture:
                     "tools_schema_sha256": report["tools_schema_sha256"],
                 }
             )
+        # One earlier failed attempt (attempt 1) with its own package bytes.
+        history_dir = self.evidence / "run-0"
+        history_dir.mkdir()
+        history_report = build_report(SCENARIOS[0], 0)
+        history_report["status"] = "failed"
+        history_report["failure"] = {
+            "type": "ScenarioFailure",
+            "step_id": "d042-start",
+            "message": "history fixture failure",
+        }
+        history_bytes = canonical(history_report)
+        (history_dir / "report.json").write_bytes(history_bytes)
+        (history_dir / "tools-schema.json").write_bytes(b"{}\n")
+        self.ledger_rows.insert(
+            0,
+            {
+                "monotonic_attempt": 1,
+                "scenario": SCENARIOS[0],
+                "status": "failed",
+                "report_relative_path": "run-0/report.json",
+                "report_sha256": sha_bytes(history_bytes),
+                "package_sha256": aggregate.package_hash(history_dir),
+                "source_sha256": history_report["source_sha256"],
+                "index_sha256": history_report["index_sha256"],
+                "fixture_instance_sha256": history_report["fixture_instance_sha256"],
+                "fixture_spec_sha256": history_report["fixture_spec_sha256"],
+                "tools_schema_sha256": history_report["tools_schema_sha256"],
+            },
+        )
+        for position, row in enumerate(self.ledger_rows, start=1):
+            row["monotonic_attempt"] = position
+        for index in range(len(SCENARIOS)):
+            self.reports[index]["run_id"] = f"run-{index + 1}"
         (self.evidence / "ledger.jsonl").write_text(
             "\n".join(json.dumps(row) for row in self.ledger_rows) + "\n", encoding="utf-8"
         )
+        self.attempts = list(range(1, len(self.ledger_rows) + 1))
+        self.selected_attempts = {
+            scenario: 2 + index for index, scenario in enumerate(SCENARIOS)
+        }
         self.selection = {
-            "schema_version": 1,
-            "all_attempts": list(range(1, len(SCENARIOS) + 1)),
+            "schema_version": 2,
+            "all_attempts": self.attempts,
             "selected": {
                 scenario: {
-                    "monotonic_attempt": index,
-                    "report_sha256": row["report_sha256"],
+                    "monotonic_attempt": self.selected_attempts[scenario],
+                    "report_sha256": self.ledger_rows[self.selected_attempts[scenario] - 1][
+                        "report_sha256"
+                    ],
                 }
-                for index, (scenario, row) in enumerate(zip(SCENARIOS, self.ledger_rows), start=1)
+                for scenario in SCENARIOS
             },
+            "rejected": {"1": "history fixture failure retained for attempt completeness"},
         }
         (self.evidence / "selection.json").write_text(
             json.dumps(self.selection), encoding="utf-8"
@@ -183,8 +224,9 @@ class AggregateFixture:
         mutate(report)
         payload = canonical(report)
         report_path.write_bytes(payload)
-        row = self.ledger_rows[index - 1]
+        row = self.ledger_rows[self.selected_attempts[SCENARIOS[index - 1]] - 1]
         row["report_sha256"] = sha_bytes(payload)
+        row["package_sha256"] = aggregate.package_hash(report_path.parent)
         self.selection["selected"][SCENARIOS[index - 1]]["report_sha256"] = row["report_sha256"]
         self.flush_side_files()
 
