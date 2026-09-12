@@ -217,7 +217,7 @@ uses its own isolated MCP session and conversation history.
 The current bridge fixes dynamic artifact calls to the root organization and
 internally resolves the one Windows endpoint. Old `org_id`/hostname/client
 examples in this historical prototype are not supported by that contract.
-`ENABLE_DANGEROUS_TOOLS` has been physically removed from the bridge source
+The dangerous-tools switch has been physically removed from the bridge source
 tool. P07 has removed it physically.
 
 The current bridge returns MCP-native `structuredContent` from both dynamic and

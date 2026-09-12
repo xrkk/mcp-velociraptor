@@ -56,7 +56,7 @@ Generate an api config file:
 - Run `.venv\Scripts\python.exe test_api.py` to confirm the API works when `.env` is configured.
 - The MCP bridge reads the same `VELOCIRAPTOR_API_CONFIG` environment variable after loading dotenv config.
 - Set `VELOCIRAPTOR_DEBUG_VQL=1` only when you want raw VQL request logging on stderr for debugging.
-- `ENABLE_DANGEROUS_TOOLS` and all legacy wrapper functions have been physically removed from the source.
+- All legacy wrapper functions and the old dangerous-tools switch have been physically removed.
 - Set `VELOCIRAPTOR_DOWNLOAD_ROOT` to an existing absolute directory before
   calling `download_flow_file`. Completed files are never overwritten.
 - The agent POC defaults to local Ollama summaries. Set `VELOCIRAPTOR_MODEL_PROVIDER=azure`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_MODEL` when you explicitly want Azure OpenAI summaries.
