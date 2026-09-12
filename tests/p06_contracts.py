@@ -54,6 +54,96 @@ SCENARIO_PURPOSES = (
     ),
 )
 
+# Per-scenario investigation profiles.  Every scenario still exercises the
+# full 130-tool surface, but each one does it through a purpose-driven
+# evidence chain: its own category ordering (which artifact is examined
+# first), its own result-page window, its own polling cadence (same total
+# wait budget), and its own focus fixture file that the probe and the
+# collect_file chain bind to by exact path and size.  The five orderings are
+# full permutations of the 19 artifact categories, so the generated step
+# sequences, reference chains, and manifest parameter hashes are pairwise
+# different rather than relabelled copies of one template.
+
+SCENARIO_PROFILES = {
+    "p06-compromise-scope": {
+        "ordering": (
+            "Persistence", "Packs", "Sysinternals", "Registry", "Sys",
+            "EventLogs", "System", "Attack", "Forensics", "Applications",
+            "NTFS", "Carving", "Search", "Timeline", "Network", "Detection",
+            "ETW", "Analysis", "Memory",
+        ),
+        "results_page_size": 1,
+        "wait_max_attempts": 240,
+        "wait_interval_seconds": 5,
+        "focus_file_index": 0,
+    },
+    "p06-ransomware-root-cause": {
+        "ordering": (
+            "System", "Attack", "Forensics", "NTFS", "Timeline", "Carving",
+            "EventLogs", "Registry", "Persistence", "Packs", "Sysinternals",
+            "Sys", "Applications", "Search", "Analysis", "Network",
+            "Detection", "ETW", "Memory",
+        ),
+        "results_page_size": 5,
+        "wait_max_attempts": 120,
+        "wait_interval_seconds": 10,
+        "focus_file_index": 1,
+    },
+    "p06-credential-lateral-movement": {
+        "ordering": (
+            "Sys", "EventLogs", "Registry", "System", "Attack", "Network",
+            "Detection", "ETW", "Forensics", "Persistence", "Packs",
+            "Sysinternals", "Applications", "Search", "NTFS", "Carving",
+            "Timeline", "Analysis", "Memory",
+        ),
+        "results_page_size": 10,
+        "wait_max_attempts": 80,
+        "wait_interval_seconds": 15,
+        "focus_file_index": 2,
+    },
+    "p06-data-exfiltration": {
+        "ordering": (
+            "Applications", "Search", "NTFS", "Timeline", "Carving",
+            "Forensics", "Network", "Detection", "ETW", "System", "Attack",
+            "Sys", "EventLogs", "Registry", "Persistence", "Packs",
+            "Sysinternals", "Analysis", "Memory",
+        ),
+        "results_page_size": 20,
+        "wait_max_attempts": 60,
+        "wait_interval_seconds": 20,
+        "focus_file_index": 3,
+    },
+    "p06-remediation-validation": {
+        "ordering": (
+            "Analysis", "Detection", "ETW", "EventLogs", "Registry",
+            "Persistence", "Packs", "Sysinternals", "Timeline", "NTFS",
+            "Search", "Carving", "Forensics", "Applications", "Sys",
+            "System", "Attack", "Network", "Memory",
+        ),
+        "results_page_size": 50,
+        "wait_max_attempts": 48,
+        "wait_interval_seconds": 25,
+        "focus_file_index": 4,
+    },
+}
+
+
+def artifact_category(artifact: str) -> str:
+    return artifact.split(".")[1]
+
+
+def ordered_invocations(
+    invocations: list[dict[str, Any]], scenario_id: str
+) -> list[dict[str, Any]]:
+    ordering = SCENARIO_PROFILES[scenario_id]["ordering"]
+    return sorted(
+        invocations,
+        key=lambda row: (
+            ordering.index(artifact_category(row["artifact"])),
+            row["artifact"],
+        ),
+    )
+
 
 def canonical_bytes(value: Any) -> bytes:
     return (
@@ -114,15 +204,23 @@ def tool_step(
     return row
 
 
-def wait_step(step_id: str, start_id: str, prefix: str, *, state: str = "FINISHED") -> dict[str, Any]:
+def wait_step(
+    step_id: str,
+    start_id: str,
+    prefix: str,
+    *,
+    state: str = "FINISHED",
+    max_attempts: int = 240,
+    interval_seconds: int = 5,
+) -> dict[str, Any]:
     return tool_step(
         step_id,
         "get_flow_status",
         {"flow_id": {"$ref": f"/steps/{start_id}/structuredContent/flow_id"}},
         [],
         repeat={
-            "max_attempts": 240,
-            "interval_seconds": 5,
+            "max_attempts": max_attempts,
+            "interval_seconds": interval_seconds,
             "assertions": [
                 assertion(f"{prefix}-wait-ok", "/isError", "is_error", False),
                 assertion(f"{prefix}-wait-state", "/structuredContent/state", "eq", state),
@@ -140,9 +238,15 @@ def relation(
     topic: str,
     *,
     allowed_empty: str | None,
+    focus_file: str = "",
 ) -> dict[str, Any]:
     by_id = {step["id"]: step for step in steps}
     arguments = {step_id: by_id[step_id]["arguments"] for step_id in step_ids}
+    focus_clause = (
+        f" The scenario's focus fixture file is {focus_file}."
+        if focus_file
+        else ""
+    )
     return {
         "scenario_id": scenario_id,
         "tool": tool,
@@ -151,10 +255,12 @@ def relation(
         "fixture_preconditions": [
             "Snapshot185 fixture-instance-v1 identity matches the tracked fixture spec",
             f"The {topic} investigation starts from the clean snapshot and one unique Windows client",
+            "This scenario binds its evidence chain to fixture file "
+            + (focus_file if focus_file else "the shared platform baseline"),
         ],
         "assertion_ids": assertion_ids,
         "investigative_question": f"For {topic}, what does {tool} prove or rule out on the endpoint?",
-        "expected_evidence": f"A real successful {tool} call and its bound {topic} result/status chain are preserved.",
+        "expected_evidence": f"A real successful {tool} call and its bound {topic} result/status chain is preserved.{focus_clause}",
         "allowed_empty_condition": allowed_empty,
     }
 
@@ -166,21 +272,55 @@ def build_scenario(
     fixture_index: int,
     invocations: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    profile = SCENARIO_PROFILES[scenario_id]
+    fixture_spec = json.loads(FIXTURE_SPEC.read_text(encoding="utf-8"))
+    focus = fixture_spec["files"][profile["focus_file_index"]]
+    focus_rel = focus["path"]
+    focus_size = focus["size"]
+    focus_arg = {"$fixture": f"/files/{profile['focus_file_index']}/path"}
+    invocations = ordered_invocations(invocations, scenario_id)
     steps: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
 
     vql_id = "fixed-run-vql"
-    vql_assertion = "fixed-run-vql-ok"
     steps.append(
         tool_step(
             vql_id,
             "run_vql",
-            {"query": f"SELECT {fixture_index + 1} AS ScenarioOrdinal FROM scope()"},
-            [assertion(vql_assertion, "/isError", "is_error", False)],
+            {
+                "query": (
+                    f"SELECT {fixture_index + 1} AS ScenarioOrdinal, "
+                    f"{json.dumps(focus_rel)} AS FocusFile FROM scope()"
+                )
+            },
+            [
+                assertion("fixed-run-vql-ok", "/isError", "is_error", False),
+                assertion(
+                    "fixed-run-vql-ordinal",
+                    "/structuredContent/data/0/ScenarioOrdinal",
+                    "eq",
+                    fixture_index + 1,
+                ),
+                assertion(
+                    "fixed-run-vql-focus",
+                    "/structuredContent/data/0/FocusFile",
+                    "eq",
+                    focus_rel,
+                ),
+            ],
         )
     )
     relations.append(
-        relation(scenario_id, "run_vql", steps, [vql_id], [vql_assertion], topic, allowed_empty=None)
+        relation(
+            scenario_id,
+            "run_vql",
+            steps,
+            [vql_id],
+            ["fixed-run-vql-ok", "fixed-run-vql-ordinal", "fixed-run-vql-focus"],
+            topic,
+            allowed_empty=None,
+            focus_file=focus_rel,
+        )
     )
 
     for number, invocation in enumerate(invocations, start=1):
@@ -251,11 +391,20 @@ def build_scenario(
                 assertion(f"{prefix}-start-flow", "/structuredContent/flow_id", "exists"),
             ],
         )
-        wait = wait_step(f"{prefix}-wait", start["id"], prefix)
+        wait = wait_step(
+            f"{prefix}-wait",
+            start["id"],
+            prefix,
+            max_attempts=profile["wait_max_attempts"],
+            interval_seconds=profile["wait_interval_seconds"],
+        )
         results = tool_step(
             f"{prefix}-results",
             "get_flow_results",
-            {"flow_id": {"$ref": f"/steps/{start['id']}/structuredContent/flow_id"}, "page_size": 1},
+            {
+                "flow_id": {"$ref": f"/steps/{start['id']}/structuredContent/flow_id"},
+                "page_size": profile["results_page_size"],
+            },
             [
                 assertion(f"{prefix}-results-ok", "/isError", "is_error", False),
                 assertion(f"{prefix}-results-data", "/structuredContent/data", "exists"),
@@ -279,13 +428,27 @@ def build_scenario(
             f"{prefix}-results-data",
             f"{prefix}-files-data",
         ]
-        empty = f"No matching {topic} evidence is a valid negative finding for this reviewed parameter set."
-        relations.append(relation(scenario_id, artifact, steps, ids, assertions, topic, allowed_empty=empty))
+        empty = (
+            f"No matching {topic} evidence is a valid negative finding for this "
+            f"reviewed parameter set with focus file {focus_rel}."
+        )
+        relations.append(
+            relation(
+                scenario_id,
+                artifact,
+                steps,
+                ids,
+                assertions,
+                topic,
+                allowed_empty=empty,
+                focus_file=focus_rel,
+            )
+        )
 
     collect = tool_step(
         "fixed-collect-file",
         "collect_file",
-        {"path": {"$fixture": f"/files/{fixture_index}/path"}},
+        {"path": focus_arg},
         [assertion("fixed-collect-file-ok", "/isError", "is_error", False)],
     )
     collect_wait = wait_step("fixed-collect-wait", collect["id"], "fixed-collect")
@@ -300,6 +463,18 @@ def build_scenario(
         [
             assertion("fixed-collect-results-ok", "/isError", "is_error", False),
             assertion("fixed-collect-results-data", "/structuredContent/data", "len_gte", 1),
+            assertion(
+                "fixed-collect-results-source",
+                "/structuredContent/data/0/SourceFile",
+                "eq",
+                focus_arg,
+            ),
+            assertion(
+                "fixed-collect-results-size",
+                "/structuredContent/data/0/Size",
+                "eq",
+                focus_size,
+            ),
         ],
     )
     collect_files = tool_step(
@@ -434,7 +609,14 @@ def build_scenario(
     fixed_map = {
         "collect_file": ([collect["id"]], ["fixed-collect-file-ok"]),
         "get_flow_status": ([collect_wait["id"]], ["fixed-collect-wait-state"]),
-        "get_flow_results": ([collect_results["id"]], ["fixed-collect-results-data"]),
+        "get_flow_results": (
+            [collect_results["id"]],
+            [
+                "fixed-collect-results-data",
+                "fixed-collect-results-source",
+                "fixed-collect-results-size",
+            ],
+        ),
         "list_flow_files": ([collect_files["id"]], ["fixed-collect-files-data"]),
         "download_flow_file": ([download["id"]], ["fixed-download-file-ok"]),
         "cancel_flow": ([cancel["id"], hunt_cancel["id"]], ["fixed-cancel-flow-ok", "fixed-hunt-cancel-flow-ok"]),
@@ -454,6 +636,7 @@ def build_scenario(
                 assertion_ids,
                 topic,
                 allowed_empty=None,
+                focus_file=focus_rel,
             )
         )
 
@@ -522,11 +705,13 @@ def validate_contracts() -> dict[str, int]:
         raise AssertionError("coverage relations must be unique")
     questions: dict[str, set[str]] = {}
     evidence: dict[str, set[str]] = {}
+    generated: dict[str, dict[str, Any]] = {}
     for relative, expected_payload in expected_files.items():
         path = SCENARIOS / relative
         if path.read_bytes() != expected_payload:
             raise AssertionError(f"scenario drift: {relative}")
         scenario = json.loads(expected_payload)
+        generated[scenario["scenario_id"]] = scenario
         Draft202012Validator(schema).validate(scenario)
         steps = {row["id"]: row for row in scenario["steps"] if row["kind"] == "tool"}
         scenario_tools = {row["tool"] for row in steps.values()}
@@ -554,6 +739,30 @@ def validate_contracts() -> dict[str, int]:
         len(values) != 5 for values in evidence.values()
     ):
         raise AssertionError("copied scenario rationale or evidence role")
+    scenario_ids = list(generated)
+    for i, left_id in enumerate(scenario_ids):
+        left = generated[left_id]["steps"]
+        left_sequence = tuple(step.get("tool") for step in left)
+        for right_id in scenario_ids[i + 1 :]:
+            right = generated[right_id]["steps"]
+            right_sequence = tuple(step.get("tool") for step in right)
+            if left_sequence == right_sequence:
+                raise AssertionError(
+                    f"scenario tool sequences are isomorphic: {left_id} vs {right_id}"
+                )
+            differing = sum(
+                1
+                for step_left, step_right in zip(left, right)
+                if step_left.get("tool") != step_right.get("tool")
+                or step_left.get("arguments") != step_right.get("arguments")
+            )
+            # The shared platform lifecycle chains (cancel/hunt/triage/kill)
+            # are intentionally identical; the artifact evidence chains must
+            # carry the scenario's ordering, window, cadence, and focus.
+            if differing < (len(left) * 2) // 5:
+                raise AssertionError(
+                    f"scenario steps differ only cosmetically: {left_id} vs {right_id} ({differing}/{len(left)})"
+                )
     return {"scenarios": 5, "tools": 130, "relations": 650}
 
 

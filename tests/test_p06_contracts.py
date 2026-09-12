@@ -39,6 +39,37 @@ class P06ContractTests(unittest.TestCase):
                 self.assertEqual(len({row["scenario_id"] for row in rows}), 5)
                 self.assertEqual(len({row["investigative_question"] for row in rows}), 5)
                 self.assertEqual(len({row["expected_evidence"] for row in rows}), 5)
+        # The focus-bound tools must carry five distinct evidence bindings:
+        # each scenario's probe query and collected file are different.
+        for tool in ("run_vql", "collect_file"):
+            rows = by_tool[tool]
+            self.assertEqual(len({row["parameters_sha256"] for row in rows}), 5, tool)
+
+    def test_scenarios_are_pairwise_non_isomorphic_evidence_chains(self):
+        files, _index, _manifest = p06_contracts.build_contracts()
+        scenarios = {}
+        for relative, payload in files.items():
+            scenario = json.loads(payload)
+            scenarios[scenario["scenario_id"]] = scenario
+        self.assertEqual(len(scenarios), 5)
+        ids = sorted(scenarios)
+        for position, left in enumerate(ids):
+            left_steps = scenarios[left]["steps"]
+            left_sequence = tuple(step["tool"] for step in left_steps)
+            for right in ids[position + 1 :]:
+                right_steps = scenarios[right]["steps"]
+                right_sequence = tuple(step["tool"] for step in right_steps)
+                with self.subTest(pair=f"{left}:{right}"):
+                    self.assertNotEqual(left_sequence, right_sequence)
+                    differing = sum(
+                        1
+                        for left_step, right_step in zip(left_steps, right_steps)
+                        if left_step["tool"] != right_step["tool"]
+                        or left_step.get("arguments") != right_step.get("arguments")
+                        or left_step.get("repeat_until", {}).get("interval_seconds")
+                        != right_step.get("repeat_until", {}).get("interval_seconds")
+                    )
+                    self.assertGreater(differing, len(left_steps) // 2)
 
     def test_cross_step_validator_rejects_flow_hunt_and_file_substitution(self):
         scenario = {

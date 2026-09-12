@@ -5,7 +5,7 @@
       "path": "full/p06-compromise-scope.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-compromise-scope",
-      "sha256": "9c8d6af2d1f33b53b89518e3ae4e0af9b5ca790ef79f9108738188d9765b0905",
+      "sha256": "708f632063e8216cde14cf9d3e2bf5ba484e79a4a5c5327e73156f83c94bb699",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
@@ -13,7 +13,7 @@
       "path": "full/p06-ransomware-root-cause.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-ransomware-root-cause",
-      "sha256": "04f27035fbccc748cce9fc2a692a86fb8ea42dd0d6506f13e71ce5aff4486973",
+      "sha256": "2ac43b3d7faaa61bb613fade7e5808c3771ba7d92eb3ac1a6fed9a3c7c384e93",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
@@ -21,7 +21,7 @@
       "path": "full/p06-credential-lateral-movement.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-credential-lateral-movement",
-      "sha256": "633ec7cfa2edccce2b6e634be71dbd2fb569280ca144845c4c854a0aeab271d8",
+      "sha256": "9b790b127f908f0a332dd21076cab37a7938c2d8e6c3a84bac55acdd1ac4fc92",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
@@ -29,7 +29,7 @@
       "path": "full/p06-data-exfiltration.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-data-exfiltration",
-      "sha256": "2532c9048dfcbd9d4bcdeec8437ee4ab108a6cbed4d6f05a90c51724cb0cc56a",
+      "sha256": "677815b2fdaa0bbea1c8542fd1e35a6a96a2332f48f2911323b286701ca1f68a",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
@@ -37,7 +37,7 @@
       "path": "full/p06-remediation-validation.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-remediation-validation",
-      "sha256": "288187a9b1b3a83d4f4cbe051adc859ede1bafc515274b44510fc0067194aca9",
+      "sha256": "71e34fc7b33d552e074dacf9eda792fbde51c58f2ccb3b172d958f63f0de8b75",
       "snapshot_stage": "P06_ACTIVE"
     }
   ],

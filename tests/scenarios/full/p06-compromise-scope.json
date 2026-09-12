@@ -8,7 +8,7 @@
   "steps": [
     {
       "arguments": {
-        "query": "SELECT 1 AS ScenarioOrdinal FROM scope()"
+        "query": "SELECT 1 AS ScenarioOrdinal, \"files/ascii.txt\" AS FocusFile FROM scope()"
       },
       "assertions": [
         {
@@ -16,6 +16,18 @@
           "expected": false,
           "id": "fixed-run-vql-ok",
           "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data/0/ScenarioOrdinal",
+          "expected": 1,
+          "id": "fixed-run-vql-ordinal",
+          "op": "eq"
+        },
+        {
+          "actual": "/structuredContent/data/0/FocusFile",
+          "expected": "files/ascii.txt",
+          "id": "fixed-run-vql-focus",
+          "op": "eq"
         }
       ],
       "id": "fixed-run-vql",
@@ -39,7 +51,7 @@
       ],
       "id": "d001-start",
       "kind": "tool",
-      "tool": "Windows.Analysis.EvidenceOfDownload"
+      "tool": "Windows.Persistence.Debug"
     },
     {
       "arguments": {
@@ -118,9 +130,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -136,7 +146,7 @@
       ],
       "id": "d002-start",
       "kind": "tool",
-      "tool": "Windows.Applications.Chrome.Cookies"
+      "tool": "Windows.Persistence.PermanentWMIEvents"
     },
     {
       "arguments": {
@@ -216,7 +226,7 @@
     },
     {
       "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
+        "SearchStrings": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -233,7 +243,7 @@
       ],
       "id": "d003-start",
       "kind": "tool",
-      "tool": "Windows.Applications.Chrome.Extensions"
+      "tool": "Windows.Persistence.PowershellProfile"
     },
     {
       "arguments": {
@@ -330,7 +340,7 @@
       ],
       "id": "d004-start",
       "kind": "tool",
-      "tool": "Windows.Applications.Chrome.History"
+      "tool": "Windows.Persistence.PowershellRegistry"
     },
     {
       "arguments": {
@@ -409,9 +419,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -427,7 +435,7 @@
       ],
       "id": "d005-start",
       "kind": "tool",
-      "tool": "Windows.Applications.Edge.History"
+      "tool": "Windows.Persistence.Wow64cpu"
     },
     {
       "arguments": {
@@ -522,7 +530,7 @@
       ],
       "id": "d006-start",
       "kind": "tool",
-      "tool": "Windows.Applications.OfficeMacros"
+      "tool": "Windows.Packs.Persistence"
     },
     {
       "arguments": {
@@ -617,7 +625,7 @@
       ],
       "id": "d007-start",
       "kind": "tool",
-      "tool": "Windows.Attack.Prefetch"
+      "tool": "Windows.Sysinternals.Autoruns"
     },
     {
       "arguments": {
@@ -712,7 +720,7 @@
       ],
       "id": "d008-start",
       "kind": "tool",
-      "tool": "Windows.Attack.UnexpectedImagePath"
+      "tool": "Windows.Registry.AppCompatCache"
     },
     {
       "arguments": {
@@ -791,9 +799,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "PidRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -809,7 +815,7 @@
       ],
       "id": "d009-start",
       "kind": "tool",
-      "tool": "Windows.Carving.CobaltStrike"
+      "tool": "Windows.Registry.BackupRestore"
     },
     {
       "arguments": {
@@ -889,7 +895,7 @@
     },
     {
       "arguments": {
-        "SHA1Regex": "^__p06_compromise_scope_no_match__$"
+        "userRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -906,7 +912,7 @@
       ],
       "id": "d010-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Amcache"
+      "tool": "Windows.Registry.EnableUnsafeClientMailRules"
     },
     {
       "arguments": {
@@ -986,7 +992,7 @@
     },
     {
       "arguments": {
-        "AuthenticodeRegex": "^__p06_compromise_scope_no_match__$"
+        "userRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -1003,7 +1009,7 @@
       ],
       "id": "d011-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryHunter"
+      "tool": "Windows.Registry.EnabledMacro"
     },
     {
       "arguments": {
@@ -1082,7 +1088,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -1098,7 +1106,7 @@
       ],
       "id": "d012-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryRename"
+      "tool": "Windows.Registry.NTUser"
     },
     {
       "arguments": {
@@ -1178,7 +1186,7 @@
     },
     {
       "arguments": {
-        "ProcessNameRegex": "^__p06_compromise_scope_no_match__$"
+        "userRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -1195,7 +1203,7 @@
       ],
       "id": "d013-start",
       "kind": "tool",
-      "tool": "Windows.Detection.EnvironmentVariables"
+      "tool": "Windows.Registry.NTUser.Upload"
     },
     {
       "arguments": {
@@ -1274,9 +1282,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ExcludeRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -1292,7 +1298,7 @@
       ],
       "id": "d014-start",
       "kind": "tool",
-      "tool": "Windows.Detection.ForwardedImports"
+      "tool": "Windows.Registry.PortProxy"
     },
     {
       "arguments": {
@@ -1371,7 +1377,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UserRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -1387,7 +1395,7 @@
       ],
       "id": "d015-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Impersonation"
+      "tool": "Windows.Registry.RDP"
     },
     {
       "arguments": {
@@ -1466,9 +1474,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "processRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -1484,7 +1490,7 @@
       ],
       "id": "d016-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Mutants"
+      "tool": "Windows.Registry.RecentDocs"
     },
     {
       "arguments": {
@@ -1564,7 +1570,7 @@
     },
     {
       "arguments": {
-        "TemplateFileRegex": "^__p06_compromise_scope_no_match__$"
+        "UserFilter": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -1581,7 +1587,7 @@
       ],
       "id": "d017-start",
       "kind": "tool",
-      "tool": "Windows.Detection.TemplateInjection"
+      "tool": "Windows.Registry.UserAssist"
     },
     {
       "arguments": {
@@ -1676,7 +1682,7 @@
       ],
       "id": "d018-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.NTFS"
+      "tool": "Windows.Registry.WDigest"
     },
     {
       "arguments": {
@@ -1771,7 +1777,7 @@
       ],
       "id": "d019-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.PhysicalMemory"
+      "tool": "Windows.Sys.AllUsers"
     },
     {
       "arguments": {
@@ -1850,9 +1856,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -1868,7 +1872,7 @@
       ],
       "id": "d020-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.Process"
+      "tool": "Windows.Sys.AppcompatShims"
     },
     {
       "arguments": {
@@ -1947,9 +1951,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -1965,7 +1967,7 @@
       ],
       "id": "d021-start",
       "kind": "tool",
-      "tool": "Windows.ETW.DotNetRundown"
+      "tool": "Windows.Sys.CertificateAuthorities"
     },
     {
       "arguments": {
@@ -2060,7 +2062,7 @@
       ],
       "id": "d022-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.AlternateLogon"
+      "tool": "Windows.Sys.DiskInfo"
     },
     {
       "arguments": {
@@ -2155,7 +2157,7 @@
       ],
       "id": "d023-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Cleared"
+      "tool": "Windows.Sys.Drivers"
     },
     {
       "arguments": {
@@ -2234,9 +2236,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "PathRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2252,7 +2252,7 @@
       ],
       "id": "d024-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Evtx"
+      "tool": "Windows.Sys.FirewallRules"
     },
     {
       "arguments": {
@@ -2331,9 +2331,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "IocRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2349,7 +2347,7 @@
       ],
       "id": "d025-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.EvtxHunter"
+      "tool": "Windows.Sys.Interfaces"
     },
     {
       "arguments": {
@@ -2428,9 +2426,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UsernameRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2446,7 +2442,7 @@
       ],
       "id": "d026-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ExplicitLogon"
+      "tool": "Windows.Sys.Programs"
     },
     {
       "arguments": {
@@ -2525,9 +2521,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProviderRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2543,7 +2537,7 @@
       ],
       "id": "d027-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Modifications"
+      "tool": "Windows.Sys.StartupItems"
     },
     {
       "arguments": {
@@ -2622,9 +2616,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ContextRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2640,7 +2632,7 @@
       ],
       "id": "d028-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.PowershellModule"
+      "tool": "Windows.Sys.Users"
     },
     {
       "arguments": {
@@ -2719,9 +2711,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "SearchStrings": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2737,7 +2727,7 @@
       ],
       "id": "d029-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.PowershellScriptblock"
+      "tool": "Windows.EventLogs.AlternateLogon"
     },
     {
       "arguments": {
@@ -2816,9 +2806,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "SourceIPRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -2834,7 +2822,7 @@
       ],
       "id": "d030-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.RDPAuth"
+      "tool": "Windows.EventLogs.Cleared"
     },
     {
       "arguments": {
@@ -2914,7 +2902,7 @@
     },
     {
       "arguments": {
-        "TaskSchedulerEventRegex": "^__p06_compromise_scope_no_match__$"
+        "PathRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -2931,7 +2919,7 @@
       ],
       "id": "d031-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ScheduledTasks"
+      "tool": "Windows.EventLogs.Evtx"
     },
     {
       "arguments": {
@@ -3011,7 +2999,7 @@
     },
     {
       "arguments": {
-        "ComspecRegex": "^__p06_compromise_scope_no_match__$"
+        "IocRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -3028,7 +3016,7 @@
       ],
       "id": "d032-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ServiceCreationComspec"
+      "tool": "Windows.EventLogs.EvtxHunter"
     },
     {
       "arguments": {
@@ -3107,7 +3095,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UsernameRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3123,7 +3113,7 @@
       ],
       "id": "d033-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Amcache"
+      "tool": "Windows.EventLogs.ExplicitLogon"
     },
     {
       "arguments": {
@@ -3203,7 +3193,7 @@
     },
     {
       "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
+        "ProviderRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -3220,7 +3210,7 @@
       ],
       "id": "d034-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Bam"
+      "tool": "Windows.EventLogs.Modifications"
     },
     {
       "arguments": {
@@ -3299,7 +3289,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ContextRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3315,7 +3307,7 @@
       ],
       "id": "d035-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.CertUtil"
+      "tool": "Windows.EventLogs.PowershellModule"
     },
     {
       "arguments": {
@@ -3394,7 +3386,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "SearchStrings": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3410,7 +3404,7 @@
       ],
       "id": "d036-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.FilenameSearch"
+      "tool": "Windows.EventLogs.PowershellScriptblock"
     },
     {
       "arguments": {
@@ -3489,7 +3483,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "SourceIPRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3505,7 +3501,7 @@
       ],
       "id": "d037-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.JumpLists"
+      "tool": "Windows.EventLogs.RDPAuth"
     },
     {
       "arguments": {
@@ -3585,7 +3581,7 @@
     },
     {
       "arguments": {
-        "IocRegex": "^__p06_compromise_scope_no_match__$"
+        "TaskSchedulerEventRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -3602,7 +3598,7 @@
       ],
       "id": "d038-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Lnk"
+      "tool": "Windows.EventLogs.ScheduledTasks"
     },
     {
       "arguments": {
@@ -3682,7 +3678,7 @@
     },
     {
       "arguments": {
-        "binaryRegex": "^__p06_compromise_scope_no_match__$"
+        "ComspecRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -3699,7 +3695,7 @@
       ],
       "id": "d039-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Prefetch"
+      "tool": "Windows.EventLogs.ServiceCreationComspec"
     },
     {
       "arguments": {
@@ -3778,9 +3774,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserFilter": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -3796,7 +3790,7 @@
       ],
       "id": "d040-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.RecentApps"
+      "tool": "Windows.System.AuditPolicy"
     },
     {
       "arguments": {
@@ -3875,7 +3869,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "SignerExcludeRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3891,7 +3887,7 @@
       ],
       "id": "d041-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.RecycleBin"
+      "tool": "Windows.System.CatFiles"
     },
     {
       "arguments": {
@@ -3970,7 +3966,11 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "Command": "exit 0",
+        "Stateful": false,
+        "Timeout": 30
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3986,7 +3986,7 @@
       ],
       "id": "d042-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.SAM.Enriched"
+      "tool": "Windows.System.CmdShell"
     },
     {
       "arguments": {
@@ -4065,9 +4065,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4083,7 +4081,7 @@
       ],
       "id": "d043-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.SRUM"
+      "tool": "Windows.System.CriticalServices"
     },
     {
       "arguments": {
@@ -4162,7 +4160,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -4178,7 +4178,7 @@
       ],
       "id": "d044-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Shellbags"
+      "tool": "Windows.System.DLLs"
     },
     {
       "arguments": {
@@ -4257,9 +4257,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserFilter": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4275,7 +4273,7 @@
       ],
       "id": "d045-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Timeline"
+      "tool": "Windows.System.DNSCache"
     },
     {
       "arguments": {
@@ -4354,9 +4352,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "PathRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4372,7 +4368,7 @@
       ],
       "id": "d046-start",
       "kind": "tool",
-      "tool": "Windows.Forensics.Usn"
+      "tool": "Windows.System.DomainRole"
     },
     {
       "arguments": {
@@ -4452,7 +4448,7 @@
     },
     {
       "arguments": {
-        "Compression": "Snappy"
+        "processRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -4469,7 +4465,7 @@
       ],
       "id": "d047-start",
       "kind": "tool",
-      "tool": "Windows.Memory.Acquisition"
+      "tool": "Windows.System.Handles"
     },
     {
       "arguments": {
@@ -4549,9 +4545,7 @@
     },
     {
       "arguments": {
-        "BaseOffset": 0,
-        "FilenameRegex": "^__p06_compromise_scope_no_match__$",
-        "Pid": 0
+        "HostnameRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -4568,7 +4562,7 @@
       ],
       "id": "d048-start",
       "kind": "tool",
-      "tool": "Windows.Memory.PEDump"
+      "tool": "Windows.System.HostsFile"
     },
     {
       "arguments": {
@@ -4647,10 +4641,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "PidRegex": "^__p06_compromise_scope_no_match__$",
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4666,7 +4657,7 @@
       ],
       "id": "d049-start",
       "kind": "tool",
-      "tool": "Windows.Memory.ProcessDump"
+      "tool": "Windows.System.LocalAdmins"
     },
     {
       "arguments": {
@@ -4746,7 +4737,9 @@
     },
     {
       "arguments": {
-        "ProcessNameRegex": "^__p06_compromise_scope_no_match__$"
+        "Command": "exit 0",
+        "Stateful": false,
+        "Timeout": 30
       },
       "assertions": [
         {
@@ -4763,7 +4756,7 @@
       ],
       "id": "d050-start",
       "kind": "tool",
-      "tool": "Windows.Memory.ProcessInfo"
+      "tool": "Windows.System.PowerShell"
     },
     {
       "arguments": {
@@ -4843,7 +4836,7 @@
     },
     {
       "arguments": {
-        "AdsNameExclusion": "^__p06_compromise_scope_no_match__$"
+        "ModulePathRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -4860,7 +4853,7 @@
       ],
       "id": "d051-start",
       "kind": "tool",
-      "tool": "Windows.NTFS.ADSHunter"
+      "tool": "Windows.System.Powershell.ModuleAnalysisCache"
     },
     {
       "arguments": {
@@ -4940,7 +4933,7 @@
     },
     {
       "arguments": {
-        "HostPathRegex": "^__p06_compromise_scope_no_match__$"
+        "SearchStrings": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -4957,7 +4950,7 @@
       ],
       "id": "d052-start",
       "kind": "tool",
-      "tool": "Windows.NTFS.ExtendedAttributes"
+      "tool": "Windows.System.Powershell.PSReadline"
     },
     {
       "arguments": {
@@ -5036,7 +5029,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5052,7 +5047,7 @@
       ],
       "id": "d053-start",
       "kind": "tool",
-      "tool": "Windows.NTFS.I30"
+      "tool": "Windows.System.Pslist"
     },
     {
       "arguments": {
@@ -5131,9 +5126,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "PathRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -5149,7 +5142,7 @@
       ],
       "id": "d054-start",
       "kind": "tool",
-      "tool": "Windows.NTFS.MFT"
+      "tool": "Windows.System.RootCAStore"
     },
     {
       "arguments": {
@@ -5228,9 +5221,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "MFTId": "9223372036854775807"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -5246,7 +5237,7 @@
       ],
       "id": "d055-start",
       "kind": "tool",
-      "tool": "Windows.NTFS.Recover"
+      "tool": "Windows.System.SVCHost"
     },
     {
       "arguments": {
@@ -5325,7 +5316,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "NameRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5341,7 +5334,7 @@
       ],
       "id": "d056-start",
       "kind": "tool",
-      "tool": "Windows.Network.ArpCache"
+      "tool": "Windows.System.Services"
     },
     {
       "arguments": {
@@ -5420,7 +5413,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "NameRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5436,7 +5431,7 @@
       ],
       "id": "d057-start",
       "kind": "tool",
-      "tool": "Windows.Network.ListeningPorts"
+      "tool": "Windows.System.Shares"
     },
     {
       "arguments": {
@@ -5531,7 +5526,7 @@
       ],
       "id": "d058-start",
       "kind": "tool",
-      "tool": "Windows.Network.Netstat"
+      "tool": "Windows.System.Signers"
     },
     {
       "arguments": {
@@ -5611,7 +5606,7 @@
     },
     {
       "arguments": {
-        "IPRegex": "^__p06_compromise_scope_no_match__$"
+        "Username": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -5628,7 +5623,7 @@
       ],
       "id": "d059-start",
       "kind": "tool",
-      "tool": "Windows.Network.NetstatEnriched"
+      "tool": "Windows.System.TaskScheduler"
     },
     {
       "arguments": {
@@ -5708,7 +5703,7 @@
     },
     {
       "arguments": {
-        "StartTrace": true
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -5725,7 +5720,7 @@
       ],
       "id": "d060-start",
       "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
+      "tool": "Windows.System.Threads"
     },
     {
       "arguments": {
@@ -5761,7 +5756,7 @@
         "flow_id": {
           "$ref": "/steps/d060-start/structuredContent/flow_id"
         },
-        "page_size": 20
+        "page_size": 1
       },
       "assertions": [
         {
@@ -5772,9 +5767,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 1,
           "id": "d060-results-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d060-results",
@@ -5783,61 +5777,8 @@
     },
     {
       "arguments": {
-        "StartTrace": false,
-        "TraceFile": {
-          "$packet_etl": "/steps/d060-results/structuredContent/data"
-        }
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d060-stop-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/flow_id",
-          "id": "d060-stop-flow",
-          "op": "exists"
-        }
-      ],
-      "id": "d060-stop",
-      "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
-    },
-    {
-      "arguments": {
         "flow_id": {
-          "$ref": "/steps/d060-stop/structuredContent/flow_id"
-        }
-      },
-      "assertions": [],
-      "id": "d060-stop-wait",
-      "kind": "tool",
-      "repeat_until": {
-        "assertions": [
-          {
-            "actual": "/isError",
-            "expected": false,
-            "id": "d060-stop-wait-ok",
-            "op": "is_error"
-          },
-          {
-            "actual": "/structuredContent/state",
-            "expected": "FINISHED",
-            "id": "d060-stop-wait-state",
-            "op": "eq"
-          }
-        ],
-        "interval_seconds": 5,
-        "max_attempts": 240
-      },
-      "tool": "get_flow_status"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d060-stop/structuredContent/flow_id"
+          "$ref": "/steps/d060-start/structuredContent/flow_id"
         }
       },
       "assertions": [
@@ -5849,9 +5790,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 2,
           "id": "d060-files-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d060-files",
@@ -5859,7 +5799,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "processNamesRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5875,7 +5817,7 @@
       ],
       "id": "d061-start",
       "kind": "tool",
-      "tool": "Windows.Packs.Persistence"
+      "tool": "Windows.System.UntrustedBinaries"
     },
     {
       "arguments": {
@@ -5954,7 +5896,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5970,7 +5914,7 @@
       ],
       "id": "d062-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.Debug"
+      "tool": "Windows.System.VAD"
     },
     {
       "arguments": {
@@ -6065,7 +6009,7 @@
       ],
       "id": "d063-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PermanentWMIEvents"
+      "tool": "Windows.System.WMIQuery"
     },
     {
       "arguments": {
@@ -6144,9 +6088,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "SearchStrings": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6162,7 +6104,7 @@
       ],
       "id": "d064-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PowershellProfile"
+      "tool": "Windows.Attack.Prefetch"
     },
     {
       "arguments": {
@@ -6241,9 +6183,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6259,7 +6199,7 @@
       ],
       "id": "d065-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PowershellRegistry"
+      "tool": "Windows.Attack.UnexpectedImagePath"
     },
     {
       "arguments": {
@@ -6354,7 +6294,7 @@
       ],
       "id": "d066-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.Wow64cpu"
+      "tool": "Windows.Forensics.Amcache"
     },
     {
       "arguments": {
@@ -6433,7 +6373,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -6449,7 +6391,7 @@
       ],
       "id": "d067-start",
       "kind": "tool",
-      "tool": "Windows.Registry.AppCompatCache"
+      "tool": "Windows.Forensics.Bam"
     },
     {
       "arguments": {
@@ -6544,7 +6486,7 @@
       ],
       "id": "d068-start",
       "kind": "tool",
-      "tool": "Windows.Registry.BackupRestore"
+      "tool": "Windows.Forensics.CertUtil"
     },
     {
       "arguments": {
@@ -6623,9 +6565,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6641,7 +6581,7 @@
       ],
       "id": "d069-start",
       "kind": "tool",
-      "tool": "Windows.Registry.EnableUnsafeClientMailRules"
+      "tool": "Windows.Forensics.FilenameSearch"
     },
     {
       "arguments": {
@@ -6720,9 +6660,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6738,7 +6676,7 @@
       ],
       "id": "d070-start",
       "kind": "tool",
-      "tool": "Windows.Registry.EnabledMacro"
+      "tool": "Windows.Forensics.JumpLists"
     },
     {
       "arguments": {
@@ -6818,7 +6756,7 @@
     },
     {
       "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
+        "IocRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -6835,7 +6773,7 @@
       ],
       "id": "d071-start",
       "kind": "tool",
-      "tool": "Windows.Registry.NTUser"
+      "tool": "Windows.Forensics.Lnk"
     },
     {
       "arguments": {
@@ -6915,7 +6853,7 @@
     },
     {
       "arguments": {
-        "userRegex": "^__p06_compromise_scope_no_match__$"
+        "binaryRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -6932,7 +6870,7 @@
       ],
       "id": "d072-start",
       "kind": "tool",
-      "tool": "Windows.Registry.NTUser.Upload"
+      "tool": "Windows.Forensics.Prefetch"
     },
     {
       "arguments": {
@@ -7011,7 +6949,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UserFilter": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7027,7 +6967,7 @@
       ],
       "id": "d073-start",
       "kind": "tool",
-      "tool": "Windows.Registry.PortProxy"
+      "tool": "Windows.Forensics.RecentApps"
     },
     {
       "arguments": {
@@ -7106,9 +7046,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -7124,7 +7062,7 @@
       ],
       "id": "d074-start",
       "kind": "tool",
-      "tool": "Windows.Registry.RDP"
+      "tool": "Windows.Forensics.RecycleBin"
     },
     {
       "arguments": {
@@ -7219,7 +7157,7 @@
       ],
       "id": "d075-start",
       "kind": "tool",
-      "tool": "Windows.Registry.RecentDocs"
+      "tool": "Windows.Forensics.SAM.Enriched"
     },
     {
       "arguments": {
@@ -7299,7 +7237,7 @@
     },
     {
       "arguments": {
-        "UserFilter": "^__p06_compromise_scope_no_match__$"
+        "UserRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -7316,7 +7254,7 @@
       ],
       "id": "d076-start",
       "kind": "tool",
-      "tool": "Windows.Registry.UserAssist"
+      "tool": "Windows.Forensics.SRUM"
     },
     {
       "arguments": {
@@ -7411,7 +7349,7 @@
       ],
       "id": "d077-start",
       "kind": "tool",
-      "tool": "Windows.Registry.WDigest"
+      "tool": "Windows.Forensics.Shellbags"
     },
     {
       "arguments": {
@@ -7490,7 +7428,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UserFilter": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7506,7 +7446,7 @@
       ],
       "id": "d078-start",
       "kind": "tool",
-      "tool": "Windows.Search.FileFinder"
+      "tool": "Windows.Forensics.Timeline"
     },
     {
       "arguments": {
@@ -7585,7 +7525,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "PathRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7601,7 +7543,7 @@
       ],
       "id": "d079-start",
       "kind": "tool",
-      "tool": "Windows.Search.VSS"
+      "tool": "Windows.Forensics.Usn"
     },
     {
       "arguments": {
@@ -7681,7 +7623,7 @@
     },
     {
       "arguments": {
-        "nameRegex": "^__p06_compromise_scope_no_match__$"
+        "userRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -7698,7 +7640,7 @@
       ],
       "id": "d080-start",
       "kind": "tool",
-      "tool": "Windows.Search.Yara"
+      "tool": "Windows.Applications.Chrome.Cookies"
     },
     {
       "arguments": {
@@ -7777,7 +7719,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7793,7 +7737,7 @@
       ],
       "id": "d081-start",
       "kind": "tool",
-      "tool": "Windows.Sys.AllUsers"
+      "tool": "Windows.Applications.Chrome.Extensions"
     },
     {
       "arguments": {
@@ -7872,7 +7816,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7888,7 +7834,7 @@
       ],
       "id": "d082-start",
       "kind": "tool",
-      "tool": "Windows.Sys.AppcompatShims"
+      "tool": "Windows.Applications.Chrome.History"
     },
     {
       "arguments": {
@@ -7967,7 +7913,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -7983,7 +7931,7 @@
       ],
       "id": "d083-start",
       "kind": "tool",
-      "tool": "Windows.Sys.CertificateAuthorities"
+      "tool": "Windows.Applications.Edge.History"
     },
     {
       "arguments": {
@@ -8078,7 +8026,7 @@
       ],
       "id": "d084-start",
       "kind": "tool",
-      "tool": "Windows.Sys.DiskInfo"
+      "tool": "Windows.Applications.OfficeMacros"
     },
     {
       "arguments": {
@@ -8157,7 +8105,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "AdsNameExclusion": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8173,7 +8123,7 @@
       ],
       "id": "d085-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Drivers"
+      "tool": "Windows.NTFS.ADSHunter"
     },
     {
       "arguments": {
@@ -8252,7 +8202,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "HostPathRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8268,7 +8220,7 @@
       ],
       "id": "d086-start",
       "kind": "tool",
-      "tool": "Windows.Sys.FirewallRules"
+      "tool": "Windows.NTFS.ExtendedAttributes"
     },
     {
       "arguments": {
@@ -8363,7 +8315,7 @@
       ],
       "id": "d087-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Interfaces"
+      "tool": "Windows.NTFS.I30"
     },
     {
       "arguments": {
@@ -8442,7 +8394,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "PathRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8458,7 +8412,7 @@
       ],
       "id": "d088-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Programs"
+      "tool": "Windows.NTFS.MFT"
     },
     {
       "arguments": {
@@ -8537,7 +8491,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "MFTId": "9223372036854775807"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8553,7 +8509,7 @@
       ],
       "id": "d089-start",
       "kind": "tool",
-      "tool": "Windows.Sys.StartupItems"
+      "tool": "Windows.NTFS.Recover"
     },
     {
       "arguments": {
@@ -8632,7 +8588,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "PidRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8648,7 +8606,7 @@
       ],
       "id": "d090-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Users"
+      "tool": "Windows.Carving.CobaltStrike"
     },
     {
       "arguments": {
@@ -8743,7 +8701,7 @@
       ],
       "id": "d091-start",
       "kind": "tool",
-      "tool": "Windows.Sysinternals.Autoruns"
+      "tool": "Windows.Search.FileFinder"
     },
     {
       "arguments": {
@@ -8838,7 +8796,7 @@
       ],
       "id": "d092-start",
       "kind": "tool",
-      "tool": "Windows.System.AuditPolicy"
+      "tool": "Windows.Search.VSS"
     },
     {
       "arguments": {
@@ -8918,7 +8876,7 @@
     },
     {
       "arguments": {
-        "SignerExcludeRegex": "^__p06_compromise_scope_no_match__$"
+        "nameRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -8935,7 +8893,7 @@
       ],
       "id": "d093-start",
       "kind": "tool",
-      "tool": "Windows.System.CatFiles"
+      "tool": "Windows.Search.Yara"
     },
     {
       "arguments": {
@@ -9015,9 +8973,7 @@
     },
     {
       "arguments": {
-        "Command": "exit 0",
-        "Stateful": false,
-        "Timeout": 30
+        "PathRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -9034,7 +8990,7 @@
       ],
       "id": "d094-start",
       "kind": "tool",
-      "tool": "Windows.System.CmdShell"
+      "tool": "Windows.Timeline.MFT"
     },
     {
       "arguments": {
@@ -9113,7 +9069,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "binaryRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -9129,7 +9087,7 @@
       ],
       "id": "d095-start",
       "kind": "tool",
-      "tool": "Windows.System.CriticalServices"
+      "tool": "Windows.Timeline.Prefetch"
     },
     {
       "arguments": {
@@ -9209,7 +9167,7 @@
     },
     {
       "arguments": {
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
+        "targetUser": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -9226,7 +9184,7 @@
       ],
       "id": "d096-start",
       "kind": "tool",
-      "tool": "Windows.System.DLLs"
+      "tool": "Windows.Timeline.Registry.RunMRU"
     },
     {
       "arguments": {
@@ -9321,7 +9279,7 @@
       ],
       "id": "d097-start",
       "kind": "tool",
-      "tool": "Windows.System.DNSCache"
+      "tool": "Windows.Network.ArpCache"
     },
     {
       "arguments": {
@@ -9416,7 +9374,7 @@
       ],
       "id": "d098-start",
       "kind": "tool",
-      "tool": "Windows.System.DomainRole"
+      "tool": "Windows.Network.ListeningPorts"
     },
     {
       "arguments": {
@@ -9495,9 +9453,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "processRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -9513,7 +9469,7 @@
       ],
       "id": "d099-start",
       "kind": "tool",
-      "tool": "Windows.System.Handles"
+      "tool": "Windows.Network.Netstat"
     },
     {
       "arguments": {
@@ -9593,7 +9549,7 @@
     },
     {
       "arguments": {
-        "HostnameRegex": "^__p06_compromise_scope_no_match__$"
+        "IPRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -9610,7 +9566,7 @@
       ],
       "id": "d100-start",
       "kind": "tool",
-      "tool": "Windows.System.HostsFile"
+      "tool": "Windows.Network.NetstatEnriched"
     },
     {
       "arguments": {
@@ -9689,7 +9645,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "StartTrace": true
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -9705,7 +9663,7 @@
       ],
       "id": "d101-start",
       "kind": "tool",
-      "tool": "Windows.System.LocalAdmins"
+      "tool": "Windows.Network.PacketCapture"
     },
     {
       "arguments": {
@@ -9741,7 +9699,7 @@
         "flow_id": {
           "$ref": "/steps/d101-start/structuredContent/flow_id"
         },
-        "page_size": 1
+        "page_size": 20
       },
       "assertions": [
         {
@@ -9752,8 +9710,9 @@
         },
         {
           "actual": "/structuredContent/data",
+          "expected": 1,
           "id": "d101-results-data",
-          "op": "exists"
+          "op": "len_gte"
         }
       ],
       "id": "d101-results",
@@ -9762,8 +9721,61 @@
     },
     {
       "arguments": {
+        "StartTrace": false,
+        "TraceFile": {
+          "$packet_etl": "/steps/d101-results/structuredContent/data"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "id": "d101-stop-ok",
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/flow_id",
+          "id": "d101-stop-flow",
+          "op": "exists"
+        }
+      ],
+      "id": "d101-stop",
+      "kind": "tool",
+      "tool": "Windows.Network.PacketCapture"
+    },
+    {
+      "arguments": {
         "flow_id": {
-          "$ref": "/steps/d101-start/structuredContent/flow_id"
+          "$ref": "/steps/d101-stop/structuredContent/flow_id"
+        }
+      },
+      "assertions": [],
+      "id": "d101-stop-wait",
+      "kind": "tool",
+      "repeat_until": {
+        "assertions": [
+          {
+            "actual": "/isError",
+            "expected": false,
+            "id": "d101-stop-wait-ok",
+            "op": "is_error"
+          },
+          {
+            "actual": "/structuredContent/state",
+            "expected": "FINISHED",
+            "id": "d101-stop-wait-state",
+            "op": "eq"
+          }
+        ],
+        "interval_seconds": 5,
+        "max_attempts": 240
+      },
+      "tool": "get_flow_status"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/d101-stop/structuredContent/flow_id"
         }
       },
       "assertions": [
@@ -9775,8 +9787,9 @@
         },
         {
           "actual": "/structuredContent/data",
+          "expected": 2,
           "id": "d101-files-data",
-          "op": "exists"
+          "op": "len_gte"
         }
       ],
       "id": "d101-files",
@@ -9785,9 +9798,7 @@
     },
     {
       "arguments": {
-        "Command": "exit 0",
-        "Stateful": false,
-        "Timeout": 30
+        "SHA1Regex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -9804,7 +9815,7 @@
       ],
       "id": "d102-start",
       "kind": "tool",
-      "tool": "Windows.System.PowerShell"
+      "tool": "Windows.Detection.Amcache"
     },
     {
       "arguments": {
@@ -9884,7 +9895,7 @@
     },
     {
       "arguments": {
-        "ModulePathRegex": "^__p06_compromise_scope_no_match__$"
+        "AuthenticodeRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -9901,7 +9912,7 @@
       ],
       "id": "d103-start",
       "kind": "tool",
-      "tool": "Windows.System.Powershell.ModuleAnalysisCache"
+      "tool": "Windows.Detection.BinaryHunter"
     },
     {
       "arguments": {
@@ -9980,9 +9991,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "SearchStrings": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -9998,7 +10007,7 @@
       ],
       "id": "d104-start",
       "kind": "tool",
-      "tool": "Windows.System.Powershell.PSReadline"
+      "tool": "Windows.Detection.BinaryRename"
     },
     {
       "arguments": {
@@ -10078,7 +10087,7 @@
     },
     {
       "arguments": {
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
+        "ProcessNameRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -10095,7 +10104,7 @@
       ],
       "id": "d105-start",
       "kind": "tool",
-      "tool": "Windows.System.Pslist"
+      "tool": "Windows.Detection.EnvironmentVariables"
     },
     {
       "arguments": {
@@ -10174,7 +10183,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ExcludeRegex": "^__p06_compromise_scope_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10190,7 +10201,7 @@
       ],
       "id": "d106-start",
       "kind": "tool",
-      "tool": "Windows.System.RootCAStore"
+      "tool": "Windows.Detection.ForwardedImports"
     },
     {
       "arguments": {
@@ -10285,7 +10296,7 @@
       ],
       "id": "d107-start",
       "kind": "tool",
-      "tool": "Windows.System.SVCHost"
+      "tool": "Windows.Detection.Impersonation"
     },
     {
       "arguments": {
@@ -10365,7 +10376,7 @@
     },
     {
       "arguments": {
-        "NameRegex": "^__p06_compromise_scope_no_match__$"
+        "processRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -10382,7 +10393,7 @@
       ],
       "id": "d108-start",
       "kind": "tool",
-      "tool": "Windows.System.Services"
+      "tool": "Windows.Detection.Mutants"
     },
     {
       "arguments": {
@@ -10462,7 +10473,7 @@
     },
     {
       "arguments": {
-        "NameRegex": "^__p06_compromise_scope_no_match__$"
+        "TemplateFileRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -10479,7 +10490,7 @@
       ],
       "id": "d109-start",
       "kind": "tool",
-      "tool": "Windows.System.Shares"
+      "tool": "Windows.Detection.TemplateInjection"
     },
     {
       "arguments": {
@@ -10574,7 +10585,7 @@
       ],
       "id": "d110-start",
       "kind": "tool",
-      "tool": "Windows.System.Signers"
+      "tool": "Windows.Detection.Yara.NTFS"
     },
     {
       "arguments": {
@@ -10653,9 +10664,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "Username": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10671,7 +10680,7 @@
       ],
       "id": "d111-start",
       "kind": "tool",
-      "tool": "Windows.System.TaskScheduler"
+      "tool": "Windows.Detection.Yara.PhysicalMemory"
     },
     {
       "arguments": {
@@ -10768,7 +10777,7 @@
       ],
       "id": "d112-start",
       "kind": "tool",
-      "tool": "Windows.System.Threads"
+      "tool": "Windows.Detection.Yara.Process"
     },
     {
       "arguments": {
@@ -10848,7 +10857,7 @@
     },
     {
       "arguments": {
-        "processNamesRegex": "^__p06_compromise_scope_no_match__$"
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -10865,7 +10874,7 @@
       ],
       "id": "d113-start",
       "kind": "tool",
-      "tool": "Windows.System.UntrustedBinaries"
+      "tool": "Windows.ETW.DotNetRundown"
     },
     {
       "arguments": {
@@ -10944,9 +10953,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10962,7 +10969,7 @@
       ],
       "id": "d114-start",
       "kind": "tool",
-      "tool": "Windows.System.VAD"
+      "tool": "Windows.Analysis.EvidenceOfDownload"
     },
     {
       "arguments": {
@@ -11041,7 +11048,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "Compression": "Snappy"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -11057,7 +11066,7 @@
       ],
       "id": "d115-start",
       "kind": "tool",
-      "tool": "Windows.System.WMIQuery"
+      "tool": "Windows.Memory.Acquisition"
     },
     {
       "arguments": {
@@ -11137,7 +11146,9 @@
     },
     {
       "arguments": {
-        "PathRegex": "^__p06_compromise_scope_no_match__$"
+        "BaseOffset": 0,
+        "FilenameRegex": "^__p06_compromise_scope_no_match__$",
+        "Pid": 0
       },
       "assertions": [
         {
@@ -11154,7 +11165,7 @@
       ],
       "id": "d116-start",
       "kind": "tool",
-      "tool": "Windows.Timeline.MFT"
+      "tool": "Windows.Memory.PEDump"
     },
     {
       "arguments": {
@@ -11234,7 +11245,8 @@
     },
     {
       "arguments": {
-        "binaryRegex": "^__p06_compromise_scope_no_match__$"
+        "PidRegex": "^__p06_compromise_scope_no_match__$",
+        "ProcessRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -11251,7 +11263,7 @@
       ],
       "id": "d117-start",
       "kind": "tool",
-      "tool": "Windows.Timeline.Prefetch"
+      "tool": "Windows.Memory.ProcessDump"
     },
     {
       "arguments": {
@@ -11331,7 +11343,7 @@
     },
     {
       "arguments": {
-        "targetUser": "^__p06_compromise_scope_no_match__$"
+        "ProcessNameRegex": "^__p06_compromise_scope_no_match__$"
       },
       "assertions": [
         {
@@ -11348,7 +11360,7 @@
       ],
       "id": "d118-start",
       "kind": "tool",
-      "tool": "Windows.Timeline.Registry.RunMRU"
+      "tool": "Windows.Memory.ProcessInfo"
     },
     {
       "arguments": {
@@ -11493,6 +11505,20 @@
           "expected": 1,
           "id": "fixed-collect-results-data",
           "op": "len_gte"
+        },
+        {
+          "actual": "/structuredContent/data/0/SourceFile",
+          "expected": {
+            "$fixture": "/files/0/path"
+          },
+          "id": "fixed-collect-results-source",
+          "op": "eq"
+        },
+        {
+          "actual": "/structuredContent/data/0/Size",
+          "expected": 15,
+          "id": "fixed-collect-results-size",
+          "op": "eq"
         }
       ],
       "id": "fixed-collect-results",
