@@ -8,7 +8,7 @@
   "steps": [
     {
       "arguments": {
-        "query": "SELECT 2 AS ScenarioOrdinal, \"files/utf8 \\u7a7a\\u683c.txt\" AS FocusFile FROM scope()"
+        "query": "SELECT 2 AS ScenarioOrdinal, \"files/utf8 空格.txt\" AS FocusFile FROM scope()"
       },
       "assertions": [
         {

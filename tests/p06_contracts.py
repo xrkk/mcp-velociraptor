@@ -290,7 +290,8 @@ def build_scenario(
             {
                 "query": (
                     f"SELECT {fixture_index + 1} AS ScenarioOrdinal, "
-                    f"{json.dumps(focus_rel)} AS FocusFile FROM scope()"
+                    + json.dumps(focus_rel, ensure_ascii=False)
+                    + " AS FocusFile FROM scope()"
                 )
             },
             [

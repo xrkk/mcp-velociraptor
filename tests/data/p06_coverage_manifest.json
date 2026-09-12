@@ -6335,7 +6335,7 @@
         "This scenario binds its evidence chain to fixture file files/utf8 空格.txt"
       ],
       "investigative_question": "For ransomware root cause, what does run_vql prove or rule out on the endpoint?",
-      "parameters_sha256": "dab30d5b9c002bd48a8cc01629d16557f403229379ded449f0e02b7b4427bbbd",
+      "parameters_sha256": "c276106c117a76ea0ab49e8cfff4e4cc3bef9b1445d7d1df7fe6c48a7e04552b",
       "scenario_id": "p06-ransomware-root-cause",
       "step_ids": [
         "fixed-run-vql"

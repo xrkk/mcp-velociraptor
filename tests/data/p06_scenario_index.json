@@ -13,7 +13,7 @@
       "path": "full/p06-ransomware-root-cause.json",
       "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
       "scenario_id": "p06-ransomware-root-cause",
-      "sha256": "2ac43b3d7faaa61bb613fade7e5808c3771ba7d92eb3ac1a6fed9a3c7c384e93",
+      "sha256": "c93bc5288dfe8b0bc1b918b6d674de6e6987d2c8a226e844394e2b9c2e8c6341",
       "snapshot_stage": "P06_ACTIVE"
     },
     {

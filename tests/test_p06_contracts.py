@@ -71,6 +71,28 @@ class P06ContractTests(unittest.TestCase):
                     )
                     self.assertGreater(differing, len(left_steps) // 2)
 
+    def test_probe_queries_embed_focus_paths_without_ascii_escaping(self):
+        # VQL must receive the raw focus path so the FocusFile equality
+        # assertion round-trips for non-ASCII fixture names (e.g. the
+        # "utf8 空格" file); json.dumps with default ensure_ascii would
+        # embed literal \uXXXX sequences that VQL returns unchanged.
+        files, _index, _manifest = p06_contracts.build_contracts()
+        spec = json.loads(p06_contracts.FIXTURE_SPEC.read_text(encoding="utf-8"))
+        for relative, payload in files.items():
+            scenario = json.loads(payload)
+            probe = next(
+                step for step in scenario["steps"] if step["id"] == "fixed-run-vql"
+            )
+            query = probe["arguments"]["query"]
+            focus = spec["files"][
+                p06_contracts.SCENARIO_PROFILES[scenario["scenario_id"]][
+                    "focus_file_index"
+                ]
+            ]["path"]
+            with self.subTest(scenario=scenario["scenario_id"]):
+                self.assertIn(f'"{focus}" AS FocusFile', query)
+                self.assertNotIn("\\u", query)
+
     def test_cross_step_validator_rejects_flow_hunt_and_file_substitution(self):
         scenario = {
             "steps": [
