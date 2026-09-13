@@ -30,7 +30,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_CAPTURE = REPO_ROOT / "Logs" / "P07" / "upstream78-tools-list.jsonl"
-P06_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06"
+UPSTREAM_TASK = REPO_ROOT / "Logs" / "P07" / "upstream78-fixed-task.json"
+P06_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r2"
 SCENARIOS = (
     "p06-compromise-scope",
     "p06-ransomware-root-cause",
@@ -39,11 +40,11 @@ SCENARIOS = (
     "p06-remediation-validation",
 )
 RUNS = {
-    "p06-compromise-scope": "36361ed1-3f61-4dff-be5c-74d52f537c5c",
-    "p06-ransomware-root-cause": "f1c215e6-8a17-4be6-8d23-81737d9f2e25",
-    "p06-credential-lateral-movement": "2c573fa2-1dce-4688-9d9a-b25a948c9b1c",
-    "p06-data-exfiltration": "a2ccd066-5815-4db2-9f20-39d567a8adf6",
-    "p06-remediation-validation": "0748d676-eedd-4c22-8224-c7173696e16a",
+    "p06-compromise-scope": "f65961d0-e759-4791-817c-c886075c0c79",
+    "p06-ransomware-root-cause": "a148b57b-00ac-46f7-8ce5-85c041e8fe2e",
+    "p06-credential-lateral-movement": "52bd203b-553f-41dd-bfdf-060f21d00ce8",
+    "p06-data-exfiltration": "1586b2f3-5d38-4fd1-bd2f-7a34674bcd7a",
+    "p06-remediation-validation": "7e38a35d-0533-45ff-a572-17a04902d53b",
 }
 OUTPUT = REPO_ROOT / "Logs" / "P07" / "cost-measurement.json"
 
@@ -109,9 +110,59 @@ def measure_task_costs() -> list[dict]:
     return rows
 
 
+def current_task_chain_rows() -> list[dict]:
+    """The current-side equivalent of the upstream fixed task, per formal run.
+
+    For every scenario report, collect the calls of the RecycleBin evidence
+    chain (the same artifact the upstream baseline ran) with their poll
+    attempts and structured output byte sizes.
+    """
+    rows = []
+    for scenario in SCENARIOS:
+        path = P06_ROOT / scenario / RUNS[scenario] / "report.json"
+        report = json.loads(path.read_text(encoding="utf-8"))
+        chain = [
+            call
+            for call in report["calls"]
+            if call.get("tool") == "Windows.Forensics.RecycleBin"
+            or (
+                call.get("tool") in {"get_flow_status", "get_flow_results", "list_flow_files"}
+                and str(call.get("step_id", "")).endswith(
+                    ("-wait", "-results", "-files")
+                )
+                and _in_recyclebin_chain(report, call)
+            )
+        ]
+        rows.append(
+            {
+                "scenario": scenario,
+                "tool_calls": len(chain),
+                "poll_attempts": sum(call.get("attempt", 1) for call in chain),
+                "structured_output_bytes": sum(
+                    len(canonical_text(call.get("structured")).encode("utf-8"))
+                    for call in chain
+                ),
+            }
+        )
+    return rows
+
+
+def _in_recyclebin_chain(report: dict, call: dict) -> bool:
+    prefix = str(call.get("step_id", "")).split("-")[0]
+    for candidate in report["calls"]:
+        if (
+            candidate.get("tool") == "Windows.Forensics.RecycleBin"
+            and str(candidate.get("step_id", "")).startswith(prefix + "-")
+        ):
+            return True
+    return False
+
+
 def main() -> int:
     upstream, upstream_capture_sha = upstream_tools()
     current, current_schema_sha, current_source = current_tools()
+    upstream_task = json.loads(UPSTREAM_TASK.read_text(encoding="utf-8"))
+    current_task_chains = current_task_chain_rows()
 
     def face(tools: list[dict]) -> dict:
         text = canonical_text(tools)
@@ -173,11 +224,35 @@ def main() -> int:
                 ),
                 "duration_ms_sum": sum(row["duration_ms"] for row in task_rows),
             },
-            "upstream_comparable_baseline": (
-                "none: P01 evidence records only static upstream registration counts "
-                "(stdio-probe-stderr.txt shows the upstream server could not start in the "
-                "P01 environment); disclosed as-is, not fabricated"
-            ),
+            "upstream_fixed_task_baseline": {
+                "capture_file": "Logs/P07/upstream78-fixed-task.json",
+                "capture_sha256": sha256_file(UPSTREAM_TASK),
+                "artifact": upstream_task["artifact"],
+                "mapping": (
+                    "target-equivalent investigation (start collection -> wait for completion "
+                    "-> retrieve result rows) implemented with each side's native toolset "
+                    "(AUD-004): upstream collect_artifact + get_collection_results(max_retries, "
+                    "retry_delay) vs current start tool + get_flow_status polling + "
+                    "get_flow_results + list_flow_files"
+                ),
+                "upstream_calls": [
+                    {
+                        "tool": call["tool"],
+                        "is_error": call["is_error"],
+                        "elapsed_seconds": call["elapsed_seconds"],
+                        "payload_bytes": call["payload_bytes"],
+                    }
+                    for call in upstream_task["calls"]
+                ],
+                "upstream_total_elapsed_seconds": upstream_task["total_elapsed_seconds"],
+                "upstream_retry_semantics": (
+                    "get_collection_results retries internally with the declared "
+                    "max_retries/retry_delay parameters; no per-retry wire calls are visible "
+                    "over stdio, so the retry dimension is reported as the tool's internal "
+                    "behavior, unlike the current side's explicit per-poll calls"
+                ),
+                "current_equivalent_chains": current_task_chains,
+            },
         },
         "conclusion": (
             "Raw measured quantities with the stated methodology; no preset smaller/better "
