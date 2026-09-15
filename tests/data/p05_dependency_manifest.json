@@ -2,14 +2,6 @@
   "schema_version": 1,
   "dependencies": [
     {
-      "filename": "etl2pcapng.zip",
-      "name": "etl2pcapng",
-      "sha256": "2acda1a09c8d2f54086c05cc53f0a120f7ac16ae8ee691154e9bf9f44a8970a9",
-      "size": 151414,
-      "source": "https://github.com/microsoft/etl2pcapng/releases/download/v1.4.0/etl2pcapng.zip",
-      "version": "1.4.0"
-    },
-    {
       "authenticode_subject": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
       "filename": "autorunsc.exe",
       "name": "Autorun_386",

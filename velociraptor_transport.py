@@ -229,16 +229,36 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
     return app
 
 
-def run_formal_http(server: Any, config: TransportConfig) -> None:
+def run_formal_http(
+    server: Any,
+    config: TransportConfig,
+    *,
+    on_ready: Callable[[], None] | None = None,
+    stop_requested: Callable[[], bool] | None = None,
+) -> None:
     """Serve the formal entry with one process and one worker."""
     import uvicorn
 
+    class LifecycleServer(uvicorn.Server):
+        async def startup(self, sockets=None):
+            await super().startup(sockets=sockets)
+            if self.started and on_ready is not None:
+                on_ready()
+
+        async def on_tick(self, counter):
+            if stop_requested is not None and stop_requested():
+                self.should_exit = True
+            return await super().on_tick(counter)
+
     app = build_formal_http_app(server, config)
-    uvicorn.Server(
+    http_server = LifecycleServer(
         uvicorn.Config(
             app,
             host=config.host,
             port=config.port,
             log_level="warning",
         )
-    ).run()
+    )
+    http_server.run()
+    if not http_server.started:
+        raise RuntimeError('Formal HTTP startup did not reach readiness')

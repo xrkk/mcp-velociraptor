@@ -1,0 +1,268 @@
+{
+  "business_purpose": "Collect two deterministic files and complete a no-parameter forensic triage through one MCP session.",
+  "cleanup": [],
+  "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
+  "required_snapshot": "Snapshot 187-固定IP+WindowsMCP开机自启",
+  "scenario_id": "p05-flow-triage-repair-initial",
+  "schema_version": 1,
+  "steps": [
+    {
+      "arguments": {
+        "path": {
+          "$fixture": "/files/0/path"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        }
+      ],
+      "id": "collect_ascii",
+      "kind": "tool",
+      "tool": "collect_file"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_ascii/structuredContent/flow_id"
+        }
+      },
+      "assertions": [],
+      "id": "wait_ascii",
+      "kind": "tool",
+      "repeat_until": {
+        "assertions": [
+          {
+            "actual": "/isError",
+            "expected": false,
+            "op": "is_error"
+          },
+          {
+            "actual": "/structuredContent/state",
+            "expected": "FINISHED",
+            "op": "eq"
+          }
+        ],
+        "interval_seconds": 1,
+        "max_attempts": 180
+      },
+      "tool": "get_flow_status"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_ascii/structuredContent/flow_id"
+        },
+        "page_size": 10,
+        "source": "All Matches Metadata"
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data",
+          "expected": 1,
+          "op": "len_gte"
+        }
+      ],
+      "id": "ascii_metadata",
+      "kind": "tool",
+      "tool": "get_flow_results"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_ascii/structuredContent/flow_id"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data",
+          "expected": 1,
+          "op": "len_gte"
+        }
+      ],
+      "id": "ascii_files",
+      "kind": "tool",
+      "tool": "list_flow_files"
+    },
+    {
+      "arguments": {
+        "path": {
+          "$fixture": "/files/1/path"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        }
+      ],
+      "id": "collect_utf8",
+      "kind": "tool",
+      "tool": "collect_file"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_utf8/structuredContent/flow_id"
+        }
+      },
+      "assertions": [],
+      "id": "wait_utf8",
+      "kind": "tool",
+      "repeat_until": {
+        "assertions": [
+          {
+            "actual": "/isError",
+            "expected": false,
+            "op": "is_error"
+          },
+          {
+            "actual": "/structuredContent/state",
+            "expected": "FINISHED",
+            "op": "eq"
+          }
+        ],
+        "interval_seconds": 1,
+        "max_attempts": 180
+      },
+      "tool": "get_flow_status"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_utf8/structuredContent/flow_id"
+        },
+        "page_size": 10,
+        "source": "All Matches Metadata"
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        }
+      ],
+      "id": "utf8_metadata",
+      "kind": "tool",
+      "tool": "get_flow_results"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/collect_utf8/structuredContent/flow_id"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data",
+          "expected": 1,
+          "op": "len_gte"
+        }
+      ],
+      "id": "utf8_files",
+      "kind": "tool",
+      "tool": "list_flow_files"
+    },
+    {
+      "arguments": {},
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        }
+      ],
+      "id": "start_triage",
+      "kind": "tool",
+      "tool": "collect_forensic_triage"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/start_triage/structuredContent/flow_id"
+        }
+      },
+      "assertions": [],
+      "id": "wait_triage",
+      "kind": "tool",
+      "repeat_until": {
+        "assertions": [
+          {
+            "actual": "/isError",
+            "expected": false,
+            "op": "is_error"
+          },
+          {
+            "actual": "/structuredContent/state",
+            "expected": "FINISHED",
+            "op": "eq"
+          }
+        ],
+        "interval_seconds": 1,
+        "max_attempts": 240
+      },
+      "tool": "get_flow_status"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/start_triage/structuredContent/flow_id"
+        },
+        "page_size": 10
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data",
+          "op": "exists"
+        }
+      ],
+      "id": "triage_results",
+      "kind": "tool",
+      "tool": "get_flow_results"
+    },
+    {
+      "arguments": {
+        "flow_id": {
+          "$ref": "/steps/start_triage/structuredContent/flow_id"
+        }
+      },
+      "assertions": [
+        {
+          "actual": "/isError",
+          "expected": false,
+          "op": "is_error"
+        },
+        {
+          "actual": "/structuredContent/data",
+          "op": "exists"
+        }
+      ],
+      "id": "triage_files",
+      "kind": "tool",
+      "tool": "list_flow_files"
+    }
+  ]
+}

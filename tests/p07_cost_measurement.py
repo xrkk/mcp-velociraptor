@@ -31,7 +31,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_CAPTURE = REPO_ROOT / "Logs" / "P07" / "upstream78-tools-list.jsonl"
 UPSTREAM_TASK = REPO_ROOT / "Logs" / "P07" / "upstream78-fixed-task.json"
-P06_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r2"
+P06_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r3"
 SCENARIOS = (
     "p06-compromise-scope",
     "p06-ransomware-root-cause",
@@ -39,13 +39,36 @@ SCENARIOS = (
     "p06-data-exfiltration",
     "p06-remediation-validation",
 )
-RUNS = {
-    "p06-compromise-scope": "f65961d0-e759-4791-817c-c886075c0c79",
-    "p06-ransomware-root-cause": "a148b57b-00ac-46f7-8ce5-85c041e8fe2e",
-    "p06-credential-lateral-movement": "52bd203b-553f-41dd-bfdf-060f21d00ce8",
-    "p06-data-exfiltration": "1586b2f3-5d38-4fd1-bd2f-7a34674bcd7a",
-    "p06-remediation-validation": "7e38a35d-0533-45ff-a572-17a04902d53b",
+COST_PAIR_GROUPS = {
+    "p06-compromise-scope": "g1-compromise-scope",
+    "p06-ransomware-root-cause": "g2-ransomware-root-cause",
+    "p06-credential-lateral-movement": "g3-credential-lateral-movement",
+    "p06-data-exfiltration": "g4-data-exfiltration",
+    "p06-remediation-validation": "g5-remediation-validation",
 }
+
+
+def final_selection_runs() -> dict[str, str]:
+    """Resolve the five final-selection run ids from the r3 receive ledger."""
+    r3 = P06_ROOT
+    selection = json.loads((r3 / "final-selection.json").read_text(encoding="utf-8"))
+    rows = {
+        row["monotonic_attempt"]: row
+        for row in (
+            json.loads(line)
+            for line in (r3 / "接收清单.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+    runs = {}
+    for scenario, chosen in selection["selected"].items():
+        relative = rows[chosen["monotonic_attempt"]]["report_relative_path"]
+        runs[scenario] = relative.split("/")[1]
+    if set(runs) != set(SCENARIOS):
+        raise ValueError("final selection does not cover the five scenarios")
+    return runs
+
+
 OUTPUT = REPO_ROOT / "Logs" / "P07" / "cost-measurement.json"
 
 
@@ -74,8 +97,9 @@ def upstream_tools() -> tuple[list[dict], str]:
 def current_tools() -> tuple[list[dict], str, str]:
     hashes: set[str] = set()
     tools: list[dict] | None = None
+    runs = final_selection_runs()
     for scenario in SCENARIOS:
-        path = P06_ROOT / scenario / RUNS[scenario] / "tools-schema.json"
+        path = P06_ROOT / scenario / runs[scenario] / "tools-schema.json"
         hashes.add(sha256_file(path))
         tools = json.loads(path.read_text(encoding="utf-8"))
     if len(hashes) != 1:
@@ -87,8 +111,9 @@ def current_tools() -> tuple[list[dict], str, str]:
 
 def measure_task_costs() -> list[dict]:
     rows = []
+    runs = final_selection_runs()
     for scenario in SCENARIOS:
-        path = P06_ROOT / scenario / RUNS[scenario] / "report.json"
+        path = P06_ROOT / scenario / runs[scenario] / "report.json"
         report = json.loads(path.read_text(encoding="utf-8"))
         calls = report["calls"]
         retry_calls = sum(1 for call in calls if call.get("attempt", 1) > 1)
@@ -98,7 +123,7 @@ def measure_task_costs() -> list[dict]:
         rows.append(
             {
                 "scenario": scenario,
-                "run_id": RUNS[scenario],
+                "run_id": runs[scenario],
                 "report_sha256": sha256_file(path),
                 "tool_calls": len(calls),
                 "retry_calls_beyond_first_attempt": retry_calls,
@@ -111,58 +136,152 @@ def measure_task_costs() -> list[dict]:
 
 
 def current_task_chain_rows() -> list[dict]:
-    """The current-side equivalent of the upstream fixed task, per formal run.
+    """The current-side RecycleBin evidence chain of each final-selection run.
 
-    For every scenario report, collect the calls of the RecycleBin evidence
-    chain (the same artifact the upstream baseline ran) with their poll
-    attempts and structured output byte sizes.
+    Calls are bound by the RecycleBin flow id (not step-name heuristics):
+    the start call plus every status/results/files call that references the
+    same flow. Poll rounds that did not yet observe FINISHED are the real
+    retries, mirroring the externally observed upstream retry rounds.
     """
     rows = []
+    runs = final_selection_runs()
     for scenario in SCENARIOS:
-        path = P06_ROOT / scenario / RUNS[scenario] / "report.json"
+        path = P06_ROOT / scenario / runs[scenario] / "report.json"
         report = json.loads(path.read_text(encoding="utf-8"))
+        start = next(
+            call for call in report["calls"] if call.get("tool") == "Windows.Forensics.RecycleBin"
+        )
+        flow_id = (start.get("structured") or {}).get("flow_id")
+        if not flow_id:
+            raise ValueError(f"{scenario}: RecycleBin start lacks its flow identity")
+        # P04 result/file models intentionally do not echo flow_id; bind by
+        # the request arguments as well as the status echo.
         chain = [
             call
             for call in report["calls"]
-            if call.get("tool") == "Windows.Forensics.RecycleBin"
+            if call is start
             or (
                 call.get("tool") in {"get_flow_status", "get_flow_results", "list_flow_files"}
-                and str(call.get("step_id", "")).endswith(
-                    ("-wait", "-results", "-files")
+                and (
+                    (call.get("structured") or {}).get("flow_id") == flow_id
+                    or call.get("arguments", {}).get("flow_id") == flow_id
                 )
-                and _in_recyclebin_chain(report, call)
             )
         ]
+        wait_rounds = [c for c in chain if c.get("tool") == "get_flow_status"]
+        retry_rounds = sum(
+            1 for c in wait_rounds if (c.get("structured") or {}).get("state") != "FINISHED"
+        )
+        results_calls = [c for c in chain if c.get("tool") == "get_flow_results"]
         rows.append(
             {
                 "scenario": scenario,
+                "run_id": runs[scenario],
+                "flow_id": flow_id,
                 "tool_calls": len(chain),
-                "poll_attempts": sum(call.get("attempt", 1) for call in chain),
+                "poll_rounds": len(wait_rounds),
+                "retry_rounds": retry_rounds,
                 "structured_output_bytes": sum(
-                    len(canonical_text(call.get("structured")).encode("utf-8"))
+                    len(canonical_text(call.get("structured")).encode("utf-8")) for call in chain
+                ),
+                "elapsed_seconds": (
+                    datetime.fromisoformat(chain[-1]["ended_at"].replace("Z", "+00:00"))
+                    - datetime.fromisoformat(chain[0]["started_at"].replace("Z", "+00:00"))
+                ).total_seconds(),
+                "results_rows": sum(
+                    len(
+                        ((call.get("structured") or {}).get("data"))
+                        or ((call.get("structured") or {}).get("rows"))
+                        or []
+                    )
+                    for call in results_calls
+                ),
+                "file_rows": sum(
+                    len(
+                        ((call.get("structured") or {}).get("files"))
+                        or ((call.get("structured") or {}).get("data"))
+                        or []
+                    )
                     for call in chain
+                    if call.get("tool") == "list_flow_files"
                 ),
             }
         )
     return rows
 
 
-def _in_recyclebin_chain(report: dict, call: dict) -> bool:
-    prefix = str(call.get("step_id", "")).split("-")[0]
-    for candidate in report["calls"]:
-        if (
-            candidate.get("tool") == "Windows.Forensics.RecycleBin"
-            and str(candidate.get("step_id", "")).startswith(prefix + "-")
-        ):
-            return True
-    return False
+def upstream_group_rows() -> list[dict]:
+    """The five upstream fixed-task runs, one per restored-188 group."""
+    rows = []
+    for scenario, group in COST_PAIR_GROUPS.items():
+        path = REPO_ROOT / "Logs" / "P07" / "cost-pairs" / group / "upstream-task.json"
+        if not path.is_file():
+            raise ValueError(f"upstream group missing: {group}")
+        task = json.loads(path.read_text(encoding="utf-8"))
+        if task.get("status") != "success":
+            raise ValueError(f"upstream group {group} did not succeed: {task.get('failure')}")
+        rows.append(
+            {
+                "scenario": scenario,
+                "group": group,
+                "restore_bound": task.get("group"),
+                "transport": task["transport"],
+                "tool_calls": task["call_count"],
+                "results_rounds": task["results_rounds"],
+                "retry_rounds": task["retry_rounds"],
+                "structured_output_bytes": sum(call["payload_bytes"] for call in task["calls"]),
+                "elapsed_seconds": sum(call["elapsed_seconds"] for call in task["calls"]),
+                "results_rows": task["results_rows"],
+                "file_rows": task["file_list_rows"] or 0,
+                "calls": [
+                    {
+                        "tool": call["tool"],
+                        "is_error": call["is_error"],
+                        "elapsed_seconds": call["elapsed_seconds"],
+                        "payload_bytes": call["payload_bytes"],
+                    }
+                    for call in task["calls"]
+                ],
+            }
+        )
+    return rows
+
+
+def cost_pair_rows(upstream: list[dict], current: list[dict]) -> list[dict]:
+    by_scenario = {row["scenario"]: row for row in current}
+    pairs = []
+    for up in upstream:
+        cur = by_scenario[up["scenario"]]
+        pairs.append(
+            {
+                "scenario": up["scenario"],
+                "upstream": up,
+                "current": cur,
+                "deltas_current_minus_upstream": {
+                    "tool_calls": cur["tool_calls"] - up["tool_calls"],
+                    "retry_rounds": cur["retry_rounds"] - up["retry_rounds"],
+                    "structured_output_bytes": cur["structured_output_bytes"]
+                    - up["structured_output_bytes"],
+                    "results_rows": cur["results_rows"] - up["results_rows"],
+                    "file_rows": cur["file_rows"] - up["file_rows"],
+                },
+                "transport_disclosure": (
+                    "upstream: windows-isolated stdio subprocess (git 9dc8054 via the "
+                    "FastMCP->MCPServer shim); current: formal external streamable-http "
+                    "session of the final-selection run; the transports differ by design "
+                    "and are not claimed to be one client environment"
+                ),
+            }
+        )
+    return pairs
 
 
 def main() -> int:
     upstream, upstream_capture_sha = upstream_tools()
     current, current_schema_sha, current_source = current_tools()
-    upstream_task = json.loads(UPSTREAM_TASK.read_text(encoding="utf-8"))
+    upstream_groups = upstream_group_rows()
     current_task_chains = current_task_chain_rows()
+    pairs = cost_pair_rows(upstream_groups, current_task_chains)
 
     def face(tools: list[dict]) -> dict:
         text = canonical_text(tools)
@@ -224,40 +343,26 @@ def main() -> int:
                 ),
                 "duration_ms_sum": sum(row["duration_ms"] for row in task_rows),
             },
-            "upstream_fixed_task_baseline": {
-                "capture_file": "Logs/P07/upstream78-fixed-task.json",
-                "capture_sha256": sha256_file(UPSTREAM_TASK),
-                "artifact": upstream_task["artifact"],
-                "mapping": (
-                    "target-equivalent investigation (start collection -> wait for completion "
-                    "-> retrieve result rows) implemented with each side's native toolset "
-                    "(AUD-004): upstream collect_artifact + get_collection_results(max_retries, "
-                    "retry_delay) vs current start tool + get_flow_status polling + "
-                    "get_flow_results + list_flow_files"
+            "five_cost_pairs": {
+                "methodology": (
+                    "each of the five upstream groups ran the fixed RecycleBin investigation "
+                    "endpoint (collect_artifact -> externally observed get_collection_results "
+                    "rounds with max_retries=1 so every internal retry is a recorded round -> "
+                    "bounded uploads file list via the upstream native run_vql) on its own "
+                    "independent restore of the activated Snapshot188, in a Windows isolated "
+                    "stdio subprocess; the current side is the same endpoint's evidence chain "
+                    "from the final-selection formal HTTP run of the same scenario"
                 ),
-                "upstream_calls": [
-                    {
-                        "tool": call["tool"],
-                        "is_error": call["is_error"],
-                        "elapsed_seconds": call["elapsed_seconds"],
-                        "payload_bytes": call["payload_bytes"],
-                    }
-                    for call in upstream_task["calls"]
-                ],
-                "upstream_total_elapsed_seconds": upstream_task["total_elapsed_seconds"],
-                "upstream_retry_semantics": (
-                    "get_collection_results retries internally with the declared "
-                    "max_retries/retry_delay parameters; no per-retry wire calls are visible "
-                    "over stdio, so the retry dimension is reported as the tool's internal "
-                    "behavior, unlike the current side's explicit per-poll calls"
-                ),
-                "current_equivalent_chains": current_task_chains,
+                "pairs": pairs,
             },
         },
         "conclusion": (
             "Raw measured quantities with the stated methodology; no preset smaller/better "
             "direction. The current 130-tool face is larger than the upstream 78-tool face "
-            "on every schema dimension; task costs are reported for the current product only."
+            "on every schema dimension. The five fixed-task pairs are comparable per group "
+            "on call counts, retry rounds, structured-output bytes, result rows and file "
+            "rows; elapsed times cross transports (stdio vs formal HTTP) and are disclosed "
+            "as such rather than claimed equivalent."
         ),
     }
 

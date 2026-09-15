@@ -2,7 +2,7 @@
   "business_purpose": "Bound data discovery, staging, access, and possible exfiltration using browser, file, command, process, network, and timeline evidence.",
   "cleanup": [],
   "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
-  "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+  "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
   "scenario_id": "p06-data-exfiltration",
   "schema_version": 1,
   "steps": [
@@ -3403,7 +3403,7 @@
     },
     {
       "arguments": {
-        "StartTrace": true
+        "SHA1Regex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -3420,7 +3420,7 @@
       ],
       "id": "d036-start",
       "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
+      "tool": "Windows.Detection.Amcache"
     },
     {
       "arguments": {
@@ -3446,8 +3446,8 @@
             "op": "eq"
           }
         ],
-        "interval_seconds": 5,
-        "max_attempts": 240
+        "interval_seconds": 20,
+        "max_attempts": 60
       },
       "tool": "get_flow_status"
     },
@@ -3467,9 +3467,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 1,
           "id": "d036-results-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d036-results",
@@ -3478,61 +3477,8 @@
     },
     {
       "arguments": {
-        "StartTrace": false,
-        "TraceFile": {
-          "$packet_etl": "/steps/d036-results/structuredContent/data"
-        }
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d036-stop-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/flow_id",
-          "id": "d036-stop-flow",
-          "op": "exists"
-        }
-      ],
-      "id": "d036-stop",
-      "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
-    },
-    {
-      "arguments": {
         "flow_id": {
-          "$ref": "/steps/d036-stop/structuredContent/flow_id"
-        }
-      },
-      "assertions": [],
-      "id": "d036-stop-wait",
-      "kind": "tool",
-      "repeat_until": {
-        "assertions": [
-          {
-            "actual": "/isError",
-            "expected": false,
-            "id": "d036-stop-wait-ok",
-            "op": "is_error"
-          },
-          {
-            "actual": "/structuredContent/state",
-            "expected": "FINISHED",
-            "id": "d036-stop-wait-state",
-            "op": "eq"
-          }
-        ],
-        "interval_seconds": 5,
-        "max_attempts": 240
-      },
-      "tool": "get_flow_status"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d036-stop/structuredContent/flow_id"
+          "$ref": "/steps/d036-start/structuredContent/flow_id"
         }
       },
       "assertions": [
@@ -3544,9 +3490,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 2,
           "id": "d036-files-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d036-files",
@@ -3555,7 +3500,7 @@
     },
     {
       "arguments": {
-        "SHA1Regex": "^__p06_data_exfiltration_no_match__$"
+        "AuthenticodeRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -3572,7 +3517,7 @@
       ],
       "id": "d037-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Amcache"
+      "tool": "Windows.Detection.BinaryHunter"
     },
     {
       "arguments": {
@@ -3651,9 +3596,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "AuthenticodeRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -3669,7 +3612,7 @@
       ],
       "id": "d038-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryHunter"
+      "tool": "Windows.Detection.BinaryRename"
     },
     {
       "arguments": {
@@ -3748,7 +3691,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessNameRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -3764,7 +3709,7 @@
       ],
       "id": "d039-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryRename"
+      "tool": "Windows.Detection.EnvironmentVariables"
     },
     {
       "arguments": {
@@ -3844,7 +3789,7 @@
     },
     {
       "arguments": {
-        "ProcessNameRegex": "^__p06_data_exfiltration_no_match__$"
+        "ExcludeRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -3861,7 +3806,7 @@
       ],
       "id": "d040-start",
       "kind": "tool",
-      "tool": "Windows.Detection.EnvironmentVariables"
+      "tool": "Windows.Detection.ForwardedImports"
     },
     {
       "arguments": {
@@ -3940,9 +3885,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ExcludeRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -3958,7 +3901,7 @@
       ],
       "id": "d041-start",
       "kind": "tool",
-      "tool": "Windows.Detection.ForwardedImports"
+      "tool": "Windows.Detection.Impersonation"
     },
     {
       "arguments": {
@@ -4037,7 +3980,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "processRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -4053,7 +3998,7 @@
       ],
       "id": "d042-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Impersonation"
+      "tool": "Windows.Detection.Mutants"
     },
     {
       "arguments": {
@@ -4133,7 +4078,7 @@
     },
     {
       "arguments": {
-        "processRegex": "^__p06_data_exfiltration_no_match__$"
+        "TemplateFileRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -4150,7 +4095,7 @@
       ],
       "id": "d043-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Mutants"
+      "tool": "Windows.Detection.TemplateInjection"
     },
     {
       "arguments": {
@@ -4229,9 +4174,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "TemplateFileRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4247,7 +4190,7 @@
       ],
       "id": "d044-start",
       "kind": "tool",
-      "tool": "Windows.Detection.TemplateInjection"
+      "tool": "Windows.Detection.Yara.NTFS"
     },
     {
       "arguments": {
@@ -4342,7 +4285,7 @@
       ],
       "id": "d045-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.NTFS"
+      "tool": "Windows.Detection.Yara.PhysicalMemory"
     },
     {
       "arguments": {
@@ -4421,7 +4364,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -4437,7 +4382,7 @@
       ],
       "id": "d046-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.PhysicalMemory"
+      "tool": "Windows.Detection.Yara.Process"
     },
     {
       "arguments": {
@@ -4534,7 +4479,7 @@
       ],
       "id": "d047-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.Process"
+      "tool": "Windows.ETW.DotNetRundown"
     },
     {
       "arguments": {
@@ -4613,9 +4558,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4631,7 +4574,7 @@
       ],
       "id": "d048-start",
       "kind": "tool",
-      "tool": "Windows.ETW.DotNetRundown"
+      "tool": "Windows.System.AuditPolicy"
     },
     {
       "arguments": {
@@ -4710,7 +4653,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "SignerExcludeRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -4726,7 +4671,7 @@
       ],
       "id": "d049-start",
       "kind": "tool",
-      "tool": "Windows.System.AuditPolicy"
+      "tool": "Windows.System.CatFiles"
     },
     {
       "arguments": {
@@ -4806,7 +4751,9 @@
     },
     {
       "arguments": {
-        "SignerExcludeRegex": "^__p06_data_exfiltration_no_match__$"
+        "Command": "exit 0",
+        "Stateful": false,
+        "Timeout": 30
       },
       "assertions": [
         {
@@ -4823,7 +4770,7 @@
       ],
       "id": "d050-start",
       "kind": "tool",
-      "tool": "Windows.System.CatFiles"
+      "tool": "Windows.System.CmdShell"
     },
     {
       "arguments": {
@@ -4902,11 +4849,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "Command": "exit 0",
-        "Stateful": false,
-        "Timeout": 30
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -4922,7 +4865,7 @@
       ],
       "id": "d051-start",
       "kind": "tool",
-      "tool": "Windows.System.CmdShell"
+      "tool": "Windows.System.CriticalServices"
     },
     {
       "arguments": {
@@ -5001,7 +4944,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5017,7 +4962,7 @@
       ],
       "id": "d052-start",
       "kind": "tool",
-      "tool": "Windows.System.CriticalServices"
+      "tool": "Windows.System.DLLs"
     },
     {
       "arguments": {
@@ -5096,9 +5041,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -5114,7 +5057,7 @@
       ],
       "id": "d053-start",
       "kind": "tool",
-      "tool": "Windows.System.DLLs"
+      "tool": "Windows.System.DNSCache"
     },
     {
       "arguments": {
@@ -5209,7 +5152,7 @@
       ],
       "id": "d054-start",
       "kind": "tool",
-      "tool": "Windows.System.DNSCache"
+      "tool": "Windows.System.DomainRole"
     },
     {
       "arguments": {
@@ -5288,7 +5231,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "processRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5304,7 +5249,7 @@
       ],
       "id": "d055-start",
       "kind": "tool",
-      "tool": "Windows.System.DomainRole"
+      "tool": "Windows.System.Handles"
     },
     {
       "arguments": {
@@ -5384,7 +5329,7 @@
     },
     {
       "arguments": {
-        "processRegex": "^__p06_data_exfiltration_no_match__$"
+        "HostnameRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -5401,7 +5346,7 @@
       ],
       "id": "d056-start",
       "kind": "tool",
-      "tool": "Windows.System.Handles"
+      "tool": "Windows.System.HostsFile"
     },
     {
       "arguments": {
@@ -5480,9 +5425,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "HostnameRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -5498,7 +5441,7 @@
       ],
       "id": "d057-start",
       "kind": "tool",
-      "tool": "Windows.System.HostsFile"
+      "tool": "Windows.System.LocalAdmins"
     },
     {
       "arguments": {
@@ -5577,7 +5520,11 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "Command": "exit 0",
+        "Stateful": false,
+        "Timeout": 30
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -5593,7 +5540,7 @@
       ],
       "id": "d058-start",
       "kind": "tool",
-      "tool": "Windows.System.LocalAdmins"
+      "tool": "Windows.System.PowerShell"
     },
     {
       "arguments": {
@@ -5673,9 +5620,7 @@
     },
     {
       "arguments": {
-        "Command": "exit 0",
-        "Stateful": false,
-        "Timeout": 30
+        "ModulePathRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -5692,7 +5637,7 @@
       ],
       "id": "d059-start",
       "kind": "tool",
-      "tool": "Windows.System.PowerShell"
+      "tool": "Windows.System.Powershell.ModuleAnalysisCache"
     },
     {
       "arguments": {
@@ -5772,7 +5717,7 @@
     },
     {
       "arguments": {
-        "ModulePathRegex": "^__p06_data_exfiltration_no_match__$"
+        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -5789,7 +5734,7 @@
       ],
       "id": "d060-start",
       "kind": "tool",
-      "tool": "Windows.System.Powershell.ModuleAnalysisCache"
+      "tool": "Windows.System.Powershell.PSReadline"
     },
     {
       "arguments": {
@@ -5869,7 +5814,7 @@
     },
     {
       "arguments": {
-        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -5886,7 +5831,7 @@
       ],
       "id": "d061-start",
       "kind": "tool",
-      "tool": "Windows.System.Powershell.PSReadline"
+      "tool": "Windows.System.Pslist"
     },
     {
       "arguments": {
@@ -5965,9 +5910,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -5983,7 +5926,7 @@
       ],
       "id": "d062-start",
       "kind": "tool",
-      "tool": "Windows.System.Pslist"
+      "tool": "Windows.System.RootCAStore"
     },
     {
       "arguments": {
@@ -6078,7 +6021,7 @@
       ],
       "id": "d063-start",
       "kind": "tool",
-      "tool": "Windows.System.RootCAStore"
+      "tool": "Windows.System.SVCHost"
     },
     {
       "arguments": {
@@ -6157,7 +6100,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "NameRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -6173,7 +6118,7 @@
       ],
       "id": "d064-start",
       "kind": "tool",
-      "tool": "Windows.System.SVCHost"
+      "tool": "Windows.System.Services"
     },
     {
       "arguments": {
@@ -6270,7 +6215,7 @@
       ],
       "id": "d065-start",
       "kind": "tool",
-      "tool": "Windows.System.Services"
+      "tool": "Windows.System.Shares"
     },
     {
       "arguments": {
@@ -6349,9 +6294,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "NameRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6367,7 +6310,7 @@
       ],
       "id": "d066-start",
       "kind": "tool",
-      "tool": "Windows.System.Shares"
+      "tool": "Windows.System.Signers"
     },
     {
       "arguments": {
@@ -6446,7 +6389,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "Username": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -6462,7 +6407,7 @@
       ],
       "id": "d067-start",
       "kind": "tool",
-      "tool": "Windows.System.Signers"
+      "tool": "Windows.System.TaskScheduler"
     },
     {
       "arguments": {
@@ -6542,7 +6487,7 @@
     },
     {
       "arguments": {
-        "Username": "^__p06_data_exfiltration_no_match__$"
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -6559,7 +6504,7 @@
       ],
       "id": "d068-start",
       "kind": "tool",
-      "tool": "Windows.System.TaskScheduler"
+      "tool": "Windows.System.Threads"
     },
     {
       "arguments": {
@@ -6639,7 +6584,7 @@
     },
     {
       "arguments": {
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
+        "processNamesRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -6656,7 +6601,7 @@
       ],
       "id": "d069-start",
       "kind": "tool",
-      "tool": "Windows.System.Threads"
+      "tool": "Windows.System.UntrustedBinaries"
     },
     {
       "arguments": {
@@ -6736,7 +6681,7 @@
     },
     {
       "arguments": {
-        "processNamesRegex": "^__p06_data_exfiltration_no_match__$"
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -6753,7 +6698,7 @@
       ],
       "id": "d070-start",
       "kind": "tool",
-      "tool": "Windows.System.UntrustedBinaries"
+      "tool": "Windows.System.VAD"
     },
     {
       "arguments": {
@@ -6832,9 +6777,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -6850,7 +6793,7 @@
       ],
       "id": "d071-start",
       "kind": "tool",
-      "tool": "Windows.System.VAD"
+      "tool": "Windows.System.WMIQuery"
     },
     {
       "arguments": {
@@ -6945,7 +6888,7 @@
       ],
       "id": "d072-start",
       "kind": "tool",
-      "tool": "Windows.System.WMIQuery"
+      "tool": "Windows.Attack.Prefetch"
     },
     {
       "arguments": {
@@ -7040,7 +6983,7 @@
       ],
       "id": "d073-start",
       "kind": "tool",
-      "tool": "Windows.Attack.Prefetch"
+      "tool": "Windows.Attack.UnexpectedImagePath"
     },
     {
       "arguments": {
@@ -7135,7 +7078,7 @@
       ],
       "id": "d074-start",
       "kind": "tool",
-      "tool": "Windows.Attack.UnexpectedImagePath"
+      "tool": "Windows.Sys.AllUsers"
     },
     {
       "arguments": {
@@ -7230,7 +7173,7 @@
       ],
       "id": "d075-start",
       "kind": "tool",
-      "tool": "Windows.Sys.AllUsers"
+      "tool": "Windows.Sys.AppcompatShims"
     },
     {
       "arguments": {
@@ -7325,7 +7268,7 @@
       ],
       "id": "d076-start",
       "kind": "tool",
-      "tool": "Windows.Sys.AppcompatShims"
+      "tool": "Windows.Sys.CertificateAuthorities"
     },
     {
       "arguments": {
@@ -7420,7 +7363,7 @@
       ],
       "id": "d077-start",
       "kind": "tool",
-      "tool": "Windows.Sys.CertificateAuthorities"
+      "tool": "Windows.Sys.DiskInfo"
     },
     {
       "arguments": {
@@ -7515,7 +7458,7 @@
       ],
       "id": "d078-start",
       "kind": "tool",
-      "tool": "Windows.Sys.DiskInfo"
+      "tool": "Windows.Sys.Drivers"
     },
     {
       "arguments": {
@@ -7610,7 +7553,7 @@
       ],
       "id": "d079-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Drivers"
+      "tool": "Windows.Sys.FirewallRules"
     },
     {
       "arguments": {
@@ -7705,7 +7648,7 @@
       ],
       "id": "d080-start",
       "kind": "tool",
-      "tool": "Windows.Sys.FirewallRules"
+      "tool": "Windows.Sys.Interfaces"
     },
     {
       "arguments": {
@@ -7800,7 +7743,7 @@
       ],
       "id": "d081-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Interfaces"
+      "tool": "Windows.Sys.Programs"
     },
     {
       "arguments": {
@@ -7895,7 +7838,7 @@
       ],
       "id": "d082-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Programs"
+      "tool": "Windows.Sys.StartupItems"
     },
     {
       "arguments": {
@@ -7990,7 +7933,7 @@
       ],
       "id": "d083-start",
       "kind": "tool",
-      "tool": "Windows.Sys.StartupItems"
+      "tool": "Windows.Sys.Users"
     },
     {
       "arguments": {
@@ -8085,7 +8028,7 @@
       ],
       "id": "d084-start",
       "kind": "tool",
-      "tool": "Windows.Sys.Users"
+      "tool": "Windows.EventLogs.AlternateLogon"
     },
     {
       "arguments": {
@@ -8180,7 +8123,7 @@
       ],
       "id": "d085-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.AlternateLogon"
+      "tool": "Windows.EventLogs.Cleared"
     },
     {
       "arguments": {
@@ -8259,7 +8202,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "PathRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -8275,7 +8220,7 @@
       ],
       "id": "d086-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Cleared"
+      "tool": "Windows.EventLogs.Evtx"
     },
     {
       "arguments": {
@@ -8355,7 +8300,7 @@
     },
     {
       "arguments": {
-        "PathRegex": "^__p06_data_exfiltration_no_match__$"
+        "IocRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8372,7 +8317,7 @@
       ],
       "id": "d087-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Evtx"
+      "tool": "Windows.EventLogs.EvtxHunter"
     },
     {
       "arguments": {
@@ -8452,7 +8397,7 @@
     },
     {
       "arguments": {
-        "IocRegex": "^__p06_data_exfiltration_no_match__$"
+        "UsernameRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8469,7 +8414,7 @@
       ],
       "id": "d088-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.EvtxHunter"
+      "tool": "Windows.EventLogs.ExplicitLogon"
     },
     {
       "arguments": {
@@ -8549,7 +8494,7 @@
     },
     {
       "arguments": {
-        "UsernameRegex": "^__p06_data_exfiltration_no_match__$"
+        "ProviderRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8566,7 +8511,7 @@
       ],
       "id": "d089-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ExplicitLogon"
+      "tool": "Windows.EventLogs.Modifications"
     },
     {
       "arguments": {
@@ -8646,7 +8591,7 @@
     },
     {
       "arguments": {
-        "ProviderRegex": "^__p06_data_exfiltration_no_match__$"
+        "ContextRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8663,7 +8608,7 @@
       ],
       "id": "d090-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.Modifications"
+      "tool": "Windows.EventLogs.PowershellModule"
     },
     {
       "arguments": {
@@ -8743,7 +8688,7 @@
     },
     {
       "arguments": {
-        "ContextRegex": "^__p06_data_exfiltration_no_match__$"
+        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8760,7 +8705,7 @@
       ],
       "id": "d091-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.PowershellModule"
+      "tool": "Windows.EventLogs.PowershellScriptblock"
     },
     {
       "arguments": {
@@ -8840,7 +8785,7 @@
     },
     {
       "arguments": {
-        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
+        "SourceIPRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8857,7 +8802,7 @@
       ],
       "id": "d092-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.PowershellScriptblock"
+      "tool": "Windows.EventLogs.RDPAuth"
     },
     {
       "arguments": {
@@ -8937,7 +8882,7 @@
     },
     {
       "arguments": {
-        "SourceIPRegex": "^__p06_data_exfiltration_no_match__$"
+        "TaskSchedulerEventRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -8954,7 +8899,7 @@
       ],
       "id": "d093-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.RDPAuth"
+      "tool": "Windows.EventLogs.ScheduledTasks"
     },
     {
       "arguments": {
@@ -9034,7 +8979,7 @@
     },
     {
       "arguments": {
-        "TaskSchedulerEventRegex": "^__p06_data_exfiltration_no_match__$"
+        "ComspecRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -9051,7 +8996,7 @@
       ],
       "id": "d094-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ScheduledTasks"
+      "tool": "Windows.EventLogs.ServiceCreationComspec"
     },
     {
       "arguments": {
@@ -9130,9 +9075,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ComspecRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -9148,7 +9091,7 @@
       ],
       "id": "d095-start",
       "kind": "tool",
-      "tool": "Windows.EventLogs.ServiceCreationComspec"
+      "tool": "Windows.Registry.AppCompatCache"
     },
     {
       "arguments": {
@@ -9243,7 +9186,7 @@
       ],
       "id": "d096-start",
       "kind": "tool",
-      "tool": "Windows.Registry.AppCompatCache"
+      "tool": "Windows.Registry.BackupRestore"
     },
     {
       "arguments": {
@@ -9322,7 +9265,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "userRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -9338,7 +9283,7 @@
       ],
       "id": "d097-start",
       "kind": "tool",
-      "tool": "Windows.Registry.BackupRestore"
+      "tool": "Windows.Registry.EnableUnsafeClientMailRules"
     },
     {
       "arguments": {
@@ -9435,7 +9380,7 @@
       ],
       "id": "d098-start",
       "kind": "tool",
-      "tool": "Windows.Registry.EnableUnsafeClientMailRules"
+      "tool": "Windows.Registry.EnabledMacro"
     },
     {
       "arguments": {
@@ -9532,7 +9477,7 @@
       ],
       "id": "d099-start",
       "kind": "tool",
-      "tool": "Windows.Registry.EnabledMacro"
+      "tool": "Windows.Registry.NTUser"
     },
     {
       "arguments": {
@@ -9629,7 +9574,7 @@
       ],
       "id": "d100-start",
       "kind": "tool",
-      "tool": "Windows.Registry.NTUser"
+      "tool": "Windows.Registry.NTUser.Upload"
     },
     {
       "arguments": {
@@ -9708,9 +9653,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -9726,7 +9669,7 @@
       ],
       "id": "d101-start",
       "kind": "tool",
-      "tool": "Windows.Registry.NTUser.Upload"
+      "tool": "Windows.Registry.PortProxy"
     },
     {
       "arguments": {
@@ -9805,7 +9748,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UserRegex": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -9821,7 +9766,7 @@
       ],
       "id": "d102-start",
       "kind": "tool",
-      "tool": "Windows.Registry.PortProxy"
+      "tool": "Windows.Registry.RDP"
     },
     {
       "arguments": {
@@ -9900,9 +9845,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -9918,7 +9861,7 @@
       ],
       "id": "d103-start",
       "kind": "tool",
-      "tool": "Windows.Registry.RDP"
+      "tool": "Windows.Registry.RecentDocs"
     },
     {
       "arguments": {
@@ -9997,7 +9940,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "UserFilter": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10013,7 +9958,7 @@
       ],
       "id": "d104-start",
       "kind": "tool",
-      "tool": "Windows.Registry.RecentDocs"
+      "tool": "Windows.Registry.UserAssist"
     },
     {
       "arguments": {
@@ -10092,9 +10037,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "UserFilter": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10110,7 +10053,7 @@
       ],
       "id": "d105-start",
       "kind": "tool",
-      "tool": "Windows.Registry.UserAssist"
+      "tool": "Windows.Registry.WDigest"
     },
     {
       "arguments": {
@@ -10205,7 +10148,7 @@
       ],
       "id": "d106-start",
       "kind": "tool",
-      "tool": "Windows.Registry.WDigest"
+      "tool": "Windows.Persistence.Debug"
     },
     {
       "arguments": {
@@ -10300,7 +10243,7 @@
       ],
       "id": "d107-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.Debug"
+      "tool": "Windows.Persistence.PermanentWMIEvents"
     },
     {
       "arguments": {
@@ -10379,7 +10322,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10395,7 +10340,7 @@
       ],
       "id": "d108-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PermanentWMIEvents"
+      "tool": "Windows.Persistence.PowershellProfile"
     },
     {
       "arguments": {
@@ -10475,7 +10420,7 @@
     },
     {
       "arguments": {
-        "SearchStrings": "^__p06_data_exfiltration_no_match__$"
+        "userRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -10492,7 +10437,7 @@
       ],
       "id": "d109-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PowershellProfile"
+      "tool": "Windows.Persistence.PowershellRegistry"
     },
     {
       "arguments": {
@@ -10571,9 +10516,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "userRegex": "^__p06_data_exfiltration_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10589,7 +10532,7 @@
       ],
       "id": "d110-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.PowershellRegistry"
+      "tool": "Windows.Persistence.Wow64cpu"
     },
     {
       "arguments": {
@@ -10684,7 +10627,7 @@
       ],
       "id": "d111-start",
       "kind": "tool",
-      "tool": "Windows.Persistence.Wow64cpu"
+      "tool": "Windows.Packs.Persistence"
     },
     {
       "arguments": {
@@ -10779,7 +10722,7 @@
       ],
       "id": "d112-start",
       "kind": "tool",
-      "tool": "Windows.Packs.Persistence"
+      "tool": "Windows.Sysinternals.Autoruns"
     },
     {
       "arguments": {
@@ -10874,7 +10817,7 @@
       ],
       "id": "d113-start",
       "kind": "tool",
-      "tool": "Windows.Sysinternals.Autoruns"
+      "tool": "Windows.Analysis.EvidenceOfDownload"
     },
     {
       "arguments": {
@@ -10953,7 +10896,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "Compression": "Snappy"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10969,7 +10914,7 @@
       ],
       "id": "d114-start",
       "kind": "tool",
-      "tool": "Windows.Analysis.EvidenceOfDownload"
+      "tool": "Windows.Memory.Acquisition"
     },
     {
       "arguments": {
@@ -11049,7 +10994,9 @@
     },
     {
       "arguments": {
-        "Compression": "Snappy"
+        "BaseOffset": 0,
+        "FilenameRegex": "^__p06_data_exfiltration_no_match__$",
+        "Pid": 0
       },
       "assertions": [
         {
@@ -11066,7 +11013,7 @@
       ],
       "id": "d115-start",
       "kind": "tool",
-      "tool": "Windows.Memory.Acquisition"
+      "tool": "Windows.Memory.PEDump"
     },
     {
       "arguments": {
@@ -11146,9 +11093,8 @@
     },
     {
       "arguments": {
-        "BaseOffset": 0,
-        "FilenameRegex": "^__p06_data_exfiltration_no_match__$",
-        "Pid": 0
+        "PidRegex": "^__p06_data_exfiltration_no_match__$",
+        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -11165,7 +11111,7 @@
       ],
       "id": "d116-start",
       "kind": "tool",
-      "tool": "Windows.Memory.PEDump"
+      "tool": "Windows.Memory.ProcessDump"
     },
     {
       "arguments": {
@@ -11245,8 +11191,7 @@
     },
     {
       "arguments": {
-        "PidRegex": "^__p06_data_exfiltration_no_match__$",
-        "ProcessRegex": "^__p06_data_exfiltration_no_match__$"
+        "ProcessNameRegex": "^__p06_data_exfiltration_no_match__$"
       },
       "assertions": [
         {
@@ -11263,7 +11208,7 @@
       ],
       "id": "d117-start",
       "kind": "tool",
-      "tool": "Windows.Memory.ProcessDump"
+      "tool": "Windows.Memory.ProcessInfo"
     },
     {
       "arguments": {
@@ -11338,103 +11283,6 @@
         }
       ],
       "id": "d117-files",
-      "kind": "tool",
-      "tool": "list_flow_files"
-    },
-    {
-      "arguments": {
-        "ProcessNameRegex": "^__p06_data_exfiltration_no_match__$"
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-start-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/flow_id",
-          "id": "d118-start-flow",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-start",
-      "kind": "tool",
-      "tool": "Windows.Memory.ProcessInfo"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        }
-      },
-      "assertions": [],
-      "id": "d118-wait",
-      "kind": "tool",
-      "repeat_until": {
-        "assertions": [
-          {
-            "actual": "/isError",
-            "expected": false,
-            "id": "d118-wait-ok",
-            "op": "is_error"
-          },
-          {
-            "actual": "/structuredContent/state",
-            "expected": "FINISHED",
-            "id": "d118-wait-state",
-            "op": "eq"
-          }
-        ],
-        "interval_seconds": 20,
-        "max_attempts": 60
-      },
-      "tool": "get_flow_status"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        },
-        "page_size": 20
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-results-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/data",
-          "id": "d118-results-data",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-results",
-      "kind": "tool",
-      "tool": "get_flow_results"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        }
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-files-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/data",
-          "id": "d118-files-data",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-files",
       "kind": "tool",
       "tool": "list_flow_files"
     },

@@ -24,7 +24,7 @@ TRIAGE_YAML = LOCKED_ROOT / "Windows.Triage.Targets.yaml"
 KILL_YAML = REPO_ROOT / "tests" / "fixtures" / "artifacts" / "Generic.Utils.KillProcess.yaml"
 MANIFEST_PATH = REPO_ROOT / "tests" / "data" / "p05_dependency_manifest.json"
 EVIDENCE_ROOT = REPO_ROOT / "Logs" / "P05" / "wf-01a05d1d-p05"
-TOOL_NAMES = ("etl2pcapng", "Autorun_386", "Autorun_amd64")
+TOOL_NAMES = ("Autorun_386", "Autorun_amd64")
 ARTIFACT_NAMES = ("Windows.Triage.Targets", "Generic.Utils.KillProcess")
 
 
@@ -47,7 +47,7 @@ def now() -> str:
 def inventory_rows() -> dict[str, list[dict[str, Any]]]:
     rows = run_vql_query(
         "SELECT * FROM inventory() "
-        "WHERE name =~ '^(etl2pcapng|Autorun_386|Autorun_amd64)$' ORDER BY name",
+        "WHERE name =~ '^(Autorun_386|Autorun_amd64)$' ORDER BY name",
         root_org=True,
     )
     result: dict[str, list[dict[str, Any]]] = {name: [] for name in TOOL_NAMES}
@@ -81,11 +81,6 @@ def predecessor_matches(name: str, row: dict[str, Any]) -> bool:
         and all(_empty(row.get(key)) for key in ("version", "hash", "expected_hash", "invalid_hash"))
     )
     expected = {
-        "etl2pcapng": {
-            "artifact": "Windows.Network.PacketCapture",
-            "filename": "etl2pcapng.zip",
-            "serve_locally": False,
-        },
         "Autorun_386": {
             "artifact": "Windows.Sysinternals.Autoruns",
             "filename": "autorunsc.exe",

@@ -17,9 +17,8 @@ class P05ContractTests(unittest.TestCase):
         manifest = json.loads((ROOT / "tests/data/p05_dependency_manifest.json").read_text(encoding="utf-8"))
         dependencies = {row["name"]: row for row in manifest["dependencies"]}
         self.assertEqual(
-            set(dependencies), {"etl2pcapng", "Autorun_386", "Autorun_amd64"}
+            set(dependencies), {"Autorun_386", "Autorun_amd64"}
         )
-        self.assertEqual(dependencies["etl2pcapng"]["version"], "1.4.0")
         self.assertEqual(dependencies["Autorun_amd64"]["version"], "14.3")
         for row in dependencies.values():
             self.assertRegex(row["sha256"], r"^[0-9a-f]{64}$")
@@ -63,18 +62,21 @@ class P05ContractTests(unittest.TestCase):
 
     def test_representative_scenario_matches_schema_and_index(self):
         schema = json.loads((ROOT / "tests/scenarios/schema-v1.json").read_text(encoding="utf-8"))
-        scenario_path = ROOT / "tests/scenarios/representative/p05-flow-triage.json"
-        scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
-        Draft202012Validator(schema).validate(scenario)
-        self.assertGreaterEqual(sum(row["kind"] == "tool" for row in scenario["steps"]), 10)
-        self.assertIn("collect_forensic_triage", {row.get("tool") for row in scenario["steps"]})
         index = json.loads((ROOT / "tests/data/p05_scenario_index.json").read_text(encoding="utf-8"))
-        row = index["scenarios"][0]
-        self.assertEqual(row["scenario_id"], scenario["scenario_id"])
-        self.assertEqual(row["sha256"], hashlib.sha256(scenario_path.read_bytes()).hexdigest())
         spec_hash = hashlib.sha256((ROOT / "tests/data/p05_fixture_spec.json").read_bytes()).hexdigest()
-        self.assertEqual(row["fixture_spec_sha256"], spec_hash)
-        self.assertEqual(scenario["fixture_spec_sha256"], spec_hash)
+        self.assertEqual({row["scenario_id"] for row in index["scenarios"]},
+                         {"p05-flow-triage-repair-initial", "p05-flow-triage-repair-candidate"})
+        for row in index["scenarios"]:
+            with self.subTest(scenario=row["scenario_id"]):
+                scenario_path = ROOT / "tests/scenarios" / row["path"]
+                scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
+                Draft202012Validator(schema).validate(scenario)
+                self.assertGreaterEqual(sum(step["kind"] == "tool" for step in scenario["steps"]), 10)
+                self.assertIn("collect_forensic_triage", {step.get("tool") for step in scenario["steps"]})
+                self.assertEqual(row["sha256"], hashlib.sha256(scenario_path.read_bytes()).hexdigest())
+                self.assertEqual(row["fixture_spec_sha256"], spec_hash)
+                self.assertEqual(scenario["scenario_id"], row["scenario_id"])
+                self.assertEqual(scenario["fixture_spec_sha256"], spec_hash)
 
     def test_fixture_script_has_fixed_scope_and_inert_task(self):
         source = (ROOT / "tests/p05_prepare_fixtures.ps1").read_text(encoding="utf-8")

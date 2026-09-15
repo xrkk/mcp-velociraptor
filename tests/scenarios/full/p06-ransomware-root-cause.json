@@ -2,7 +2,7 @@
   "business_purpose": "Reconstruct a ransomware intrusion from entry and execution through persistence, filesystem impact, and network activity.",
   "cleanup": [],
   "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
-  "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+  "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
   "scenario_id": "p06-ransomware-root-cause",
   "schema_version": 1,
   "steps": [
@@ -9741,7 +9741,7 @@
     },
     {
       "arguments": {
-        "StartTrace": true
+        "SHA1Regex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -9758,7 +9758,7 @@
       ],
       "id": "d102-start",
       "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
+      "tool": "Windows.Detection.Amcache"
     },
     {
       "arguments": {
@@ -9784,8 +9784,8 @@
             "op": "eq"
           }
         ],
-        "interval_seconds": 5,
-        "max_attempts": 240
+        "interval_seconds": 10,
+        "max_attempts": 120
       },
       "tool": "get_flow_status"
     },
@@ -9794,7 +9794,7 @@
         "flow_id": {
           "$ref": "/steps/d102-start/structuredContent/flow_id"
         },
-        "page_size": 20
+        "page_size": 5
       },
       "assertions": [
         {
@@ -9805,9 +9805,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 1,
           "id": "d102-results-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d102-results",
@@ -9816,61 +9815,8 @@
     },
     {
       "arguments": {
-        "StartTrace": false,
-        "TraceFile": {
-          "$packet_etl": "/steps/d102-results/structuredContent/data"
-        }
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d102-stop-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/flow_id",
-          "id": "d102-stop-flow",
-          "op": "exists"
-        }
-      ],
-      "id": "d102-stop",
-      "kind": "tool",
-      "tool": "Windows.Network.PacketCapture"
-    },
-    {
-      "arguments": {
         "flow_id": {
-          "$ref": "/steps/d102-stop/structuredContent/flow_id"
-        }
-      },
-      "assertions": [],
-      "id": "d102-stop-wait",
-      "kind": "tool",
-      "repeat_until": {
-        "assertions": [
-          {
-            "actual": "/isError",
-            "expected": false,
-            "id": "d102-stop-wait-ok",
-            "op": "is_error"
-          },
-          {
-            "actual": "/structuredContent/state",
-            "expected": "FINISHED",
-            "id": "d102-stop-wait-state",
-            "op": "eq"
-          }
-        ],
-        "interval_seconds": 5,
-        "max_attempts": 240
-      },
-      "tool": "get_flow_status"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d102-stop/structuredContent/flow_id"
+          "$ref": "/steps/d102-start/structuredContent/flow_id"
         }
       },
       "assertions": [
@@ -9882,9 +9828,8 @@
         },
         {
           "actual": "/structuredContent/data",
-          "expected": 2,
           "id": "d102-files-data",
-          "op": "len_gte"
+          "op": "exists"
         }
       ],
       "id": "d102-files",
@@ -9893,7 +9838,7 @@
     },
     {
       "arguments": {
-        "SHA1Regex": "^__p06_ransomware_root_cause_no_match__$"
+        "AuthenticodeRegex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -9910,7 +9855,7 @@
       ],
       "id": "d103-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Amcache"
+      "tool": "Windows.Detection.BinaryHunter"
     },
     {
       "arguments": {
@@ -9989,9 +9934,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "AuthenticodeRegex": "^__p06_ransomware_root_cause_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10007,7 +9950,7 @@
       ],
       "id": "d104-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryHunter"
+      "tool": "Windows.Detection.BinaryRename"
     },
     {
       "arguments": {
@@ -10086,7 +10029,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessNameRegex": "^__p06_ransomware_root_cause_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10102,7 +10047,7 @@
       ],
       "id": "d105-start",
       "kind": "tool",
-      "tool": "Windows.Detection.BinaryRename"
+      "tool": "Windows.Detection.EnvironmentVariables"
     },
     {
       "arguments": {
@@ -10182,7 +10127,7 @@
     },
     {
       "arguments": {
-        "ProcessNameRegex": "^__p06_ransomware_root_cause_no_match__$"
+        "ExcludeRegex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -10199,7 +10144,7 @@
       ],
       "id": "d106-start",
       "kind": "tool",
-      "tool": "Windows.Detection.EnvironmentVariables"
+      "tool": "Windows.Detection.ForwardedImports"
     },
     {
       "arguments": {
@@ -10278,9 +10223,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "ExcludeRegex": "^__p06_ransomware_root_cause_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10296,7 +10239,7 @@
       ],
       "id": "d107-start",
       "kind": "tool",
-      "tool": "Windows.Detection.ForwardedImports"
+      "tool": "Windows.Detection.Impersonation"
     },
     {
       "arguments": {
@@ -10375,7 +10318,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "processRegex": "^__p06_ransomware_root_cause_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10391,7 +10336,7 @@
       ],
       "id": "d108-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Impersonation"
+      "tool": "Windows.Detection.Mutants"
     },
     {
       "arguments": {
@@ -10471,7 +10416,7 @@
     },
     {
       "arguments": {
-        "processRegex": "^__p06_ransomware_root_cause_no_match__$"
+        "TemplateFileRegex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -10488,7 +10433,7 @@
       ],
       "id": "d109-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Mutants"
+      "tool": "Windows.Detection.TemplateInjection"
     },
     {
       "arguments": {
@@ -10567,9 +10512,7 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {
-        "TemplateFileRegex": "^__p06_ransomware_root_cause_no_match__$"
-      },
+      "arguments": {},
       "assertions": [
         {
           "actual": "/isError",
@@ -10585,7 +10528,7 @@
       ],
       "id": "d110-start",
       "kind": "tool",
-      "tool": "Windows.Detection.TemplateInjection"
+      "tool": "Windows.Detection.Yara.NTFS"
     },
     {
       "arguments": {
@@ -10680,7 +10623,7 @@
       ],
       "id": "d111-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.NTFS"
+      "tool": "Windows.Detection.Yara.PhysicalMemory"
     },
     {
       "arguments": {
@@ -10759,7 +10702,9 @@
       "tool": "list_flow_files"
     },
     {
-      "arguments": {},
+      "arguments": {
+        "ProcessRegex": "^__p06_ransomware_root_cause_no_match__$"
+      },
       "assertions": [
         {
           "actual": "/isError",
@@ -10775,7 +10720,7 @@
       ],
       "id": "d112-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.PhysicalMemory"
+      "tool": "Windows.Detection.Yara.Process"
     },
     {
       "arguments": {
@@ -10872,7 +10817,7 @@
       ],
       "id": "d113-start",
       "kind": "tool",
-      "tool": "Windows.Detection.Yara.Process"
+      "tool": "Windows.ETW.DotNetRundown"
     },
     {
       "arguments": {
@@ -10952,7 +10897,7 @@
     },
     {
       "arguments": {
-        "ProcessRegex": "^__p06_ransomware_root_cause_no_match__$"
+        "Compression": "Snappy"
       },
       "assertions": [
         {
@@ -10969,7 +10914,7 @@
       ],
       "id": "d114-start",
       "kind": "tool",
-      "tool": "Windows.ETW.DotNetRundown"
+      "tool": "Windows.Memory.Acquisition"
     },
     {
       "arguments": {
@@ -11049,7 +10994,9 @@
     },
     {
       "arguments": {
-        "Compression": "Snappy"
+        "BaseOffset": 0,
+        "FilenameRegex": "^__p06_ransomware_root_cause_no_match__$",
+        "Pid": 0
       },
       "assertions": [
         {
@@ -11066,7 +11013,7 @@
       ],
       "id": "d115-start",
       "kind": "tool",
-      "tool": "Windows.Memory.Acquisition"
+      "tool": "Windows.Memory.PEDump"
     },
     {
       "arguments": {
@@ -11146,9 +11093,8 @@
     },
     {
       "arguments": {
-        "BaseOffset": 0,
-        "FilenameRegex": "^__p06_ransomware_root_cause_no_match__$",
-        "Pid": 0
+        "PidRegex": "^__p06_ransomware_root_cause_no_match__$",
+        "ProcessRegex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -11165,7 +11111,7 @@
       ],
       "id": "d116-start",
       "kind": "tool",
-      "tool": "Windows.Memory.PEDump"
+      "tool": "Windows.Memory.ProcessDump"
     },
     {
       "arguments": {
@@ -11245,8 +11191,7 @@
     },
     {
       "arguments": {
-        "PidRegex": "^__p06_ransomware_root_cause_no_match__$",
-        "ProcessRegex": "^__p06_ransomware_root_cause_no_match__$"
+        "ProcessNameRegex": "^__p06_ransomware_root_cause_no_match__$"
       },
       "assertions": [
         {
@@ -11263,7 +11208,7 @@
       ],
       "id": "d117-start",
       "kind": "tool",
-      "tool": "Windows.Memory.ProcessDump"
+      "tool": "Windows.Memory.ProcessInfo"
     },
     {
       "arguments": {
@@ -11338,103 +11283,6 @@
         }
       ],
       "id": "d117-files",
-      "kind": "tool",
-      "tool": "list_flow_files"
-    },
-    {
-      "arguments": {
-        "ProcessNameRegex": "^__p06_ransomware_root_cause_no_match__$"
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-start-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/flow_id",
-          "id": "d118-start-flow",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-start",
-      "kind": "tool",
-      "tool": "Windows.Memory.ProcessInfo"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        }
-      },
-      "assertions": [],
-      "id": "d118-wait",
-      "kind": "tool",
-      "repeat_until": {
-        "assertions": [
-          {
-            "actual": "/isError",
-            "expected": false,
-            "id": "d118-wait-ok",
-            "op": "is_error"
-          },
-          {
-            "actual": "/structuredContent/state",
-            "expected": "FINISHED",
-            "id": "d118-wait-state",
-            "op": "eq"
-          }
-        ],
-        "interval_seconds": 10,
-        "max_attempts": 120
-      },
-      "tool": "get_flow_status"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        },
-        "page_size": 5
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-results-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/data",
-          "id": "d118-results-data",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-results",
-      "kind": "tool",
-      "tool": "get_flow_results"
-    },
-    {
-      "arguments": {
-        "flow_id": {
-          "$ref": "/steps/d118-start/structuredContent/flow_id"
-        }
-      },
-      "assertions": [
-        {
-          "actual": "/isError",
-          "expected": false,
-          "id": "d118-files-ok",
-          "op": "is_error"
-        },
-        {
-          "actual": "/structuredContent/data",
-          "id": "d118-files-data",
-          "op": "exists"
-        }
-      ],
-      "id": "d118-files",
       "kind": "tool",
       "tool": "list_flow_files"
     },

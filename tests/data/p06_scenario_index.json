@@ -1,43 +1,47 @@
 {
+  "resource_policy": {
+    "path": "p06_resource_policy.json",
+    "sha256": "63968ba793844596cb157633aa1a15eaa1fd5656982d704e25f64b9c0dbcd411"
+  },
   "scenarios": [
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-compromise-scope.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-compromise-scope",
-      "sha256": "708f632063e8216cde14cf9d3e2bf5ba484e79a4a5c5327e73156f83c94bb699",
+      "sha256": "638b5b017f8b08cbe32ebd5d194eb7252b5f8444b470475300605947371323ef",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-ransomware-root-cause.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-ransomware-root-cause",
-      "sha256": "c93bc5288dfe8b0bc1b918b6d674de6e6987d2c8a226e844394e2b9c2e8c6341",
+      "sha256": "3b0a66cf0c0ad11e334ddde034ea64c08491007f2bda63f22537c05b944fbb86",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-credential-lateral-movement.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-credential-lateral-movement",
-      "sha256": "9b790b127f908f0a332dd21076cab37a7938c2d8e6c3a84bac55acdd1ac4fc92",
+      "sha256": "c9b56b3f0a293b001496ca02a031da8e6f78ebf6053ec27e88cb3e00e02585e9",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-data-exfiltration.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-data-exfiltration",
-      "sha256": "677815b2fdaa0bbea1c8542fd1e35a6a96a2332f48f2911323b286701ca1f68a",
+      "sha256": "0709bc5ede10bfe9f3527ca192454c27b85d0978e3ecfeaec94b58c9307c3f48",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-remediation-validation.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-remediation-validation",
-      "sha256": "71e34fc7b33d552e074dacf9eda792fbde51c58f2ccb3b172d958f63f0de8b75",
+      "sha256": "85851eca749e3612ba8a0ca46ffdf9f77fb69b27f002cc55e2f81208a3e69170",
       "snapshot_stage": "P06_ACTIVE"
     }
   ],

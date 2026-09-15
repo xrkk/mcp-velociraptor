@@ -1,7 +1,11 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
-> Development status: P06 complete. 118 reviewed Windows CLIENT artifacts as
+> Development status: P05/P06/P07 acceptance reopened; remediation is not yet accepted.
+> The previous acceptance snapshots have been removed by the operator. The
+> retained fixed-IP baseline is being requalified; do not run historical
+> recovery commands or treat old reports as current acceptance.
+> The bridge exposes 118 reviewed Windows CLIENT artifacts as
 > dynamically generated MCP tools. Their names, descriptions, parameters, and
 > definition hashes are checked against the connected root organization before
 > stdio starts. Twelve fixed tools provide bounded VQL, single-endpoint Hunt,
@@ -63,9 +67,11 @@ Generate an api config file:
 
 ### 3. Connect to MCP client of choice
 
-The easiest configuration is to run your venv python directly calling
-`mcp_velociraptor_bridge.py`. You can either put values directly in the MCP
-client config:
+External clients use the deployed stateful Streamable HTTP endpoint
+`http://<guest-host-only-ip>:28790/mcp` with the deployer's bearer token.
+The following process-launch examples are for VM-local stdio diagnostics only;
+they do not connect an external host to the VM and do not count as formal P06
+acceptance. For those diagnostics, put values directly in the MCP client config:
 
 ```json
 {
@@ -129,7 +135,9 @@ warnings. Errors use stable
 `v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
 245554-byte limit on the complete serialized `structuredContent` object.
 
-The accepted Windows environment uses the post-install Snapshot 186 network deployment baseline.
+The historical Windows environment used the Snapshot 186 network deployment baseline.
+Its restored fixture/process prerequisites have failed revalidation; it is not
+currently a qualified P06 starting point. P05 baseline repair is in progress.
 It contains the hash-locked local dependencies for PacketCapture and Autoruns,
 plus the reviewed `Windows.Triage.Targets` and
 `Generic.Utils.KillProcess` definitions. Dependency preparation is an operator
@@ -152,7 +160,7 @@ The public surface at P04 contains exactly 130 tools:
 and the old `windows_*`, `linux_*`, and `macos_*` wrappers are not registered.
 Linux implementation remains a TODO. macOS is not supported.
 
-On the accepted Snapshot 186 environment, all 118 dynamic tools have their
+On the historical Snapshot 186 environment, all 118 dynamic tools had their
 required local dependencies. PacketCapture and Autoruns resolve their binaries
 from Velociraptor's local public filestore; the locked SHA-256 values are
 verified before acceptance and no runtime tool fetches them from their original
@@ -164,7 +172,8 @@ timeout and an 8 GiB upload ceiling because a complete image of the accepted
 4 GiB VM cannot fit under Velociraptor's default 1 GiB per-collection limit.
 This is not a public tool parameter and does not let callers raise limits for
 other artifacts. P06 resource qualification still checks available memory and
-disk before admitting the full execution scenarios.
+disk before admitting the full execution scenarios. The new admission code is
+under verification; old successful reports are not proof of the new qualification.
 
 The P05 test infrastructure is intentionally separate from the MCP API:
 
@@ -180,6 +189,99 @@ not general host setup commands. Scenario files must be ordinary indexed files
 under `tests/scenarios/`; their reviewed hashes prevent command-line or
 environment overrides from turning the runner into an arbitrary execution
 proxy.
+
+The candidate deployment script `tests/p05_service_install.ps1` now requires
+the measured guest `-BindAddress`, single host `-HostAddress`, and deployment
+`-AttemptId` UUID, in addition to `-RepoRoot` and `-ProtectedEnvFile`. It uses
+the SCM service host, checks the exact existing service/firewall identities,
+and refuses rollback of objects not tagged as created by that attempt or of
+a running service. It does not change the VM's static IP or Windows-MCP setup.
+Install and verify require existing canonical local-drive paths and reject
+reparse-point traversal before reading the protected configuration. Verify
+also checks protected-file ACLs before reading secrets, read-only service
+code, service-writable download/log directories, and formal endpoint settings;
+it does not repair ACLs or settings.
+An existing matching manual or automatic service keeps its startup mode;
+verify reports that mode. Newly created services remain manual until the
+separate P05 readiness and automatic-start acceptance steps are complete.
+These changes still require Windows validation; do not deploy this candidate
+until the P05 gates are reopened. The service host no longer dumps deployment
+environment values, including partial bearer tokens, into a diagnostic file.
+SCM callback signatures have Windows-only regression tests. The candidate
+service reports running only after HTTP startup and forwards stop requests to
+the existing HTTP server's graceful shutdown path, without creating a second
+server or stopping backend processes. Actual Windows lifecycle acceptance
+remains unfinished.
+
+The service host requires an existing deployment environment file before it
+imports the bridge. A missing reference/file stops service startup; it does not
+silently continue to repo-local configuration. When the reference is absent
+from the process environment, only the installer's `VELOCIRAPTOR_ENV_FILE`
+string registry value is read. This does not change direct stdio configuration
+precedence. The service configuration must explicitly include the HTTP
+mode/host/token, API config and
+download root. Missing or duplicate settings and conflicting inherited values
+stop startup instead of being completed from repo-local `.env`. Raw bridge
+stderr is discarded; the failure log retains a fixed public failure code,
+explanation and exit code, not raw
+diagnostic text. Categories distinguish deployment configuration, Python
+imports, transport settings, artifact/schema validation, backend connection and
+HTTP execution failures without persisting exception messages or credentials.
+
+The deployment-only P05 observer records a per-process dispatch counter under
+`Logs/p05-dispatch/`. It observes the existing SDK POST handler after Host/Origin
+checks, adds no endpoint or authentication exception, and retains no request
+content or token. Its SDK version/source guard fails startup if the observed
+security boundary changes; the updated candidate still requires Windows tests.
+The read-only HTTP evidence collector joins the counter to the actual service
+PID, creation time, executable hash and response instance header.
+
+P05 three-chain stdio evidence now retains original SDK JSON-RPC messages and
+bridge stderr in a new UUID directory for each execution. The test child is
+explicitly stdio and does not inherit the HTTP bearer token or protected-env
+reference. These originals alone do not prove the required complete network
+observation window, and do not activate a candidate snapshot.
+
+The P05-only candidate `tests/p05_process_parent.py` keeps preparation/backend
+parent processes alive for identity checks. Its three fixed roles are `fixture`,
+`frontend`, and `client`; it is not a product service or general launcher and
+does not replace a running predecessor. Do not invoke it inside a P06 scenario
+or use it to bypass the reviewed baseline creation/activation gates. The old
+snapshots and evidence remain unchanged; a new baseline is not yet activated.
+
+P06 qualification is an external official-SDK test command, not a VM-local
+stdio bridge process:
+
+```text
+<external-sdk-python> -m tests.p06_resource_qualification --endpoint http://<guest-host-only-ip>:28790/mcp
+<external-sdk-python> -m tests.p06_individual_acceptance --endpoint http://<guest-host-only-ip>:28790/mcp
+```
+
+The deployer's token must already be in `VELOCIRAPTOR_MCP_BEARER_TOKEN`; never
+put it in arguments or logs. Start only after the reviewed Snapshot 188 recovery
+gate has produced complete original restore records, `current-restore.json`,
+the unchanged `fixture-instance.json`, and `server-observation.json` in the
+fixed `Logs/P06/wf-01a05d1d-p06-r3/` evidence root. Qualification has no
+evidence-root override or stdio fallback. Windows test
+control collects resource observations only; all product calls remain on one
+direct formal HTTP session. Control transcripts are stored separately and do
+not contribute tool coverage.
+
+Snapshot 187 has been administratively adopted only as the preparation baseline
+(schema 5 / epoch 5). Snapshot 188 must first pass the initial acceptance and
+two complete recovery cycles before activation (schema 5 / epoch 6) and P06 use;
+administrative adoption is not product acceptance.
+
+Individual error-contract acceptance uses its own restored attempt and formal
+HTTP session, checks error codes/details/retryability, and always contributes
+zero scenario coverage. Both commands seal their original evidence and append
+receipts rather than overwriting previous attempts.
+
+Full scenarios additionally require an explicitly selected successful qualification
+and a byte-verified resource budget. Missing/stale observations, mismatched
+service identity, insufficient space, and expired deadlines fail closed before
+further work. A new immutable evidence generation and complete five-scenario
+execution are still required; unit tests and read-only probes do not close P06.
 
 These terms describe what a call does and what it changes:
 

@@ -63,23 +63,35 @@ def create_server() -> MCPServer:
     return server
 
 
-def main() -> int:
+def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
     """Resolve the fail-closed transport seam, then run the single server."""
     try:
         config = resolve_transport_config()
     except TransportConfigError as exc:
+        if on_failure is not None:
+            on_failure("TRANSPORT_CONFIG_INVALID")
         print(
             f"Velociraptor MCP transport configuration rejected: {exc}",
             file=sys.stderr,
         )
         return 2
 
+    if config.mode != FORMAL_TRANSPORT and (on_ready is not None or stop_requested is not None):
+        if on_failure is not None:
+            on_failure("SERVICE_TRANSPORT_INVALID")
+        print('Service lifecycle requires the formal HTTP transport', file=sys.stderr)
+        return 2
+
     try:
         server = create_server()
     except ArtifactRegistryError as exc:
+        if on_failure is not None:
+            on_failure("ARTIFACT_REGISTRY_INVALID")
         print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
+        if on_failure is not None:
+            on_failure("BACKEND_INITIALIZATION_FAILED")
         print(
             "Velociraptor MCP startup failed: backend initialization or metadata "
             f"read failed ({type(exc).__name__})",
@@ -88,7 +100,10 @@ def main() -> int:
         return 2
 
     if config.mode == FORMAL_TRANSPORT:
-        run_formal_http(server, config)
+        if on_ready is None and stop_requested is None:
+            run_formal_http(server, config)
+        else:
+            run_formal_http(server, config, on_ready=on_ready, stop_requested=stop_requested)
     else:
         server.run("stdio")
     return 0

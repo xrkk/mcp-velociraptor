@@ -23,6 +23,7 @@ from mcp.client.stdio import stdio_client
 
 # Allow direct script execution from any working directory (tests/ layout).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tests.p06_evidence import EvidenceError, verify_restore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -34,13 +35,18 @@ P06_MANIFEST_PATH = REPO_ROOT / "tests" / "data" / "p06_coverage_manifest.json"
 FIXTURE_SPEC_PATH = REPO_ROOT / "tests" / "data" / "p05_fixture_spec.json"
 FIXTURE_INSTANCE_PATH = Path(r"C:\VelociraptorMCP\fixtures-p05\fixture-instance-v1.json")
 P05_REPORT_ROOT = REPO_ROOT / "Logs" / "P05" / "wf-01a05d1d-p05"
-P06_REPORT_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06"
-SNAPSHOT_185 = "Snapshot 1-开启Windows-MCP"
-SNAPSHOT_186 = "Snapshot 186-Velociraptor-MCP网络部署基线"
+P06_REPORT_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r3"
+SNAPSHOT_187 = "Snapshot 187-固定IP+WindowsMCP开机自启"
+SNAPSHOT_188 = "Snapshot 188-Velociraptor-MCP可恢复验收基线"
 SNAPSHOT_STAGES = {
-    ("P05_INITIAL", SNAPSHOT_185),
-    ("P05_CANDIDATE", SNAPSHOT_186),
-    ("P06_ACTIVE", SNAPSHOT_186),
+    ("P05_REPAIR_INITIAL", SNAPSHOT_187),
+    ("P05_REPAIR_CANDIDATE", SNAPSHOT_188),
+    ("P06_ACTIVE", SNAPSHOT_188),
+}
+RESTORE_STAGE_CANONICAL = {
+    "P05_REPAIR_INITIAL": (5, 5, "PREPARATION_BASELINE", SNAPSHOT_187),
+    "P05_REPAIR_CANDIDATE": (5, 5, "PREPARATION_BASELINE", SNAPSHOT_187),
+    "P06_ACTIVE": (5, 6, "NETWORK_ACTIVE", SNAPSHOT_188),
 }
 REPORT_SCHEMA_VERSION = 2
 CURRENT_RESTORE_NAME = "current-restore.json"
@@ -134,6 +140,10 @@ def process_creation_time(pid: int) -> int | None:
     if os.name != "nt":
         return None
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.GetProcessTimes.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.c_ulonglong)] * 4
     handle = kernel32.OpenProcess(0x1000, False, pid)
     if not handle:
         return None
@@ -198,7 +208,8 @@ def load_indexed_scenario(
     matches: list[tuple[Path, dict[str, Any]]] = []
     for index_path in _candidate_indexes():
         index = json.loads(index_path.read_text(encoding="utf-8"))
-        if set(index) != {"schema_version", "scenarios"} or index["schema_version"] != 1:
+        expected_keys = {'schema_version','scenarios'} | ({'resource_policy'} if index_path==P06_INDEX_PATH else set())
+        if set(index) != expected_keys or index["schema_version"] != 1:
             raise ScenarioInputError("invalid scenario index")
         matches.extend(
             (index_path, row)
@@ -232,7 +243,7 @@ def load_indexed_scenario(
         raise ScenarioInputError("scenario id differs from the index")
     if scenario["required_snapshot"] != row["required_snapshot"]:
         raise ScenarioInputError("scenario snapshot differs from the index")
-    if scenario["required_snapshot"] not in (SNAPSHOT_185, SNAPSHOT_186):
+    if scenario["required_snapshot"] not in {snapshot for _, snapshot in SNAPSHOT_STAGES}:
         raise ScenarioInputError("scenario requires an unapproved snapshot")
     if scenario["fixture_spec_sha256"] != row["fixture_spec_sha256"]:
         raise ScenarioInputError("scenario fixture spec differs from the index")
@@ -242,15 +253,19 @@ def load_indexed_scenario(
     if sum(step["kind"] == "tool" for step in scenario["steps"]) < 10:
         raise ScenarioInputError("scenario requires at least ten tool steps")
     validate_scenario_semantics(scenario)
+    if index_path==P06_INDEX_PATH:
+        from tests.p06_resource_policy import load_policy
+        load_policy(scenario)
     return scenario, row, actual_hash, index_path
 
 
-def load_fixture(scenario: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def load_fixture(scenario: dict[str, Any], instance_path: Path | None = None) -> tuple[dict[str, Any], str]:
     if sha256_file(FIXTURE_SPEC_PATH) != scenario["fixture_spec_sha256"]:
         raise ScenarioInputError("tracked fixture spec hash mismatch")
-    if not FIXTURE_INSTANCE_PATH.is_file() or _is_reparse(FIXTURE_INSTANCE_PATH):
+    instance_path = instance_path or FIXTURE_INSTANCE_PATH
+    if not instance_path.is_file() or _is_reparse(instance_path):
         raise ScenarioInputError("fixture instance is missing or not a plain file")
-    fixture = json.loads(FIXTURE_INSTANCE_PATH.read_text(encoding="utf-8"))
+    fixture = json.loads(instance_path.read_text(encoding="utf-8"))
     required = {
         "schema_version",
         "fixture_spec_sha256",
@@ -271,7 +286,7 @@ def load_fixture(scenario: dict[str, Any]) -> tuple[dict[str, Any], str]:
         raise ScenarioInputError("fixture instance is bound to another spec")
     if fixture["workflow_id"] != "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2":
         raise ScenarioInputError("fixture instance belongs to another workflow")
-    return fixture, sha256_file(FIXTURE_INSTANCE_PATH)
+    return fixture, sha256_file(instance_path)
 
 
 def pointer_tokens(pointer: str) -> list[str]:
@@ -506,7 +521,16 @@ async def execute_tool_step(
     last: dict[str, Any] = {}
     evaluated: list[dict[str, Any]] = []
     for attempt in range(1, max_attempts + 1):
-        raw = await session.call_tool(step["tool"], arguments)
+        call_started, call_clock = utc_now(), time.monotonic()
+        try:
+            raw = await session.call_tool(step["tool"], arguments)
+        except BaseException as exc:
+            calls.append({'arguments': arguments, 'attempt': attempt, 'sequence': len(calls)+1,
+                          'is_error': True, 'step_id': step['id'], 'structured': None,
+                          'tool': step['tool'], 'started_at': call_started, 'ended_at': utc_now(),
+                          'duration_ms': max(0,int((time.monotonic()-call_clock)*1000)),
+                          'error': {'type': type(exc).__name__, 'message': str(exc)}})
+            raise
         last = result_value(raw)
         evaluated = [evaluate_assertion(item, last, fixture) for item in assertion_spec]
         calls.append(
@@ -517,7 +541,12 @@ async def execute_tool_step(
                 "is_error": last["isError"],
                 "step_id": step["id"],
                 "structured": last["structuredContent"],
+                "mcp_result": raw.model_dump(mode='json',by_alias=True,exclude_none=True)
+                              if hasattr(raw,'model_dump') else None,
                 "tool": step["tool"],
+                "started_at": call_started,
+                "ended_at": utc_now(),
+                "duration_ms": max(0, int((time.monotonic()-call_clock)*1000)),
             }
         )
         if all(item["passed"] for item in evaluated):
@@ -604,6 +633,17 @@ class HttpHeaderCapture:
     def __init__(self, inner: Any) -> None:
         self.inner = inner
         self.responses: list[dict[str, Any]] = []
+        self.expected_identity: tuple[str, str] | None = None
+
+    async def __aenter__(self):
+        await self.inner.__aenter__()
+        return self
+
+    async def __aexit__(self, *exc_info):
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        await self.inner.aclose()
 
     async def handle_async_request(self, request: Any) -> Any:
         response = await self.inner.handle_async_request(request)
@@ -614,8 +654,16 @@ class HttpHeaderCapture:
                 "status_code": response.status_code,
                 "mcp_session_id": response.headers.get("mcp-session-id"),
                 "server_instance_id": response.headers.get("x-mcp-server-instance"),
+                "request_session_id": request.headers.get("mcp-session-id"),
             }
         )
+        if self.expected_identity is not None and 200 <= response.status_code < 300:
+            session_id, instance_id = self.expected_identity
+            observed_session = response.headers.get('mcp-session-id')
+            if ((observed_session is not None and observed_session != session_id)
+                    or response.headers.get('x-mcp-server-instance') != instance_id
+                    or request.headers.get('mcp-session-id') != session_id):
+                raise ScenarioFailure('formal HTTP session or service identity changed')
         return response
 
 
@@ -638,7 +686,13 @@ RESTORE_RECORD_KINDS = {
     "pre_start_marker",
     "post_restore_hostname",
     "canonical_readback",
+    "baseline_adoption",
     "activation_evidence",
+}
+RESTORE_STAGE_RECORD_KINDS = {
+    "P05_REPAIR_INITIAL": RESTORE_RECORD_KINDS - {"activation_evidence"},
+    "P05_REPAIR_CANDIDATE": RESTORE_RECORD_KINDS - {"activation_evidence"},
+    "P06_ACTIVE": RESTORE_RECORD_KINDS,
 }
 
 
@@ -665,28 +719,33 @@ def load_current_restore(evidence_root: Path, run_id: str) -> dict[str, Any]:
             raise SnapshotEvidenceError("restore record shape is invalid")
         if record["kind"] not in RESTORE_RECORD_KINDS:
             raise SnapshotEvidenceError("restore record kind is unknown")
+        if record["kind"] in kinds_seen:
+            raise SnapshotEvidenceError("restore record kind is duplicated")
         record_path = _plain_contained_file(evidence_root, record["path"])
         if sha256_file(record_path) != record["sha256"]:
             raise SnapshotEvidenceError(f"restore record hash mismatch: {record['kind']}")
         kinds_seen.add(record["kind"])
-    required_kinds = RESTORE_RECORD_KINDS - {"activation_evidence"}
-    stage_required = required_kinds | (
-        {"activation_evidence"} if document["snapshot_stage"] == "P06_ACTIVE" else set()
-    )
-    if not stage_required.issubset(kinds_seen):
-        raise SnapshotEvidenceError("current-restore.json lacks required record kinds")
-    if document["snapshot_stage"] == "P06_ACTIVE" and (
-        document["canonical_schema_version"] != 3
-        or document["canonical_epoch"] != 4
-        or document["canonical_phase"] != "NETWORK_ACTIVE"
+    stage = document["snapshot_stage"]
+    expected_canonical = RESTORE_STAGE_CANONICAL.get(stage)
+    if expected_canonical is None:
+        raise SnapshotEvidenceError("current-restore.json stage is not approved")
+    stage_required = RESTORE_STAGE_RECORD_KINDS.get(stage)
+    if stage_required is None or kinds_seen != stage_required:
+        raise SnapshotEvidenceError("current-restore.json record kinds do not match its stage")
+    schema_version, epoch, phase, active_snapshot = expected_canonical
+    if (
+        document["canonical_schema_version"] != schema_version
+        or document["canonical_epoch"] != epoch
+        or document["canonical_phase"] != phase
     ):
-        raise SnapshotEvidenceError("P06_ACTIVE restore must reference the activated schema3 state")
-    if document["snapshot_stage"] in {"P05_INITIAL", "P05_CANDIDATE"} and (
-        document["canonical_schema_version"] != 2
-        or document["canonical_epoch"] != 3
-        or document["canonical_phase"] != "DEPENDENCIES_ACTIVE"
-    ):
-        raise SnapshotEvidenceError("P05 restore must reference the schema2 epoch3 state")
+        raise SnapshotEvidenceError("restore does not reference its required canonical state")
+    if stage == 'P06_ACTIVE':
+        try:
+            verify_restore(document, evidence_root)
+        except (EvidenceError, OSError, ValueError, KeyError, TypeError) as exc:
+            raise SnapshotEvidenceError(f'original restore evidence failed: {exc}') from exc
+    if stage == 'P06_ACTIVE' and document['snapshot_name'] != active_snapshot:
+        raise SnapshotEvidenceError("P06_ACTIVE restore does not name the activated Snapshot188")
     return document
 
 
@@ -753,12 +812,18 @@ def _runner_start_time_utc() -> str | None:
     stamp = process_creation_time(os.getpid())
     if stamp is not None:
         try:
-            return datetime.fromtimestamp(stamp / 1_000_000, tz=UTC).isoformat()
+            return datetime.fromtimestamp(stamp / 10_000_000 - 11_644_473_600, tz=UTC).isoformat()
         except (OSError, ValueError, OverflowError):
             pass
-    # Fallback: Python process start is reliably observable via sys module
-    # on Windows where ctypes GetProcessTimes may fail in service contexts.
-    return datetime.now(UTC).isoformat()
+    if sys.platform.startswith('linux'):
+        try:
+            process = Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()
+            boot = next(int(line.split()[1]) for line in Path('/proc/stat').read_text().splitlines()
+                        if line.startswith('btime '))
+            return datetime.fromtimestamp(boot+int(process[19])/os.sysconf('SC_CLK_TCK'),tz=UTC).isoformat()
+        except (OSError, ValueError, IndexError, StopIteration):
+            pass
+    return None
 
 
 def _verify_terminal_flow_classification(report: dict[str, Any]) -> None:
@@ -810,8 +875,13 @@ async def run_scenario(
     server_observation: Path | None = None,
     run_id: str | None = None,
 ) -> tuple[dict[str, Any], Path]:
+    if scenario_id.startswith('p06-') and transport == 'streamable-http':
+        if evidence_root is not None and Path(evidence_root).resolve() != P06_REPORT_ROOT.resolve():
+            raise ScenarioInputError('formal P06 evidence root is fixed to r3')
+        evidence_root = P06_REPORT_ROOT
     scenario, index_row, source_hash, index_path = load_indexed_scenario(scenario_id)
-    fixture, fixture_hash = load_fixture(scenario)
+    fixture, fixture_hash = load_fixture(scenario, Path(evidence_root)/'fixture-instance.json'
+                                         if transport=='streamable-http' and evidence_root else None)
     if transport not in {"stdio", "streamable-http"}:
         raise ScenarioInputError("transport must be 'stdio' or 'streamable-http'")
     # The outer workflow pre-reserves the run id in current-restore.json (0.5);
@@ -822,12 +892,16 @@ async def run_scenario(
     report_root = P06_REPORT_ROOT / scenario_id if scenario_id.startswith("p06-") else P05_REPORT_ROOT
     run_dir = report_root / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
+    fixture_path = Path(evidence_root)/'fixture-instance.json' if transport=='streamable-http' and evidence_root else FIXTURE_INSTANCE_PATH
+    (run_dir/'fixture-instance.json').write_bytes(fixture_path.read_bytes())
     report_path = run_dir / "report.json"
     started_at = utc_now()
     started = time.monotonic()
     restore_document: dict[str, Any] | None = None
     if evidence_root is not None:
         restore_document = load_current_restore(Path(evidence_root), run_id)
+    if transport == 'streamable-http' and restore_document is None:
+        raise SnapshotEvidenceError('formal HTTP execution requires original restore evidence')
     authorization_configured = bool(
         transport == "streamable-http" and os.environ.get(token_env, "").strip()
     )
@@ -861,13 +935,14 @@ async def run_scenario(
         "steps": [],
         "tools_schema_sha256": None,
         "transport": transport,
-        "unexecuted_step_ids": [],
+        "unexecuted_step_ids": [step['id'] for step in scenario['steps']],
     }
     completed: dict[str, Any] = {}
     scenario_failed = False
     stderr_file = tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False)
     stderr_path = Path(stderr_file.name)
     capture: HttpHeaderCapture | None = None
+    resource_gate = None
     children_before = direct_child_pids(os.getpid())
     try:
         if transport == "stdio":
@@ -920,6 +995,7 @@ async def run_scenario(
                     instance_id = initialized_response["server_instance_id"]
                     if not instance_id:
                         raise ScenarioFailure("no X-MCP-Server-Instance response header captured")
+                    capture.expected_identity = (report['mcp_session']['id'], instance_id)
                     observation = verify_server_observation(
                         Path(server_observation) if server_observation else Path(
                             REPO_ROOT / "Logs" / "server-observation.json"
@@ -940,7 +1016,15 @@ async def run_scenario(
                     report["server_observation_sha256"] = sha256_file(Path(server_observation) if server_observation else Path(
                         REPO_ROOT / "Logs" / "server-observation.json"
                     ))
-                tools = (await session.list_tools()).tools
+                    observation_path = Path(server_observation) if server_observation else REPO_ROOT / 'Logs' / 'server-observation.json'
+                    (run_dir / 'server-observation.json').write_bytes(observation_path.read_bytes())
+                    import socket
+                    if socket.gethostname().casefold()==observation['computer_name'].casefold():
+                        raise ScenarioFailure('formal P06 client must execute outside the target VM')
+                listing = await session.list_tools()
+                (run_dir/'tools-list.json').write_bytes(canonical_bytes(
+                    listing.model_dump(mode='json',by_alias=True,exclude_none=True)))
+                tools = listing.tools
                 names = {tool.name for tool in tools}
                 tools_document = tools_schema_document(tools)
                 tools_bytes = canonical_bytes(tools_document)
@@ -952,20 +1036,39 @@ async def run_scenario(
                 unknown = sorted(required_tools - names)
                 if unknown:
                     raise ScenarioInputError(f"scenario contains unknown tools: {unknown}")
+                if scenario_id.startswith('p06-') and transport=='streamable-http':
+                    from tests.p06_resource_gate import GuestResourceSampler, ScenarioResourceGate, ResourceRejected, guarded_step
+                    sampler = GuestResourceSampler(endpoint,run_id,report['server_identity'],run_dir/'resources')
+                    resource_gate = ScenarioResourceGate(P06_REPORT_ROOT,scenario,sampler)
+                    try:
+                        gate_row = await resource_gate.before('p06-resource-start',initial=True)
+                        report['steps'].append({'id':'p06-resource-start','kind':'resource-gate',
+                                                'passed':True,'resource':gate_row})
+                    except ResourceRejected as exc:
+                        report['steps'].append({'id':'p06-resource-start','kind':'resource-gate',
+                                                'passed':False,'resource':exc.evidence})
+                        raise
                 for index, step in enumerate(scenario["steps"]):
                     if step["kind"] == "sleep":
                         await asyncio.sleep(step["seconds"])
                         report["steps"].append({"id": step["id"], "kind": "sleep", "passed": True})
                         completed[step["id"]] = {"slept": step["seconds"]}
+                        report['unexecuted_step_ids'] = [item['id'] for item in scenario['steps'][index+1:]]
                         continue
+                    resource_row = None
                     try:
-                        value, assertions = await execute_tool_step(
-                            session, step, completed, fixture, report["calls"]
-                        )
+                        if resource_gate:
+                            (value,assertions),resource_row = await guarded_step(
+                                resource_gate, step['id'],
+                                lambda: execute_tool_step(session,step,completed,fixture,report['calls']))
+                        else:
+                            value, assertions = await execute_tool_step(session,step,completed,fixture,report['calls'])
                         completed[step["id"]] = value
                         report["steps"].append(
-                            {"assertions": assertions, "id": step["id"], "kind": "tool", "passed": True}
+                            {"assertions": assertions, "id": step["id"], "kind": "tool", "passed": True,
+                             **({'resource':resource_row} if resource_row else {})}
                         )
+                        report['unexecuted_step_ids'] = [item['id'] for item in scenario['steps'][index+1:]]
                     except Exception as exc:
                         scenario_failed = True
                         report["failure"] = {
@@ -973,7 +1076,8 @@ async def run_scenario(
                             "step_id": step["id"],
                             "type": type(exc).__name__,
                         }
-                        report["steps"].append({"id": step["id"], "kind": "tool", "passed": False})
+                        report["steps"].append({"id": step["id"], "kind": "tool", "passed": False,
+                                                 'resource': getattr(exc,'evidence',getattr(exc,'resource_evidence',resource_row))})
                         report["unexecuted_step_ids"] = [item["id"] for item in scenario["steps"][index + 1 :]]
                         break
                 for cleanup in scenario["cleanup"]:
@@ -1016,6 +1120,15 @@ async def run_scenario(
                 "chain": _exception_chain(exc),
             }
     finally:
+        if capture is not None:
+            (run_dir/'http-headers.json').write_bytes(canonical_bytes(capture.responses))
+            try:
+                await http_client.aclose()
+            except Exception as exc:
+                report['status'] = 'failed'
+                report['coverage'] = []
+                report['failure'] = report['failure'] or {
+                    'type':type(exc).__name__,'message':str(exc),'step_id':None}
         stderr_file.close()
         stderr_path.unlink(missing_ok=True)
         report["ended_at"] = utc_now()
@@ -1024,7 +1137,7 @@ async def run_scenario(
             if scenario_id.startswith("p06-") and transport == "streamable-http":
                 try:
                     report["coverage"] = _p06_coverage(scenario_id, report)
-                    if len(report["coverage"]) != 130:
+                    if len(report["coverage"]) != 129:
                         raise ScenarioFailure("successful P06 scenario does not prove 130 relations")
                     _verify_terminal_flow_classification(report)
                 except Exception as exc:
@@ -1061,6 +1174,12 @@ async def run_scenario(
             (run_dir / "snapshot-evidence.json").write_bytes(evidence_bytes)
             report["snapshot_evidence_sha256"] = hashlib.sha256(evidence_bytes).hexdigest()
         report_path.write_bytes(canonical_bytes(report))
+        if scenario_id.startswith('p06-') and transport == 'streamable-http':
+            from tests.p06_package import member_inventory, verify_manifest
+            (run_dir/'package-manifest.json').write_bytes(canonical_bytes(member_inventory(run_dir,evidence_root)))
+            verify_manifest(run_dir,evidence_root)
+            from tests.p06_receive import receive
+            receive(run_dir,evidence_root)
     return report, report_path
 
 

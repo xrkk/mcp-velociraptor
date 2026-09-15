@@ -25,8 +25,10 @@ The historical agent code has not been migrated to those generated names or the
 new structured result contract, so do not run it against the P03 bridge as a
 compatibility test.
 
-The accepted Windows test environment now uses the verified post-install
-Snapshot 186 baseline. PacketCapture and Autoruns resolve hash-locked binaries
+The historical Windows test environment used the post-install Snapshot 186
+baseline, but restored fixture/process prerequisites have since failed
+revalidation. P05 baseline repair is in progress; P06 must not treat the old
+snapshot as a newly qualified starting point. PacketCapture and Autoruns resolve hash-locked binaries
 from Velociraptor's local filestore, and the reviewed triage and process-ending
 artifacts are installed there. This does not make dependency management part of
 the MCP API: preparation remains an operator-owned test-infrastructure step.
@@ -36,12 +38,79 @@ through the official MCP Python SDK. They test the 130-tool bridge contract; the
 historical agent in this directory is still excluded and should not be treated
 as a compatibility client.
 
+The test-only `tests/p05_process_parent.py` candidate has fixed `fixture`,
+`frontend`, and `client` roles to retain parent identities. It is neither a
+product launcher nor an agent feature, and cannot replace a running predecessor
+or bypass baseline review and activation. No new baseline is yet activated.
+
+The operator has removed the previous acceptance snapshots and retained a
+fixed-IP baseline that is still being requalified. Historical recovery and
+qualification instructions below are not current execution authorization.
+The candidate P05 service installer requires measured guest `-BindAddress`,
+single host `-HostAddress`, and a deployment `-AttemptId` UUID, plus the repo
+and protected-env paths. It uses the SCM host and checks exact identities;
+rollback requires matching creation ownership and a stopped service. It does
+not alter the static IP or Windows-MCP startup. Windows validation is pending,
+and install/verify reject noncanonical local paths and reparse-point traversal
+before reading the protected configuration. They check protected-file ACLs
+before reading secrets, read-only service code, and service-writable download/log
+directories without repairing ACLs or settings. Deployment approval still
+requires the P05 Windows gates. The service host no longer writes
+deployment environment values or partial bearer tokens to a diagnostic file.
+SCM callback signatures have Windows-only regression tests pending execution.
+The candidate reports running after HTTP startup and forwards service stop
+requests to graceful HTTP shutdown in the same process, without stopping the
+Velociraptor backend. Actual Windows lifecycle acceptance remains unfinished.
+An existing matching manual/automatic startup mode is preserved and reported;
+new installations remain manual until separate P05 readiness/autostart checks.
+
+The candidate service host stops startup if its deployment environment file or
+reference is missing. Its registry lookup reads only the installer's string
+`VELOCIRAPTOR_ENV_FILE` reference, not arbitrary environment values. Direct
+stdio and historical agent configuration precedence are unchanged. The service
+requires explicit HTTP mode/host/token, API config and download root; missing,
+duplicate or conflicting inherited settings stop startup. The service
+host discards raw bridge stderr and logs a fixed public failure code,
+explanation and exit code for configuration, imports, registry validation,
+backend connection or HTTP execution; raw exception text and credentials are
+not persisted. These changes still need Windows behavior validation.
+
+The deployment-only P05 observer adds a local process-bound dispatch counter,
+not another endpoint or authentication path. It checks the pinned SDK security
+boundary and joins counter observations to the actual service process and HTTP
+instance header; it records no token or request body. The updated candidate
+still needs Windows verification. P05 three-chain stdio runs retain raw SDK
+messages and stderr under new UUID directories without inheriting the HTTP
+token/protected-env reference. This does not supply complete network-window
+proof or replace the snapshot activation gates.
+
 For the reviewed `Windows.Memory.Acquisition` tool only, the bridge internally
 requests a 3600-second collection timeout and an 8 GiB upload ceiling so a full
 image of the accepted 4 GiB VM is not cancelled by Velociraptor's default 1 GiB
 per-collection limit. Callers cannot change this ceiling, and other artifacts
-retain their ordinary resource defaults. P06 admits this resource-heavy tool
-only after its VM memory and disk checks pass.
+retain their ordinary resource defaults. P06/P07 acceptance is currently reopened;
+the new resource qualification and admission implementation is under verification,
+not a claim that the five formal scenarios have passed again.
+
+The P06 resource qualifier runs outside the VM with the official SDK against
+`http://<guest-host-only-ip>:28790/mcp`, using the deployer's token from
+`VELOCIRAPTOR_MCP_BEARER_TOKEN`. It requires complete original Snapshot 188
+restore evidence, the unchanged fixture-instance copy, and the guest service
+observation in the fixed `Logs/P06/wf-01a05d1d-p06-r3/` root; the qualifier
+does not accept an evidence-root override. The Windows test-control channel reads resource counters only;
+it never proxies product calls or supplies coverage. Formal scenarios consume
+an explicitly selected, byte-verified qualification budget and reject missing
+observations, low space, identity changes, or expired deadlines. Neither the
+historical agent nor a VM-local stdio test can substitute for this external
+qualification. See the main README for the test command and evidence inputs.
+The separate individual error-contract acceptance command also uses external
+HTTP, its own restored attempt, and zero coverage; neither command uses this
+historical agent or overwrites earlier evidence.
+
+Snapshot 187 is now the administratively adopted preparation baseline only
+(schema 5 / epoch 5). P06 requires Snapshot 188 activation at schema 5 / epoch 6
+after initial acceptance and two complete candidate recovery cycles; adoption
+does not certify the product.
 
 ### Setup
 ```bash

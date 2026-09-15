@@ -13,6 +13,40 @@ from tests import scenario_runner
 
 
 class P06ContractTests(unittest.TestCase):
+    def test_individual_error_acceptance_checks_details_and_retryability(self):
+        from mcp.types import CallToolResult
+        from tests.p06_individual_acceptance import assert_error
+        value = {'code':'NOT_FOUND','message':'Missing','retryable':False,
+                 'details':{'object_type':'flow','object_id':'F.unit'}}
+        expected = dict(value['details'])
+        assert_error(CallToolResult(content=[],structuredContent=value,isError=True),'NOT_FOUND',expected)
+        for key,replacement in (('retryable',True),('details',{}),('code','BACKEND_ERROR')):
+            bad = {**value,key:replacement}
+            with self.subTest(key=key), self.assertRaises(AssertionError):
+                assert_error(CallToolResult(content=[],structuredContent=bad,isError=True),'NOT_FOUND',expected)
+
+    def test_resource_policy_covers_every_step_and_distinguishes_cancel_probe(self):
+        from tests.p06_resource_policy import load_policy
+        for scenario_id, _, _ in p06_contracts.SCENARIO_PURPOSES:
+            scenario, _, _, _ = scenario_runner.load_indexed_scenario(scenario_id)
+            policy = load_policy(scenario)
+            self.assertEqual(set(policy), {row['id'] for row in scenario['steps'] if row['kind']=='tool'})
+            self.assertEqual(sum(row['class']=='admission' for row in policy.values()), 11)
+            self.assertEqual(policy['fixed-cancel-target']['class'], 'bounded')
+            self.assertEqual(policy['fixed-collect-wait']['owner_step_id'], 'fixed-collect-file')
+
+    def test_resource_policy_rejects_changed_cancel_probe_or_missing_step(self):
+        from tests.p06_resource_policy import load_policy
+        scenario, _, _, _ = scenario_runner.load_indexed_scenario('p06-compromise-scope')
+        changed = copy.deepcopy(scenario)
+        next(row for row in changed['steps'] if row['id']=='fixed-cancel-target')['arguments']['Command']='other'
+        with self.assertRaises(ValueError):
+            load_policy(changed)
+        missing = copy.deepcopy(scenario)
+        missing['steps'].pop()
+        with self.assertRaises(ValueError):
+            load_policy(missing)
+
     def test_resource_qualification_prepares_only_an_absolute_download_root(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "nested" / "downloads"
@@ -21,18 +55,63 @@ class P06ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             qualification.prepare_download_root(Path("relative-downloads"))
 
-    def test_generated_contracts_are_exact_and_cover_650_relations(self):
+    def test_generated_contracts_are_exact_and_cover_645_relations(self):
         self.assertEqual(
             p06_contracts.validate_contracts(),
-            {"scenarios": 5, "tools": 130, "relations": 650},
+            {"scenarios": 5, "tools": 129, "relations": 645},
         )
+
+    def test_schema5_stage_contracts_reject_legacy_p06_evidence(self):
+        self.assertEqual(
+            scenario_runner.SNAPSHOT_STAGES,
+            {
+                ('P05_REPAIR_INITIAL', scenario_runner.SNAPSHOT_187),
+                ('P05_REPAIR_CANDIDATE', scenario_runner.SNAPSHOT_188),
+                ('P06_ACTIVE', scenario_runner.SNAPSHOT_188),
+            },
+        )
+        schema = json.loads(scenario_runner.SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(
+            schema["properties"]["required_snapshot"]["enum"],
+            [scenario_runner.SNAPSHOT_187, scenario_runner.SNAPSHOT_188],
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_CANONICAL['P05_REPAIR_INITIAL'],
+            (5, 5, 'PREPARATION_BASELINE', scenario_runner.SNAPSHOT_187),
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_CANONICAL['P05_REPAIR_CANDIDATE'],
+            (5, 5, 'PREPARATION_BASELINE', scenario_runner.SNAPSHOT_187),
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_CANONICAL['P06_ACTIVE'],
+            (5, 6, 'NETWORK_ACTIVE', scenario_runner.SNAPSHOT_188),
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_RECORD_KINDS['P05_REPAIR_INITIAL'],
+            scenario_runner.RESTORE_RECORD_KINDS - {'activation_evidence'},
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_RECORD_KINDS['P05_REPAIR_CANDIDATE'],
+            scenario_runner.RESTORE_RECORD_KINDS - {'activation_evidence'},
+        )
+        self.assertEqual(
+            scenario_runner.RESTORE_STAGE_RECORD_KINDS['P06_ACTIVE'],
+            scenario_runner.RESTORE_RECORD_KINDS,
+        )
+        files, index, _manifest = p06_contracts.build_contracts()
+        self.assertEqual(p06_contracts.SNAPSHOT, scenario_runner.SNAPSHOT_188)
+        self.assertEqual(len(files), 5)
+        for row in index['scenarios']:
+            self.assertEqual(row['snapshot_stage'], 'P06_ACTIVE')
+            self.assertEqual(row['required_snapshot'], scenario_runner.SNAPSHOT_188)
 
     def test_every_tool_has_five_distinct_scenario_roles(self):
         manifest = json.loads(p06_contracts.MANIFEST.read_text(encoding="utf-8"))
         by_tool = {}
         for row in manifest["relations"]:
             by_tool.setdefault(row["tool"], []).append(row)
-        self.assertEqual(len(by_tool), 130)
+        self.assertEqual(len(by_tool), 129)
         for tool, rows in by_tool.items():
             with self.subTest(tool=tool):
                 self.assertEqual(len(rows), 5)

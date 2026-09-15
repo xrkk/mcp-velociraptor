@@ -2,19 +2,19 @@
   "scenarios": [
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
-      "path": "representative/p05-flow-triage.json",
-      "required_snapshot": "Snapshot 1-开启Windows-MCP",
-      "scenario_id": "p05-flow-triage",
-      "sha256": "ce7c74e0d98da98e5b8263f0d8411bcc3a62778b60a10b35d3755792486afe68",
-      "snapshot_stage": "P05_INITIAL"
+      "path": "representative/p05-flow-triage-repair-initial.json",
+      "required_snapshot": "Snapshot 187-固定IP+WindowsMCP开机自启",
+      "scenario_id": "p05-flow-triage-repair-initial",
+      "sha256": "1fe32b71979d54fb04417e27cc5ca94c792004b9fcdb6dff6d7d5457852961cd",
+      "snapshot_stage": "P05_REPAIR_INITIAL"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
-      "path": "representative/p05-flow-triage-network-candidate.json",
-      "required_snapshot": "Snapshot 186-Velociraptor-MCP网络部署基线",
-      "scenario_id": "p05-flow-triage-network-candidate",
-      "sha256": "887084a665d4c2300716601f175f919331ce56d305b11882fb0624336b06168a",
-      "snapshot_stage": "P05_CANDIDATE"
+      "path": "representative/p05-flow-triage-repair-candidate.json",
+      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
+      "scenario_id": "p05-flow-triage-repair-candidate",
+      "sha256": "843551b8b6b4fb6dc48fb4f1fc2808d4105a052a63fd7dddc0a53f7a95a24358",
+      "snapshot_stage": "P05_REPAIR_CANDIDATE"
     }
   ],
   "schema_version": 1

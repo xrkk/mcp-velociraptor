@@ -19,7 +19,7 @@ FIXTURE_SPEC = DATA / "p05_fixture_spec.json"
 INDEX = DATA / "p06_scenario_index.json"
 MANIFEST = DATA / "p06_coverage_manifest.json"
 SCHEMA = SCENARIOS / "schema-v1.json"
-SNAPSHOT = "Snapshot 186-Velociraptor-MCP网络部署基线"
+SNAPSHOT = "Snapshot 188-Velociraptor-MCP可恢复验收基线"
 NO_MATCH = "__mcp_p03_no_match__"
 
 # Each scenario uses a distinct investigation-scoped regex pattern so that the
@@ -253,7 +253,7 @@ def relation(
         "step_ids": step_ids,
         "parameters_sha256": sha256_bytes(canonical_bytes(arguments)),
         "fixture_preconditions": [
-            "Snapshot185 fixture-instance-v1 identity matches the tracked fixture spec",
+            "Snapshot188 fixture-instance-v1 identity matches the tracked fixture spec",
             f"The {topic} investigation starts from the clean snapshot and one unique Windows client",
             "This scenario binds its evidence chain to fixture file "
             + (focus_file if focus_file else "the shared platform baseline"),
@@ -654,7 +654,10 @@ def build_scenario(
 
 
 def build_contracts() -> tuple[dict[str, bytes], dict[str, Any], dict[str, Any]]:
-    invocations = json.loads(INVOCATIONS.read_text(encoding="utf-8"))
+    invocations = [
+        row for row in json.loads(INVOCATIONS.read_text(encoding="utf-8"))
+        if row["artifact"] != "Windows.Network.PacketCapture"
+    ]
     files: dict[str, bytes] = {}
     all_relations: list[dict[str, Any]] = []
     index_rows: list[dict[str, Any]] = []
@@ -674,11 +677,15 @@ def build_contracts() -> tuple[dict[str, bytes], dict[str, Any], dict[str, Any]]
                 "snapshot_stage": "P06_ACTIVE",
             }
         )
-    index = {"schema_version": 1, "scenarios": index_rows}
+    from tests.p06_resource_policy import build_policy, policy_bytes
+    policy = build_policy([json.loads(payload) for payload in files.values()],invocations)
+    index = {"schema_version": 1, "scenarios": index_rows,
+             'resource_policy':{'path':'p06_resource_policy.json',
+                                'sha256':sha256_bytes(policy_bytes(policy))}}
     manifest = {
         "schema_version": 1,
         "scenario_ids": [row[0] for row in SCENARIO_PURPOSES],
-        "tool_count": 130,
+        "tool_count": 129,
         "relations": all_relations,
     }
     return files, index, manifest
@@ -692,17 +699,25 @@ def validate_contracts() -> dict[str, int]:
     actual_manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     if actual_index != expected_index or actual_manifest != expected_manifest:
         raise AssertionError("P06 index or manifest differs from the deterministic reviewed contract")
+    from tests.p06_resource_policy import build_policy, policy_bytes, POLICY
+    policy = build_policy([json.loads(raw) for raw in expected_files.values()],
+                          json.loads(INVOCATIONS.read_bytes()))
+    if POLICY.read_bytes()!=policy_bytes(policy):
+        raise AssertionError('P06 resource policy differs from reviewed step classification')
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-    invocations = json.loads(INVOCATIONS.read_text(encoding="utf-8"))
+    invocations = [row for row in json.loads(INVOCATIONS.read_text(encoding="utf-8"))
+                   if row["artifact"] != "Windows.Network.PacketCapture"]
     fixed = json.loads(FIXED_GOLDEN.read_text(encoding="utf-8"))
     tools = {row["artifact"] for row in invocations} | set(fixed)
-    if len(tools) != 130:
-        raise AssertionError("approved tool union is not 130")
+    # PLAN-CHANGE-014: the registry face stays 130; the executed tool union
+    # is 129 (netsh PacketCapture excluded, FakeNet-NG domain).
+    if len(tools) != 129:
+        raise AssertionError("approved executed tool union is not 129")
     relations = actual_manifest["relations"]
-    if len(relations) != 650:
-        raise AssertionError("coverage manifest must contain exactly 650 relations")
+    if len(relations) != 645:
+        raise AssertionError("coverage manifest must contain exactly 645 relations")
     relation_keys = {(row["scenario_id"], row["tool"]) for row in relations}
-    if len(relation_keys) != 650:
+    if len(relation_keys) != 645:
         raise AssertionError("coverage relations must be unique")
     questions: dict[str, set[str]] = {}
     evidence: dict[str, set[str]] = {}
@@ -764,7 +779,7 @@ def validate_contracts() -> dict[str, int]:
                 raise AssertionError(
                     f"scenario steps differ only cosmetically: {left_id} vs {right_id} ({differing}/{len(left)})"
                 )
-    return {"scenarios": 5, "tools": 130, "relations": 650}
+    return {"scenarios": 5, "tools": 129, "relations": 645}
 
 
 def write_contracts() -> None:
@@ -774,6 +789,9 @@ def write_contracts() -> None:
         (SCENARIOS / relative).write_bytes(payload)
     INDEX.write_bytes(pretty_bytes(index))
     MANIFEST.write_bytes(pretty_bytes(manifest))
+    from tests.p06_resource_policy import build_policy, policy_bytes, POLICY
+    POLICY.write_bytes(policy_bytes(build_policy([json.loads(raw) for raw in files.values()],
+                                               json.loads(INVOCATIONS.read_bytes()))))
 
 
 def main() -> int:

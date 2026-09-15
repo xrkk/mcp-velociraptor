@@ -182,8 +182,8 @@
     },
     "required_snapshot": {
       "enum": [
-        "Snapshot 1-开启Windows-MCP",
-        "Snapshot 186-Velociraptor-MCP网络部署基线"
+        "Snapshot 187-固定IP+WindowsMCP开机自启",
+        "Snapshot 188-Velociraptor-MCP可恢复验收基线"
       ]
     },
     "scenario_id": {
