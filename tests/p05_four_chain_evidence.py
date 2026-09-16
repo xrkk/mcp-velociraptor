@@ -420,7 +420,13 @@ def verify_three_chain_core(
     post_by_pid = {row.get('ProcessId'): row for row in post_rows if type(row.get('ProcessId')) is int}
     protected_pids = {0, 4, target_rows[0].get('ParentProcessId')}
     protected_pids.update(row.get('ProcessId') for row in pre_rows if str(row.get('Name', '')).lower().startswith('velociraptor'))
-    protected_pids.update(ready_facts.get('approved_guest_argv_pids', []))
+    # The kill target is itself an approved-argv process in the ready facts;
+    # ready's own semantics exclude it from the protected set, and the chain
+    # join must apply the same exclusion or every genuine ready join fails.
+    protected_pids.update(
+        pid for pid in ready_facts.get('approved_guest_argv_pids', [])
+        if pid != target_pid
+    )
     protected_pids.update(
         pre_by_pid[pid].get('ParentProcessId') for pid in list(protected_pids)
         if pid in pre_by_pid

@@ -23,6 +23,33 @@ SNAPSHOT_186 = 'Snapshot 186-Velociraptor-MCP网络部署基线'
 SNAPSHOT_187 = 'Snapshot 187-固定IP+WindowsMCP开机自启'
 SNAPSHOT_188 = 'Snapshot 188-Velociraptor-MCP可恢复验收基线'
 MANUAL_ONLY = 'MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION'
+# The one origin the deployed service explicitly allows; the collected
+# entry-gate originals used exactly this value, and verify_entry_gate_raw
+# recomputes the allowed_origin case against it.
+ENTRY_ALLOWED_ORIGIN = 'https://p05-approved-origin.internal'
+# Carried restore/network originals extend the P05 host-command envelope with
+# the restore attempt id so an in-package copy cannot be spliced across
+# attempts (P05 §0.7 self-contained Ref-graph rule).
+RESTORE_ATTEMPT_KEYS = {'restore_attempt_id'}
+RESTORE_HOST_COMMAND_KIND = 'p05-snapshot-command-v1'
+RESTORE_GUEST_IDENTITY_KIND = 'p05-guest-identity-observation-v1'
+RESTORE_OPERATION_IDS = {
+    'snapshot_metadata': 'snapshot-metadata',
+    'revert_operation': 'revert-operation',
+    'pre_start_marker': 'pre-start-marker',
+    'post_restore_hostname': 'post-restore-identity',
+}
+PC006_BOUNDARY_KEYS = {
+    'schema_version', 'kind', 'workflow_id', 'run_id', 'restore_attempt_id',
+    'probe_source_address', 'comparison_port',
+    'bound_source_failure', 'dual_port_control', 'firewall_rule',
+}
+PC006_BOUNDARY_KIND = 'p05-pc006-boundary-v1'
+SCHEMA_IDENTITY_KEYS = {
+    'schema_version', 'kind', 'workflow_id', 'run_id', 'restore_attempt_id',
+    'http_tools_list', 'stdio_tools_list',
+}
+SCHEMA_IDENTITY_KIND = 'p06-schema-identity-v1'
 
 ACTIVATION_KEYS = {
     'schema_version', 'kind', 'workflow_id', 'candidate', 'checkpoint_marker',
@@ -461,16 +488,9 @@ def _verify_phase_restore(
     )
     if expected_snapshot == SNAPSHOT_187 and marker != canonical['active_snapshot']['checkpoint_marker']:
         raise EvidenceError('initial restore marker differs from Snapshot187 preparation canonical')
-    for kind in PHASE_RESTORE_KINDS - {'canonical_readback', 'baseline_adoption'}:
-        raw = by_kind[kind].read_text(encoding='utf-8-sig')
-        if phase['restore_attempt_id'] not in raw:
-            raise EvidenceError(f'phase original record is not attempt-bound: {kind}')
-    if expected_snapshot not in by_kind['snapshot_metadata'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('phase snapshot metadata does not identify the selected snapshot')
-    if marker not in by_kind['pre_start_marker'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('phase pre-start marker differs')
-    if 'DESKTOP-3FI41GR' not in by_kind['post_restore_hostname'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('phase restored hostname differs')
+    _verify_restore_action_originals(
+        phase['restore_attempt_id'], expected_snapshot, marker, by_kind
+    )
     return restore, baseline_identity
 
 
@@ -763,6 +783,179 @@ def _verify_phase_execution(
         raise EvidenceError('phase report contains an excess or out-of-order call')
 
 
+def _normalized_tools_bytes(listing: dict[str, Any]) -> bytes:
+    """Normalize a raw tools/list result with the one frozen algorithm.
+
+    Both the HTTP and the stdio schema-identity originals must normalize with
+    this exact projection (name/inputSchema/outputSchema, name-sorted, sorted
+    compact JSON plus trailing newline) before their bytes may be compared.
+    """
+    if not isinstance(listing.get('tools'), list):
+        raise EvidenceError('tools/list does not contain tools')
+    normalized = []
+    for tool in listing['tools']:
+        if not isinstance(tool, dict) or not isinstance(tool.get('name'), str) or 'inputSchema' not in tool:
+            raise EvidenceError('tools/list lacks name or inputSchema')
+        normalized.append({
+            'name': tool['name'],
+            'inputSchema': tool['inputSchema'],
+            'outputSchema': tool.get('outputSchema'),
+        })
+    normalized.sort(key=lambda item: item['name'])
+    if len(normalized) != 130 or len({item['name'] for item in normalized}) != 130:
+        raise EvidenceError('tools/list does not contain 130 unique tools')
+    return (
+        json.dumps(normalized, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        + '\n'
+    ).encode('utf-8')
+
+
+def _verify_restore_action_originals(
+    restore_attempt_id: str,
+    snapshot_name: str,
+    marker: str,
+    paths: dict[str, Path],
+) -> None:
+    """Parse the four restore action originals as real command transcripts.
+
+    Each carried original must be the actual command envelope (argv or control
+    script, UTC bracket, exit status, complete stdout/stderr with hashes)
+    bound to this restore attempt, and the four commands must form one
+    chronologically ordered attempt whose parsed facts — snapshot list,
+    revertToSnapshot argv, vmx checkpoint marker, guest identity — equal the
+    declared restore.  Text that merely contains the expected strings, or a
+    ``p05-restore-record-summary-v1`` without the carried envelope, is
+    rejected (CHK-034).
+    """
+    from tests import p05_snapshot_raw
+
+    def stream_identity(document: dict[str, Any], label: str) -> tuple[str, str]:
+        response = document.get('response')
+        response_keys = {
+            'stdout', 'stdout_size', 'stdout_sha256',
+            'stderr', 'stderr_size', 'stderr_sha256',
+        }
+        if not isinstance(response, dict) or set(response) != response_keys:
+            raise EvidenceError(f'{label} does not retain complete stdout/stderr')
+        for stream in ('stdout', 'stderr'):
+            text = response[stream]
+            if not isinstance(text, str):
+                raise EvidenceError(f'{label} {stream} is not text')
+            raw = text.encode('utf-8')
+            if (
+                type(response[f'{stream}_size']) is not int
+                or response[f'{stream}_size'] != len(raw)
+                or response[f'{stream}_sha256'] != hashlib.sha256(raw).hexdigest()
+            ):
+                raise EvidenceError(f'{label} {stream} bytes differ from their identity')
+        return response['stdout'], response['stderr']
+
+    records: dict[str, tuple[dict[str, Any], str]] = {}
+    vmx_values: set[str] = set()
+    for kind in ('snapshot_metadata', 'revert_operation', 'pre_start_marker', 'post_restore_hostname'):
+        path = paths[kind]
+        document = _read_json(path, f'restore original {kind}')
+        shared_keys = {
+            'schema_version', 'kind', 'workflow_id', 'operation_id',
+            'observation', 'request', 'started_at', 'ended_at', 'exit_status',
+            'response', 'vmx',
+        }
+        if document.get('kind') == RESTORE_GUEST_IDENTITY_KIND:
+            shared_keys = shared_keys | {'endpoint', 'transport'}
+        if set(document) != shared_keys | RESTORE_ATTEMPT_KEYS:
+            raise EvidenceError(f'{kind} is not an attempt-bound raw command original')
+        if (
+            document.get('schema_version') != 1
+            or document.get('workflow_id') != WORKFLOW_ID
+            or document.get('restore_attempt_id') != restore_attempt_id
+            or document.get('operation_id') != RESTORE_OPERATION_IDS[kind]
+            or not _nonempty_string(document.get('observation'), f'{kind}.observation')
+        ):
+            raise EvidenceError(f'{kind} original identity or operation differs')
+        request = document.get('request')
+        if document.get('kind') == RESTORE_HOST_COMMAND_KIND:
+            if (
+                not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
+                or not isinstance(request['argv'], list) or not request['argv']
+                or any(not isinstance(item, str) or not item for item in request['argv'])
+                or not _nonempty_string(request['command_line'], f'{kind}.command_line')
+            ):
+                raise EvidenceError(f'{kind} original request is not a complete command')
+        elif document.get('kind') == RESTORE_GUEST_IDENTITY_KIND:
+            if (
+                not isinstance(request, dict)
+                or set(request) != {'script', 'script_sha256', 'tool'}
+                or not _nonempty_string(request['script'], f'{kind}.script')
+                or not _sha256_is_valid(request.get('script_sha256'))
+                or request['script_sha256'] != hashlib.sha256(request['script'].encode('utf-8')).hexdigest()
+                or not _nonempty_string(request['tool'], f'{kind}.tool')
+            ):
+                raise EvidenceError(f'{kind} original control request is not a complete script transcript')
+            endpoint = document.get('endpoint')
+            if (
+                not isinstance(endpoint, str) or not endpoint.startswith('http://192.168.204.232:')
+                or not _nonempty_string(document.get('transport'), f'{kind}.transport')
+            ):
+                raise EvidenceError(f'{kind} original is not a control-plane guest observation')
+        else:
+            raise EvidenceError(f'{kind} original is not a recognized raw command kind')
+        try:
+            vmx = str(p05_snapshot_raw.host_vmx(document.get('vmx')))
+        except p05_snapshot_raw.SnapshotRawError as exc:
+            raise EvidenceError(f'{kind} original vmx identity is invalid') from exc
+        vmx_values.add(vmx)
+        started = _parse_utc(document.get('started_at'), f'{kind}.started_at')
+        ended = _parse_utc(document.get('ended_at'), f'{kind}.ended_at')
+        if ended < started:
+            raise EvidenceError(f'{kind} command ends before it starts')
+        exit_status = document.get('exit_status')
+        if (
+            not isinstance(exit_status, dict) or set(exit_status) != {'code'}
+            or type(exit_status['code']) is not int or exit_status['code'] != 0
+        ):
+            raise EvidenceError(f'{kind} command did not exit successfully')
+        stdout, _ = stream_identity(document, f'restore original {kind}')
+        records[kind] = (document, stdout)
+    if len(vmx_values) != 1:
+        raise EvidenceError('restore originals do not share one host VMX identity')
+    snapshot_metadata, metadata_stdout = records['snapshot_metadata']
+    revert_operation, _ = records['revert_operation']
+    pre_start_marker, marker_stdout = records['pre_start_marker']
+    post_restore_hostname, hostname_stdout = records['post_restore_hostname']
+    try:
+        names = p05_snapshot_raw.snapshot_names(metadata_stdout)
+    except p05_snapshot_raw.SnapshotRawError as exc:
+        raise EvidenceError('snapshot metadata original is not the actual vmrun snapshot tree') from exc
+    if snapshot_name not in names:
+        raise EvidenceError('snapshot metadata original does not list the selected snapshot')
+    argv = revert_operation['request']['argv']
+    if (
+        len(argv) < 5 or 'revertToSnapshot' not in argv
+        or argv[-1] != snapshot_name or argv[-2] != next(iter(vmx_values))
+    ):
+        raise EvidenceError('revert original is not the actual revertToSnapshot command for the selected snapshot')
+    try:
+        fields = p05_snapshot_raw.vmsd_fields(marker_stdout)
+    except p05_snapshot_raw.SnapshotRawError as exc:
+        raise EvidenceError('pre-start marker original is not the actual vmx/vmsd readback') from exc
+    if fields.get('checkpoint.vmState') != marker:
+        raise EvidenceError('pre-start marker original does not parse to the declared checkpoint marker')
+    try:
+        p05_snapshot_raw.guest_adapter(hostname_stdout)
+    except p05_snapshot_raw.SnapshotRawError as exc:
+        raise EvidenceError('post-restore hostname original is not the actual guest identity readback') from exc
+    order = (
+        _parse_utc(snapshot_metadata['ended_at'], 'snapshot metadata end'),
+        _parse_utc(revert_operation['started_at'], 'revert start'),
+        _parse_utc(revert_operation['ended_at'], 'revert end'),
+        _parse_utc(pre_start_marker['started_at'], 'pre-start start'),
+        _parse_utc(pre_start_marker['ended_at'], 'pre-start end'),
+        _parse_utc(post_restore_hostname['started_at'], 'hostname start'),
+    )
+    if not (order[0] <= order[1] <= order[2] <= order[3] <= order[4] <= order[5]):
+        raise EvidenceError('restore originals are not one chronologically ordered attempt')
+
+
 def _verify_phase(
     bundle_root: Path,
     phase: Any,
@@ -825,26 +1018,11 @@ def _verify_phase(
     tools_list = plain_file(bundle_root, f'{report_parent}/tools-list.json')
     tools_schema = plain_file(bundle_root, f'{report_parent}/tools-schema.json')
     listing = _read_json(tools_list, 'phase tools/list')
-    if not isinstance(listing.get('tools'), list):
-        raise EvidenceError('phase tools/list does not contain tools')
-    normalized_tools = []
-    for tool in listing['tools']:
-        if not isinstance(tool, dict) or not isinstance(tool.get('name'), str) or 'inputSchema' not in tool:
-            raise EvidenceError('phase tools/list lacks name or inputSchema')
-        normalized_tools.append({
-            'name': tool['name'],
-            'inputSchema': tool['inputSchema'],
-            'outputSchema': tool.get('outputSchema'),
-        })
-    normalized_tools.sort(key=lambda item: item['name'])
-    if len(normalized_tools) != 130 or len({item['name'] for item in normalized_tools}) != 130:
-        raise EvidenceError('phase tools/list does not contain 130 unique tools')
-    if not {step['tool'] for step in scenario['steps']}.issubset({item['name'] for item in normalized_tools}):
+    normalized_bytes = _normalized_tools_bytes(listing)
+    if not {step['tool'] for step in scenario['steps']}.issubset(
+        {tool['name'] for tool in listing['tools']}
+    ):
         raise EvidenceError('phase tools/list omits a tool required by the frozen P05 scenario')
-    normalized_bytes = (
-        json.dumps(normalized_tools, ensure_ascii=False, sort_keys=True, separators=(',', ':'), allow_nan=False)
-        + '\n'
-    ).encode('utf-8')
     if tools_schema.read_bytes() != normalized_bytes or digest(tools_schema) != report.get('tools_schema_sha256'):
         raise EvidenceError('phase tools/list, tools-schema, and report hash do not agree')
     snapshot_evidence = _read_json(refs['snapshot_evidence'], 'phase snapshot evidence')
@@ -901,7 +1079,15 @@ def _verify_ready(
     bundle_root: Path,
     phase: dict[str, Any],
     seen: dict[str, tuple[int, str]],
+    expected_restore: dict[str, Any] | None = None,
 ) -> None:
+    """Join the ready wrapper to its phase restore identity and raw transcripts.
+
+    Byte-correct Refs alone prove nothing (CHK-028): the twelve observation
+    originals are re-parsed by the P05 ready collector parser, joined to the
+    phase report, and the wrapper's stage/snapshot/marker must equal the
+    already verified phase restore.
+    """
     document = _read_json(_resolve_ref(bundle_root, phase['ready'], 'phase.ready', seen), 'ready')
     expected = {
         'schema_version', 'workflow_id', 'run_id', 'restore_attempt_id',
@@ -924,6 +1110,21 @@ def _verify_ready(
         raise EvidenceError('ready shape or phase identity is invalid')
     for name, reference in document['observations'].items():
         _resolve_ref(bundle_root, reference, f'ready.observations.{name}', seen)
+    if expected_restore is not None:
+        for field in ('snapshot_stage', 'snapshot_name', 'checkpoint_marker'):
+            if document.get(field) != expected_restore.get(field):
+                raise EvidenceError(f'ready {field} differs from the verified phase restore')
+    report_reference = phase.get('report')
+    if not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS:
+        raise EvidenceError('ready verification requires the phase report Ref join')
+    report = _read_json(
+        _resolve_ref(bundle_root, report_reference, 'phase.report', seen), 'ready report join'
+    )
+    from tests.p05_ready_evidence import ReadyEvidenceError, verify_ready_raw_evidence
+    try:
+        verify_ready_raw_evidence(document, bundle_root=bundle_root, report=report)
+    except ReadyEvidenceError as exc:
+        raise EvidenceError(f'ready raw evidence is invalid: {exc}') from exc
 
 
 def _verify_creation_binding(
@@ -972,6 +1173,15 @@ def _verify_dependency_acceptance(
     phase: dict[str, Any],
     seen: dict[str, tuple[int, str]],
 ) -> None:
+    """Recompute the dependency predicates from the carried originals.
+
+    ``inventory_artifacts`` must be the actual dependencies transcript and
+    re-verify the locked manifest rows; ``four_chains`` must parse as the
+    complete three-chain record joined to this phase's ready/report; the
+    carried ``network_observations`` window is parsed fail-closed with the
+    PC014-adjusted window parser (complete window proof stays optional
+    supporting evidence, but a malformed or lossy original is rejected).
+    """
     document = _read_json(
         _resolve_ref(bundle_root, phase['dependency_acceptance'], 'phase.dependency_acceptance', seen),
         'dependency acceptance',
@@ -988,8 +1198,58 @@ def _verify_dependency_acceptance(
         or document.get('restore_attempt_id') != phase['restore_attempt_id']
     ):
         raise EvidenceError('dependency acceptance shape or phase identity is invalid')
-    for key in ('inventory_artifacts', 'four_chains', 'network_observations'):
-        _resolve_ref(bundle_root, document[key], f'dependency_acceptance.{key}', seen)
+    report_reference = phase.get('report')
+    ready_reference = phase.get('ready')
+    if (
+        not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS
+        or not isinstance(ready_reference, dict) or set(ready_reference) != REF_KEYS
+    ):
+        raise EvidenceError('dependency verification requires the phase ready and report Ref joins')
+    report = _read_json(
+        _resolve_ref(bundle_root, report_reference, 'phase.report', seen),
+        'dependency report join',
+    )
+    inventory_path = _resolve_ref(
+        bundle_root, document['inventory_artifacts'],
+        'dependency_acceptance.inventory_artifacts', seen,
+    )
+    from tests.p05_ready_evidence import (
+        ReadyEvidenceError, _load_transcript, _verify_dependencies,
+    )
+    try:
+        transcript = _load_transcript(
+            inventory_path, 'dependencies', document, 'guest',
+        )
+        _verify_dependencies(transcript, bundle_root)
+    except ReadyEvidenceError as exc:
+        raise EvidenceError(f'dependency inventory originals are invalid: {exc}') from exc
+    from tests.p05_four_chain_evidence import FourChainEvidenceError, verify_three_chain_core
+    try:
+        verify_three_chain_core(bundle_root, document['four_chains'], ready_reference, report)
+    except FourChainEvidenceError as exc:
+        raise EvidenceError(f'four-chain originals are invalid: {exc}') from exc
+    chain = _read_json(
+        _resolve_ref(bundle_root, document['four_chains'], 'dependency_acceptance.four_chains', seen),
+        'dependency four chains',
+    )
+    window_path = _resolve_ref(
+        bundle_root, document['network_observations'],
+        'dependency_acceptance.network_observations', seen,
+    )
+    try:
+        window_text = window_path.read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeError) as exc:
+        raise EvidenceError('network window original is not readable UTF-8 text') from exc
+    from tests.p05_network_window import NetworkWindowError, parse_events, verify_window
+    try:
+        verify_window(
+            parse_events(window_text),
+            header_text=window_text,
+            window_started_at=chain['started_at'],
+            window_ended_at=chain['ended_at'],
+        )
+    except NetworkWindowError as exc:
+        raise EvidenceError(f'network window original is invalid: {exc}') from exc
 
 
 def _verify_entry_gate(
@@ -997,6 +1257,12 @@ def _verify_entry_gate(
     phase: dict[str, Any],
     seen: dict[str, tuple[int, str]],
 ) -> None:
+    """Recompute the seven HTTP entry predicates from the raw case originals.
+
+    A byte-correct Ref to a ``p05-entry-gate-case-v1`` file is still rejected
+    unless the recorded status, handler-counter delta, and initialize result
+    prove each case's actual outcome (CHK-028).
+    """
     document = _read_json(
         _resolve_ref(bundle_root, phase['entry_gate'], 'phase.entry_gate', seen),
         'entry gate',
@@ -1017,6 +1283,220 @@ def _verify_entry_gate(
         raise EvidenceError('entry gate shape or phase identity is invalid')
     for name, reference in document['cases'].items():
         _resolve_ref(bundle_root, reference, f'entry_gate.cases.{name}', seen)
+    from tests.p05_http_evidence import (
+        EXPECTED_ENDPOINT, EntryGateEvidenceError, verify_entry_gate_raw,
+    )
+    try:
+        verify_entry_gate_raw(
+            document,
+            bundle_root=bundle_root,
+            run_id=phase['run_id'],
+            restore_attempt_id=phase['restore_attempt_id'],
+            endpoint=EXPECTED_ENDPOINT,
+            allowed_origin=ENTRY_ALLOWED_ORIGIN,
+        )
+    except EntryGateEvidenceError as exc:
+        raise EvidenceError(f'entry-gate originals are invalid: {exc}') from exc
+
+
+def _network_element_original(
+    bundle_root: Path,
+    reference: Any,
+    label: str,
+    seen: dict[str, tuple[int, str]],
+    *,
+    expect_success: bool,
+) -> dict[str, Any]:
+    """Validate one PC006 element as a real command transcript envelope."""
+    path = _resolve_ref(bundle_root, reference, label, seen)
+    document = _read_json(path, label)
+    shared_keys = {
+        'schema_version', 'kind', 'workflow_id', 'operation_id', 'observation',
+        'request', 'started_at', 'ended_at', 'exit_status', 'response', 'vmx',
+    }
+    kind = document.get('kind')
+    if kind == RESTORE_GUEST_IDENTITY_KIND:
+        shared_keys = shared_keys | {'endpoint', 'transport'}
+    if kind not in {RESTORE_HOST_COMMAND_KIND, RESTORE_GUEST_IDENTITY_KIND}:
+        raise EvidenceError(f'{label} is not a raw command original')
+    if (
+        set(document) != shared_keys
+        or document.get('schema_version') != 1
+        or document.get('workflow_id') != WORKFLOW_ID
+        or not _nonempty_string(document.get('operation_id'), f'{label}.operation_id')
+        or not _nonempty_string(document.get('observation'), f'{label}.observation')
+    ):
+        raise EvidenceError(f'{label} envelope shape or identity is invalid')
+    request = document.get('request')
+    request_text = ''
+    if kind == RESTORE_HOST_COMMAND_KIND:
+        if (
+            not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
+            or not isinstance(request['argv'], list) or not request['argv']
+            or any(not isinstance(item, str) or not item for item in request['argv'])
+            or not _nonempty_string(request['command_line'], f'{label}.command_line')
+        ):
+            raise EvidenceError(f'{label} request is not a complete command')
+        request_text = ' '.join(request['argv'])
+    else:
+        if (
+            not isinstance(request, dict) or set(request) != {'script', 'script_sha256', 'tool'}
+            or not _nonempty_string(request['script'], f'{label}.script')
+            or not _sha256_is_valid(request.get('script_sha256'))
+            or request['script_sha256'] != hashlib.sha256(request['script'].encode('utf-8')).hexdigest()
+            or not _nonempty_string(request['tool'], f'{label}.tool')
+        ):
+            raise EvidenceError(f'{label} control request is not a complete script transcript')
+        request_text = request['script']
+    started = _parse_utc(document.get('started_at'), f'{label}.started_at')
+    ended = _parse_utc(document.get('ended_at'), f'{label}.ended_at')
+    if ended < started:
+        raise EvidenceError(f'{label} command ends before it starts')
+    exit_status = document.get('exit_status')
+    if not isinstance(exit_status, dict) or set(exit_status) != {'code'} or type(exit_status['code']) is not int:
+        raise EvidenceError(f'{label} lacks an actual command exit code')
+    if expect_success and exit_status['code'] != 0:
+        raise EvidenceError(f'{label} command did not exit successfully')
+    if not expect_success and exit_status['code'] == 0:
+        raise EvidenceError(f'{label} probe unexpectedly succeeded; it proves no boundary')
+    response = document.get('response')
+    response_keys = {
+        'stdout', 'stdout_size', 'stdout_sha256',
+        'stderr', 'stderr_size', 'stderr_sha256',
+    }
+    if not isinstance(response, dict) or set(response) != response_keys:
+        raise EvidenceError(f'{label} does not retain complete stdout/stderr')
+    for stream in ('stdout', 'stderr'):
+        text = response[stream]
+        if not isinstance(text, str):
+            raise EvidenceError(f'{label} {stream} is not text')
+        raw = text.encode('utf-8')
+        if (
+            type(response[f'{stream}_size']) is not int
+            or response[f'{stream}_size'] != len(raw)
+            or response[f'{stream}_sha256'] != hashlib.sha256(raw).hexdigest()
+        ):
+            raise EvidenceError(f'{label} {stream} bytes differ from their identity')
+    return {**document, 'request_text': request_text}
+
+
+def _verify_pc006_boundary(
+    bundle_root: Path,
+    phase: dict[str, Any],
+    reference: Any,
+    seen: dict[str, tuple[int, str]],
+) -> None:
+    """Verify the PC006 three-element originals (PLAN-CHANGE-006 closure).
+
+    A verdict summary such as the retained ``p05-pc006-boundary-v1`` string
+    blob is rejected: the document must carry the same-round originals of the
+    bound-source failure, the dual-port comparison, and the unique exact
+    firewall rule.
+    """
+    import ipaddress
+
+    from tests.p05_ready_evidence import GUEST_FIXED_ADDRESS, HOST_FIXED_ADDRESS, SERVICE_PORT
+
+    path = _resolve_ref(bundle_root, reference, 'network_evidence.non_allowed_source', seen)
+    document = _read_json(path, 'non-allowed source boundary')
+    if (
+        set(document) != PC006_BOUNDARY_KEYS
+        or document.get('schema_version') != 1
+        or document.get('kind') != PC006_BOUNDARY_KIND
+        or document.get('workflow_id') != WORKFLOW_ID
+        or document.get('run_id') != phase['run_id']
+        or document.get('restore_attempt_id') != phase['restore_attempt_id']
+    ):
+        raise EvidenceError('PC006 boundary document shape or phase identity is invalid')
+    source = document.get('probe_source_address')
+    try:
+        parsed_source = ipaddress.ip_address(source)
+    except ValueError as exc:
+        raise EvidenceError('PC006 bound source address is not an IP address') from exc
+    if (
+        parsed_source.version != 4
+        or str(parsed_source) in {GUEST_FIXED_ADDRESS, HOST_FIXED_ADDRESS}
+    ):
+        raise EvidenceError('PC006 bound source address is not a non-allowed source')
+    comparison_port = document.get('comparison_port')
+    if (
+        type(comparison_port) is not int or isinstance(comparison_port, bool)
+        or not 1 <= comparison_port <= 65535 or comparison_port == SERVICE_PORT
+    ):
+        raise EvidenceError('PC006 comparison port is invalid')
+    bound = _network_element_original(
+        bundle_root, document['bound_source_failure'], 'PC006 bound source probe', seen,
+        expect_success=False,
+    )
+    if f'{GUEST_FIXED_ADDRESS}:{SERVICE_PORT}' not in bound['request_text']:
+        raise EvidenceError('PC006 bound source probe does not target the formal entry')
+    dual = _network_element_original(
+        bundle_root, document['dual_port_control'], 'PC006 dual port control', seen,
+        expect_success=False,
+    )
+    if str(SERVICE_PORT) not in dual['request_text'] or str(comparison_port) not in dual['request_text']:
+        raise EvidenceError('PC006 dual port control does not compare both ports from the bound source')
+    rule_element = _network_element_original(
+        bundle_root, document['firewall_rule'], 'PC006 firewall rule verify', seen,
+        expect_success=True,
+    )
+    try:
+        rule_document = json.loads(rule_element['response']['stdout'])
+    except json.JSONDecodeError as exc:
+        raise EvidenceError('PC006 firewall rule stdout is not the raw rule JSON') from exc
+    rules = rule_document.get('rules') if isinstance(rule_document, dict) else None
+    if not isinstance(rules, list) or len(rules) != 1 or not isinstance(rules[0], dict):
+        raise EvidenceError('PC006 firewall rule original is not the unique rule readback')
+    rule = rules[0]
+    if (
+        set(rule) != {
+            'name', 'display_name', 'direction', 'action', 'enabled',
+            'protocol', 'local_port', 'local_address', 'remote_address',
+        }
+        or rule['name'] != rule['display_name'] != f'mcp-velociraptor-{SERVICE_PORT}'
+        or rule['direction'] != 'Inbound'
+        or rule['action'] != 'Allow'
+        or rule['enabled'] is not True
+        or rule['protocol'] not in {'TCP', '6'}
+        or rule['local_port'] != SERVICE_PORT
+        or rule['local_address'] != GUEST_FIXED_ADDRESS
+        or rule['remote_address'] != HOST_FIXED_ADDRESS
+    ):
+        raise EvidenceError('PC006 firewall rule is not the unique exact 28790 host-only rule')
+
+
+def _verify_schema_identity_originals(
+    bundle_root: Path,
+    phase: dict[str, Any],
+    reference: Any,
+    seen: dict[str, tuple[int, str]],
+) -> None:
+    """Require both HTTP and stdio tools/list originals and equal schemas.
+
+    A single ``tools-schema.json`` digest cannot prove dual-adapter identity
+    (CHK-028); both raw listings are normalized with the one frozen algorithm
+    and their normalized bytes must be equal.
+    """
+    path = _resolve_ref(bundle_root, reference, 'network_evidence.schema_identity', seen)
+    document = _read_json(path, 'schema identity')
+    if (
+        set(document) != SCHEMA_IDENTITY_KEYS
+        or document.get('schema_version') != 1
+        or document.get('kind') != SCHEMA_IDENTITY_KIND
+        or document.get('workflow_id') != WORKFLOW_ID
+        or document.get('run_id') != phase['run_id']
+        or document.get('restore_attempt_id') != phase['restore_attempt_id']
+    ):
+        raise EvidenceError('schema identity document shape or phase identity is invalid')
+    normalized: list[bytes] = []
+    for transport, key in (('http', 'http_tools_list'), ('stdio', 'stdio_tools_list')):
+        original_path = _resolve_ref(
+            bundle_root, document[key], f'network_evidence.schema_identity.{key}', seen,
+        )
+        listing = _read_json(original_path, f'{transport} tools/list original')
+        normalized.append(_normalized_tools_bytes(listing))
+    if normalized[0] != normalized[1]:
+        raise EvidenceError('HTTP and stdio tools/list originals do not normalize to the same schema')
 
 
 def _verify_network_evidence(
@@ -1024,6 +1504,7 @@ def _verify_network_evidence(
     phase: dict[str, Any],
     seen: dict[str, tuple[int, str]],
 ) -> None:
+    """Recompute the three network predicates from carried originals."""
     document = _read_json(
         _resolve_ref(bundle_root, phase['network_evidence'], 'phase.network_evidence', seen),
         'network evidence',
@@ -1040,8 +1521,27 @@ def _verify_network_evidence(
         or document.get('restore_attempt_id') != phase['restore_attempt_id']
     ):
         raise EvidenceError('network evidence shape or phase identity is invalid')
-    for key in ('non_allowed_source', 'schema_identity', 'service_observation'):
-        _resolve_ref(bundle_root, document[key], f'network_evidence.{key}', seen)
+    _verify_pc006_boundary(bundle_root, phase, document['non_allowed_source'], seen)
+    _verify_schema_identity_originals(bundle_root, phase, document['schema_identity'], seen)
+    observation_path = _resolve_ref(
+        bundle_root, document['service_observation'],
+        'network_evidence.service_observation', seen,
+    )
+    observation = _read_json(observation_path, 'network service observation')
+    report_reference = phase.get('report')
+    if not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS:
+        raise EvidenceError('network service observation requires the phase report Ref join')
+    report = _read_json(
+        _resolve_ref(bundle_root, report_reference, 'phase.report', seen),
+        'network service report join',
+    )
+    if any(
+        observation.get(key) != value
+        for key, value in report['server_identity'].items()
+    ):
+        raise EvidenceError('network service observation does not join the report identity')
+    if not observation.get('observed_at'):
+        raise EvidenceError('network service observation lacks collection time')
 
 
 def _verify_package_manifest(
@@ -1160,6 +1660,7 @@ def verify_activation_bundle(
         raise EvidenceError('activation requires exactly two candidate cycles')
     attempt_ids: set[str] = set()
     run_ids: set[str] = set()
+    cycle_restores: list[dict[str, Any]] = []
     for cycle in cycles:
         restore, cycle_baseline = _verify_phase(
             bundle_root,
@@ -1178,6 +1679,7 @@ def verify_activation_bundle(
             raise EvidenceError('candidate cycles reuse restore_attempt_id or run_id')
         attempt_ids.add(cycle['restore_attempt_id'])
         run_ids.add(cycle['run_id'])
+        cycle_restores.append(restore)
     if document['initial']['restore_attempt_id'] in attempt_ids or document['initial']['run_id'] in run_ids:
         raise EvidenceError('initial phase reuses a candidate identity')
     if forbidden_identity is not None:
@@ -1188,8 +1690,10 @@ def verify_activation_bundle(
             or forbidden_identity[1] in run_ids | {document['initial']['run_id']}
         ):
             raise EvidenceError('P06 restore identity is reused by an activation phase')
-    for phase in [document['initial'], *cycles]:
-        _verify_ready(bundle_root, phase, seen)
+    for phase, phase_restore in zip(
+        [document['initial'], *cycles], [initial_restore, *cycle_restores], strict=True
+    ):
+        _verify_ready(bundle_root, phase, seen, expected_restore=phase_restore)
         _verify_dependency_acceptance(bundle_root, phase, seen)
         _verify_entry_gate(bundle_root, phase, seen)
         _verify_network_evidence(bundle_root, phase, seen)
@@ -1263,20 +1767,19 @@ def _verify_restore_raw_records(
     restore: dict[str, Any],
     paths: dict[str, Path],
 ) -> None:
+    """Parse the four P06 restore originals as actual command transcripts.
+
+    Substring presence proves nothing (CHK-034): an original that merely
+    contains the attempt/snapshot/marker/hostname strings — or explicitly says
+    NOT EXECUTED — is rejected unless it is the attempt-bound envelope whose
+    parsed facts equal the declared restore.
+    """
     attempt = _nonempty_string(restore.get('restore_attempt_id'), 'restore attempt id')
-    for kind in {'snapshot_metadata', 'revert_operation', 'pre_start_marker', 'post_restore_hostname'}:
-        try:
-            raw = paths[kind].read_text(encoding='utf-8-sig')
-        except (OSError, UnicodeError) as exc:
-            raise EvidenceError(f'original restore record is not readable: {kind}') from exc
-        if attempt not in raw:
-            raise EvidenceError(f'original record is not bound to this restore attempt: {kind}')
-    if restore['snapshot_name'] not in paths['snapshot_metadata'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('snapshot metadata does not identify the selected snapshot')
-    if restore['checkpoint_marker'] not in paths['pre_start_marker'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('original pre-start marker differs')
-    if 'DESKTOP-3FI41GR' not in paths['post_restore_hostname'].read_text(encoding='utf-8-sig'):
-        raise EvidenceError('original restored hostname differs')
+    _nonempty_string(restore.get('snapshot_name'), 'restore snapshot name')
+    _valid_marker(restore.get('checkpoint_marker'), 'formal restore marker')
+    _verify_restore_action_originals(
+        attempt, restore['snapshot_name'], restore['checkpoint_marker'], paths
+    )
 
 
 def verify_restore(restore: dict, root: Path) -> dict[str, Path]:

@@ -198,6 +198,20 @@ class ThreeChainEvidenceTests(unittest.TestCase):
         self.assertEqual(derived['flow_ids'][-1], 'F-kill')
         self.assertEqual(derived['fixture_pid'], 300)
 
+    def test_kill_join_accepts_ready_facts_that_include_the_kill_target(self):
+        # A genuine ready join returns the fixture target PID inside
+        # approved_guest_argv_pids; the chain must still treat it as the kill
+        # target, not as a protected process (CHK-028 join correction).
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = ThreeChainFixture(Path(directory))
+            facts = dict(self.READY_FACTS)
+            facts['approved_guest_argv_pids'] = sorted(
+                [*facts['approved_guest_argv_pids'], facts['fixture_pid']]
+            )
+            with patch.object(three, 'verify_ready_raw_evidence', return_value=facts):
+                derived = self._verify(fixture)
+        self.assertEqual(derived['fixture_pid'], 300)
+
     def test_rejects_sdk_result_substitution_process_absence_and_missing_raw_observation(self):
         mutations = {
             'sdk_result': lambda fixture: fixture.sdk[-1]['message'].update({'result': {'isError': True}}),

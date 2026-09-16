@@ -1,8 +1,8 @@
 """Synthetic fail-closed contracts for the schema5 P06 evidence join.
 
-These are byte-only fixtures.  They model an in-package copy and deliberately
-mock the P05 raw-transcript terminal gate: a green result here never asserts a
-Windows restore or activation passed.
+The restore fixtures are attempt-bound raw command envelopes (synthetic/seam:
+they model the carried-original format and never claim a Windows restore ran).
+A green result here never asserts a Windows restore or activation passed.
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ except ImportError:
     import p06_evidence as evidence
 
 
+RESTORE_VMX = '/synthetic/Win10MalBox-Velo.vmx'
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -30,6 +33,104 @@ def _write_json(path: Path, value: object) -> None:
     path.write_bytes(
         (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n').encode('utf-8')
     )
+
+
+def restore_action_envelopes(
+    root: Path,
+    attempt: str,
+    snapshot_name: str,
+    marker: str,
+    *,
+    started_minute: int = 0,
+) -> dict[str, Path]:
+    """Write the four synthetic attempt-bound restore command originals."""
+    def envelope(kind: str, operation: str, observation: str, request: dict, stdout: str, second: int) -> Path:
+        encoded = stdout.encode('utf-8')
+        document = {
+            'schema_version': 1,
+            'kind': evidence.RESTORE_HOST_COMMAND_KIND,
+            'workflow_id': evidence.WORKFLOW_ID,
+            'operation_id': operation,
+            'observation': observation,
+            'vmx': RESTORE_VMX,
+            'restore_attempt_id': attempt,
+            'request': request,
+            'started_at': f'2026-09-14T00:{started_minute:02d}:{second:02d}Z',
+            'ended_at': f'2026-09-14T00:{started_minute:02d}:{second + 1:02d}Z',
+            'exit_status': {'code': 0},
+            'response': {
+                'stdout': stdout,
+                'stdout_size': len(encoded),
+                'stdout_sha256': hashlib.sha256(encoded).hexdigest(),
+                'stderr': '',
+                'stderr_size': 0,
+                'stderr_sha256': hashlib.sha256(b'').hexdigest(),
+            },
+        }
+        path = root / 'raw' / f'{kind}.json'
+        _write_json(path, document)
+        return path
+
+    argv = lambda items: {'argv': items, 'command_line': ' '.join(items)}  # noqa: E731
+    paths = {
+        'snapshot_metadata': envelope(
+            'snapshot_metadata', 'snapshot-metadata', 'snapshot-tree-readonly',
+            argv(['/usr/bin/vmrun', '-T', 'ws', 'listSnapshots', RESTORE_VMX]),
+            f'Total snapshots: 1\n{snapshot_name}\n', 0,
+        ),
+        'revert_operation': envelope(
+            'revert_operation', 'revert-operation', 'single-revert',
+            argv(['/usr/bin/vmrun', '-T', 'ws', 'revertToSnapshot', RESTORE_VMX, snapshot_name]),
+            '', 2,
+        ),
+        'pre_start_marker': envelope(
+            'pre_start_marker', 'pre-start-marker', 'vmx-checkpoint-marker-before-start',
+            argv(['/bin/grep', '^checkpoint.vmState', RESTORE_VMX]),
+            f'checkpoint.vmState = "{marker}"\n', 4,
+        ),
+    }
+    script = 'Get-CimInstance Win32_NetworkAdapterConfiguration | ConvertTo-Json'
+    script_encoded = script.encode('utf-8')
+    stdout = json.dumps({
+        'computer_name': 'DESKTOP-3FI41GR',
+        'adapters': [{
+            'MACAddress': '00:0C:29:83:B8:65',
+            'IPAddress': ['192.168.204.232'],
+            'DHCPEnabled': False,
+            'IPEnabled': True,
+        }],
+    })
+    stdout_encoded = stdout.encode('utf-8')
+    hostname = {
+        'schema_version': 1,
+        'kind': evidence.RESTORE_GUEST_IDENTITY_KIND,
+        'workflow_id': evidence.WORKFLOW_ID,
+        'operation_id': 'post-restore-identity',
+        'observation': 'guest-identity-via-control-plane',
+        'vmx': RESTORE_VMX,
+        'restore_attempt_id': attempt,
+        'endpoint': 'http://192.168.204.232:28787/mcp',
+        'transport': 'control-plane-mcp-http',
+        'request': {
+            'script': script,
+            'script_sha256': hashlib.sha256(script_encoded).hexdigest(),
+            'tool': 'PowerShell',
+        },
+        'started_at': f'2026-09-14T00:{started_minute:02d}:06Z',
+        'ended_at': f'2026-09-14T00:{started_minute:02d}:07Z',
+        'exit_status': {'code': 0},
+        'response': {
+            'stdout': stdout,
+            'stdout_size': len(stdout_encoded),
+            'stdout_sha256': hashlib.sha256(stdout_encoded).hexdigest(),
+            'stderr': '',
+            'stderr_size': 0,
+            'stderr_sha256': hashlib.sha256(b'').hexdigest(),
+        },
+    }
+    paths['post_restore_hostname'] = root / 'raw' / 'post_restore_hostname.json'
+    _write_json(paths['post_restore_hostname'], hostname)
+    return paths
 
 
 class Schema5RestoreFixture:
@@ -49,23 +150,11 @@ class Schema5RestoreFixture:
         self.original_activation = '/original-host/P05/activation-188/' + activation_id + '/activation-evidence.json'
         _write_json(self.adoption, {'synthetic': 'adoption'})
         _write_json(self.activation, {'synthetic': 'activation'})
-        self.records: dict[str, Path] = {
-            'snapshot_metadata': root / 'raw' / 'snapshot-metadata.json',
-            'revert_operation': root / 'raw' / 'revert-operation.json',
-            'pre_start_marker': root / 'raw' / 'pre-start-marker.json',
-            'post_restore_hostname': root / 'raw' / 'post-restore-hostname.json',
-            'baseline_adoption': self.adoption,
-            'activation_evidence': self.activation,
-        }
-        raw_values = {
-            'snapshot_metadata': f'{self.attempt} {evidence.SNAPSHOT_188}',
-            'revert_operation': self.attempt,
-            'pre_start_marker': f'{self.attempt} {self.marker}',
-            'post_restore_hostname': f'{self.attempt} DESKTOP-3FI41GR',
-        }
-        for kind, contents in raw_values.items():
-            self.records[kind].parent.mkdir(parents=True, exist_ok=True)
-            self.records[kind].write_text(contents, encoding='utf-8')
+        self.records: dict[str, Path] = restore_action_envelopes(
+            root, self.attempt, evidence.SNAPSHOT_188, self.marker
+        )
+        self.records['baseline_adoption'] = self.adoption
+        self.records['activation_evidence'] = self.activation
         self.canonical_path = root / 'raw' / 'canonical.json'
         self.records['canonical_readback'] = self.canonical_path
         self.restore = {
@@ -200,6 +289,67 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
             with self.assertRaisesRegex(evidence.EvidenceError, 'contained POSIX|escapes'):
                 evidence.verify_restore(fixture.restore, fixture.root)
 
+    def test_rejects_restore_records_that_are_not_attempt_bound_originals(self) -> None:
+        def not_executed_text(fixture: Schema5RestoreFixture) -> None:
+            path = fixture.records['snapshot_metadata']
+            path.write_text(
+                f"{fixture.attempt} {evidence.SNAPSHOT_188} {fixture.marker} DESKTOP-3FI41GR -- NOT EXECUTED",
+                encoding='utf-8',
+            )
+
+        def failed_exit(fixture: Schema5RestoreFixture) -> None:
+            path = fixture.records['revert_operation']
+            document = json.loads(path.read_text(encoding='utf-8'))
+            document['exit_status']['code'] = 1
+            _write_json(path, document)
+
+        def summary_substitute(fixture: Schema5RestoreFixture) -> None:
+            path = fixture.records['pre_start_marker']
+            _write_json(path, {
+                'schema_version': 1, 'kind': 'p05-restore-record-summary-v1',
+                'record_kind': 'pre_start_marker', 'checkpoint_marker': fixture.marker,
+                'workflow_id': evidence.WORKFLOW_ID, 'restore_attempt_id': fixture.attempt,
+            })
+
+        def cross_attempt_binding(fixture: Schema5RestoreFixture) -> None:
+            path = fixture.records['post_restore_hostname']
+            document = json.loads(path.read_text(encoding='utf-8'))
+            document['restore_attempt_id'] = 'other-restore-attempt'
+            _write_json(path, document)
+
+        def unparsed_marker(fixture: Schema5RestoreFixture) -> None:
+            path = fixture.records['pre_start_marker']
+            document = json.loads(path.read_text(encoding='utf-8'))
+            document['response']['stdout'] = f'checkpoint.vmState = "other.vmsn"\n'
+            document['response']['stdout_size'] = len(document['response']['stdout'].encode('utf-8'))
+            document['response']['stdout_sha256'] = hashlib.sha256(
+                document['response']['stdout'].encode('utf-8')).hexdigest()
+            _write_json(path, document)
+
+        mutations = {
+            'not_executed_text': (not_executed_text, 'valid UTF-8 JSON'),
+            'failed_exit': (failed_exit, 'exit successfully'),
+            'summary_substitute': (summary_substitute, 'attempt-bound raw command original'),
+            'cross_attempt_binding': (cross_attempt_binding, 'identity or operation differs'),
+            'unparsed_marker': (unparsed_marker, 'declared checkpoint marker'),
+        }
+        for label, (mutate, pattern) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                fixture = Schema5RestoreFixture(Path(directory))
+                mutate(fixture)
+                for record in fixture.restore['restore_records']:
+                    if record['path'].startswith('raw/'):
+                        record['sha256'] = _sha256(fixture.root / record['path'])
+                with (
+                    patch('tests.p05_baseline_adoption.verify_baseline_adoption', return_value={
+                        'workflow_id': evidence.WORKFLOW_ID,
+                        'adoption_id': fixture.adoption.parent.name,
+                    }),
+                    patch.object(evidence, 'verify_activation_bundle'),
+                ):
+                    with self.assertRaisesRegex(evidence.EvidenceError, pattern):
+                        evidence.verify_restore(fixture.restore, fixture.root)
+
     def test_activation_pairing_uses_187_initial_and_188_candidates_before_raw_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / 'activation-188' / str(uuid.uuid4())
@@ -254,27 +404,17 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
             originals = bundle / 'p05-originals'
             attempt = 'p05-initial-synthetic'
             marker = 'Win10MalBox-Velo-Snapshot3.vmsn'
-            paths = {
-                'snapshot_metadata': originals / 'raw' / 'snapshot.json',
-                'revert_operation': originals / 'raw' / 'revert.json',
-                'pre_start_marker': originals / 'raw' / 'marker.json',
-                'post_restore_hostname': originals / 'raw' / 'hostname.json',
-                'baseline_adoption': originals / 'baseline-adoption' / str(uuid.uuid4()) / 'adoption.json',
-                'canonical_readback': originals / 'raw' / 'canonical.json',
-            }
-            raw = {
-                'snapshot_metadata': f'{attempt} {evidence.SNAPSHOT_187}',
-                'revert_operation': attempt,
-                'pre_start_marker': f'{attempt} {marker}',
-                'post_restore_hostname': f'{attempt} DESKTOP-3FI41GR',
-                'baseline_adoption': '{}',
-                'canonical_readback': json.dumps({
-                    'active_snapshot': {'checkpoint_marker': marker},
-                }),
-            }
-            for kind, contents in raw.items():
-                paths[kind].parent.mkdir(parents=True, exist_ok=True)
-                paths[kind].write_text(contents, encoding='utf-8')
+            marker = 'Win10MalBox-Velo-Snapshot3.vmsn'
+            paths = restore_action_envelopes(
+                originals, attempt, evidence.SNAPSHOT_187, marker
+            )
+            paths['baseline_adoption'] = originals / 'baseline-adoption' / str(uuid.uuid4()) / 'adoption.json'
+            paths['canonical_readback'] = originals / 'raw' / 'canonical.json'
+            paths['baseline_adoption'].parent.mkdir(parents=True, exist_ok=True)
+            paths['baseline_adoption'].write_text('{}', encoding='utf-8')
+            _write_json(paths['canonical_readback'], {
+                'active_snapshot': {'checkpoint_marker': marker},
+            })
             records = [
                 {
                     'kind': kind,
