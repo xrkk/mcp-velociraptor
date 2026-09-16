@@ -89,7 +89,11 @@ def restore_action_envelopes(
             f'checkpoint.vmState = "{marker}"\n', 4,
         ),
     }
-    script = 'Get-CimInstance Win32_NetworkAdapterConfiguration | ConvertTo-Json'
+    script = ('$ErrorActionPreference=\'Stop\'; $rows=@(Get-CimInstance '
+              'Win32_NetworkAdapterConfiguration -Filter \'IPEnabled=True\' | ForEach-Object { '
+              '[ordered]@{ MACAddress=[string]$_.MACAddress; IPAddress=@($_.IPAddress); '
+              'DHCPEnabled=[bool]$_.DHCPEnabled; IPEnabled=[bool]$_.IPEnabled } }); '
+              '[ordered]@{ computer_name=$env:COMPUTERNAME; adapters=$rows } | ConvertTo-Json -Compress')
     script_encoded = script.encode('utf-8')
     stdout = json.dumps({
         'computer_name': 'DESKTOP-3FI41GR',

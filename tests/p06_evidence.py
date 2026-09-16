@@ -9,6 +9,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
+from urllib.parse import urlsplit
 
 
 class EvidenceError(ValueError):
@@ -45,9 +46,14 @@ PC006_BOUNDARY_KEYS = {
     'bound_source_failure', 'dual_port_control', 'firewall_rule',
 }
 PC006_BOUNDARY_KIND = 'p05-pc006-boundary-v1'
+# The two carried PC006 probe originals report their own facts in structured
+# form; a bare exit code or a prose conclusion sentence proves nothing (B03).
+CONNECT_PROBE_KIND = 'p06-connect-probe-v1'
+DUAL_PORT_KIND = 'p06-dual-port-control-v1'
+NETWORK_FAILURE_CLASSES = {'connection-refused', 'no-route-to-host', 'connection-timeout'}
 SCHEMA_IDENTITY_KEYS = {
     'schema_version', 'kind', 'workflow_id', 'run_id', 'restore_attempt_id',
-    'http_tools_list', 'stdio_tools_list',
+    'http', 'stdio',
 }
 SCHEMA_IDENTITY_KIND = 'p06-schema-identity-v1'
 
@@ -881,6 +887,11 @@ def _verify_restore_action_originals(
                 or not _nonempty_string(request['command_line'], f'{kind}.command_line')
             ):
                 raise EvidenceError(f'{kind} original request is not a complete command')
+            # Both recorded request fields must tell one story; an argv whose
+            # items the recorded command line does not contain is not one
+            # executed original (B06).
+            if any(item not in request['command_line'] for item in request['argv']):
+                raise EvidenceError(f'{kind} command_line contradicts its argv')
         elif document.get('kind') == RESTORE_GUEST_IDENTITY_KIND:
             if (
                 not isinstance(request, dict)
@@ -891,6 +902,11 @@ def _verify_restore_action_originals(
                 or not _nonempty_string(request['tool'], f'{kind}.tool')
             ):
                 raise EvidenceError(f'{kind} original control request is not a complete script transcript')
+            if (
+                'Win32_NetworkAdapterConfiguration' not in request['script']
+                or 'COMPUTERNAME' not in request['script']
+            ):
+                raise EvidenceError(f'{kind} control script is not the fixed guest identity query')
             endpoint = document.get('endpoint')
             if (
                 not isinstance(endpoint, str) or not endpoint.startswith('http://192.168.204.232:')
@@ -928,12 +944,30 @@ def _verify_restore_action_originals(
         raise EvidenceError('snapshot metadata original is not the actual vmrun snapshot tree') from exc
     if snapshot_name not in names:
         raise EvidenceError('snapshot metadata original does not list the selected snapshot')
-    argv = revert_operation['request']['argv']
-    if (
-        len(argv) < 5 or 'revertToSnapshot' not in argv
-        or argv[-1] != snapshot_name or argv[-2] != next(iter(vmx_values))
+    # B06: each action must be the real executable with the fixed action and
+    # parameter syntax; a stray executable whose argv happens to carry the
+    # right strings (echo/false) is not the recorded operation.
+    vmx_value = next(iter(vmx_values))
+    metadata_argv = snapshot_metadata['request']['argv']
+    if PurePosixPath(metadata_argv[0]).name != 'vmrun' or metadata_argv not in (
+        [metadata_argv[0], 'listSnapshots', vmx_value],
+        [metadata_argv[0], '-T', 'ws', 'listSnapshots', vmx_value],
     ):
-        raise EvidenceError('revert original is not the actual revertToSnapshot command for the selected snapshot')
+        raise EvidenceError('snapshot metadata original is not the actual vmrun listSnapshots command')
+    revert_argv = revert_operation['request']['argv']
+    if PurePosixPath(revert_argv[0]).name != 'vmrun' or revert_argv not in (
+        [revert_argv[0], 'revertToSnapshot', vmx_value, snapshot_name],
+        [revert_argv[0], '-T', 'ws', 'revertToSnapshot', vmx_value, snapshot_name],
+    ):
+        raise EvidenceError('revert original is not the actual vmrun revertToSnapshot command for the selected snapshot')
+    marker_argv = pre_start_marker['request']['argv']
+    if (
+        len(marker_argv) < 2
+        or PurePosixPath(marker_argv[0]).name not in {'grep', 'cat'}
+        or marker_argv[-1] != vmx_value
+        or (PurePosixPath(marker_argv[0]).name == 'grep' and 'checkpoint.vmState' not in marker_argv[1])
+    ):
+        raise EvidenceError('pre-start marker original is not the actual vmx checkpoint readback command')
     try:
         fields = p05_snapshot_raw.vmsd_fields(marker_stdout)
     except p05_snapshot_raw.SnapshotRawError as exc:
@@ -1301,17 +1335,26 @@ def _verify_entry_gate(
 
 def _network_element_original(
     bundle_root: Path,
+    phase: dict[str, Any],
+    report: dict[str, Any],
     reference: Any,
     label: str,
     seen: dict[str, tuple[int, str]],
     *,
     expect_success: bool,
 ) -> dict[str, Any]:
-    """Validate one PC006 element as a real command transcript envelope."""
+    """Validate one PC006 element as a run-bound command transcript envelope.
+
+    The envelope must carry this phase's run/restore identity and sit inside
+    the phase report interval; an original that only re-hashes an old shell
+    with a new run_id, or a 2000-era transcript spliced into this phase, is
+    rejected (B04).
+    """
     path = _resolve_ref(bundle_root, reference, label, seen)
     document = _read_json(path, label)
     shared_keys = {
-        'schema_version', 'kind', 'workflow_id', 'operation_id', 'observation',
+        'schema_version', 'kind', 'workflow_id', 'run_id',
+        'restore_attempt_id', 'operation_id', 'observation',
         'request', 'started_at', 'ended_at', 'exit_status', 'response', 'vmx',
     }
     kind = document.get('kind')
@@ -1323,12 +1366,13 @@ def _network_element_original(
         set(document) != shared_keys
         or document.get('schema_version') != 1
         or document.get('workflow_id') != WORKFLOW_ID
+        or document.get('run_id') != phase['run_id']
+        or document.get('restore_attempt_id') != phase['restore_attempt_id']
         or not _nonempty_string(document.get('operation_id'), f'{label}.operation_id')
         or not _nonempty_string(document.get('observation'), f'{label}.observation')
     ):
-        raise EvidenceError(f'{label} envelope shape or identity is invalid')
+        raise EvidenceError(f'{label} envelope shape or phase identity is invalid')
     request = document.get('request')
-    request_text = ''
     if kind == RESTORE_HOST_COMMAND_KIND:
         if (
             not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
@@ -1337,7 +1381,8 @@ def _network_element_original(
             or not _nonempty_string(request['command_line'], f'{label}.command_line')
         ):
             raise EvidenceError(f'{label} request is not a complete command')
-        request_text = ' '.join(request['argv'])
+        if any(item not in request['command_line'] for item in request['argv']):
+            raise EvidenceError(f'{label} command_line contradicts its argv')
     else:
         if (
             not isinstance(request, dict) or set(request) != {'script', 'script_sha256', 'tool'}
@@ -1347,11 +1392,14 @@ def _network_element_original(
             or not _nonempty_string(request['tool'], f'{label}.tool')
         ):
             raise EvidenceError(f'{label} control request is not a complete script transcript')
-        request_text = request['script']
     started = _parse_utc(document.get('started_at'), f'{label}.started_at')
     ended = _parse_utc(document.get('ended_at'), f'{label}.ended_at')
     if ended < started:
         raise EvidenceError(f'{label} command ends before it starts')
+    window_start = _parse_utc(report.get('started_at'), f'{label} phase report started_at')
+    window_end = _parse_utc(report.get('ended_at'), f'{label} phase report ended_at')
+    if not (window_start <= started and ended <= window_end):
+        raise EvidenceError(f'{label} is outside its phase report interval')
     exit_status = document.get('exit_status')
     if not isinstance(exit_status, dict) or set(exit_status) != {'code'} or type(exit_status['code']) is not int:
         raise EvidenceError(f'{label} lacks an actual command exit code')
@@ -1377,21 +1425,37 @@ def _network_element_original(
             or response[f'{stream}_sha256'] != hashlib.sha256(raw).hexdigest()
         ):
             raise EvidenceError(f'{label} {stream} bytes differ from their identity')
-    return {**document, 'request_text': request_text}
+    return document
+
+
+def _structured_probe_facts(element: dict[str, Any], label: str, expected_kind: str) -> dict[str, Any]:
+    try:
+        facts = json.loads(element['response']['stdout'])
+    except json.JSONDecodeError as exc:
+        raise EvidenceError(f'{label} stdout is not the structured probe result') from exc
+    if (
+        not isinstance(facts, dict)
+        or facts.get('schema_version') != 1
+        or facts.get('kind') != expected_kind
+    ):
+        raise EvidenceError(f'{label} stdout does not carry the {expected_kind} facts')
+    return facts
 
 
 def _verify_pc006_boundary(
     bundle_root: Path,
     phase: dict[str, Any],
+    report: dict[str, Any],
     reference: Any,
     seen: dict[str, tuple[int, str]],
 ) -> None:
     """Verify the PC006 three-element originals (PLAN-CHANGE-006 closure).
 
-    A verdict summary such as the retained ``p05-pc006-boundary-v1`` string
-    blob is rejected: the document must carry the same-round originals of the
-    bound-source failure, the dual-port comparison, and the unique exact
-    firewall rule.
+    A verdict summary is rejected, and so is a probe whose facts do not prove
+    the boundary: the bound source must be recoverable from the executed
+    command (B02), each failure must be a classified network fact rather than
+    any non-zero exit (B03), and the rule names are checked individually
+    (B01).
     """
     import ipaddress
 
@@ -1424,21 +1488,119 @@ def _verify_pc006_boundary(
         or not 1 <= comparison_port <= 65535 or comparison_port == SERVICE_PORT
     ):
         raise EvidenceError('PC006 comparison port is invalid')
+
     bound = _network_element_original(
-        bundle_root, document['bound_source_failure'], 'PC006 bound source probe', seen,
-        expect_success=False,
+        bundle_root, phase, report, document['bound_source_failure'],
+        'PC006 bound source probe', seen, expect_success=False,
     )
-    if f'{GUEST_FIXED_ADDRESS}:{SERVICE_PORT}' not in bound['request_text']:
+    # B02: recover the actual source binding from the executed command; an
+    # unbound request, a bound allowed source, or an unknown command shape is
+    # not a boundary probe.
+    bound_argv = bound['request']['argv']
+    if PurePosixPath(bound_argv[0]).name != 'curl':
+        raise EvidenceError('PC006 bound source probe is not a recognized collector probe command')
+    binding = None
+    index = 1
+    while index < len(bound_argv):
+        item = bound_argv[index]
+        if item == '--interface':
+            if index + 1 >= len(bound_argv):
+                raise EvidenceError('PC006 bound source probe --interface lacks its value')
+            binding = bound_argv[index + 1]
+            index += 2
+            continue
+        if item.startswith('--interface='):
+            binding = item.split('=', 1)[1]
+        index += 1
+    if binding is None:
+        raise EvidenceError('PC006 bound source probe carries no bound source parameter')
+    try:
+        parsed_binding = ipaddress.ip_address(binding)
+    except ValueError as exc:
+        raise EvidenceError('PC006 bound source parameter is not an IP address') from exc
+    if str(parsed_binding) != str(parsed_source):
+        raise EvidenceError('PC006 bound source parameter differs from the declared probe source')
+    urls = [item for item in bound_argv[1:] if item.startswith('http://') or item.startswith('https://')]
+    if len(urls) != 1:
+        raise EvidenceError('PC006 bound source probe does not name exactly one probe URL')
+    parsed_url = urlsplit(urls[0])
+    if (
+        parsed_url.scheme != 'http' or parsed_url.hostname != GUEST_FIXED_ADDRESS
+        or parsed_url.port != SERVICE_PORT or parsed_url.path != '/mcp'
+        or parsed_url.query or parsed_url.fragment
+        or parsed_url.username is not None or parsed_url.password is not None
+    ):
         raise EvidenceError('PC006 bound source probe does not target the formal entry')
+    bound_facts = _structured_probe_facts(bound, 'PC006 bound source probe', CONNECT_PROBE_KIND)
+    if set(bound_facts) != {
+        'schema_version', 'kind', 'source', 'target', 'outcome', 'error_class',
+    }:
+        raise EvidenceError('PC006 bound source probe facts shape is invalid')
+    if (
+        bound_facts['source'] != str(parsed_source)
+        or bound_facts['target'] != {
+            'host': GUEST_FIXED_ADDRESS, 'port': SERVICE_PORT, 'path': '/mcp',
+        }
+        or bound_facts['outcome'] != 'unreachable'
+        or bound_facts['error_class'] not in NETWORK_FAILURE_CLASSES
+    ):
+        raise EvidenceError('PC006 bound source probe facts do not prove a classified connection failure')
+
     dual = _network_element_original(
-        bundle_root, document['dual_port_control'], 'PC006 dual port control', seen,
-        expect_success=False,
+        bundle_root, phase, report, document['dual_port_control'],
+        'PC006 dual port control', seen, expect_success=False,
     )
-    if str(SERVICE_PORT) not in dual['request_text'] or str(comparison_port) not in dual['request_text']:
-        raise EvidenceError('PC006 dual port control does not compare both ports from the bound source')
+    dual_argv = dual['request']['argv']
+    dual_tokens = set(dual_argv)
+    if (
+        str(parsed_source) not in dual_tokens
+        or str(SERVICE_PORT) not in dual_tokens or str(comparison_port) not in dual_tokens
+    ):
+        raise EvidenceError('PC006 dual port control does not probe both ports from the bound source')
+    dual_facts = _structured_probe_facts(dual, 'PC006 dual port control', DUAL_PORT_KIND)
+    if set(dual_facts) != {
+        'schema_version', 'kind', 'probe_source_address', 'target_host', 'ports',
+    }:
+        raise EvidenceError('PC006 dual port control facts shape is invalid')
+    if (
+        dual_facts['probe_source_address'] != str(parsed_source)
+        or dual_facts['target_host'] != GUEST_FIXED_ADDRESS
+    ):
+        raise EvidenceError('PC006 dual port control facts do not bind the probe source and target host')
+    rows = dual_facts['ports']
+    if not isinstance(rows, list) or len(rows) != 2:
+        raise EvidenceError('PC006 dual port control must retain both per-port results')
+    by_port = {}
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {
+            'port', 'protected_by_formal_rule', 'from_probe_source', 'from_allowed_source',
+        }:
+            raise EvidenceError('PC006 dual port control row shape is invalid')
+        by_port[row['port']] = row
+    if set(by_port) != {SERVICE_PORT, comparison_port}:
+        raise EvidenceError('PC006 dual port control ports differ from the declared comparison')
+    for port, row in by_port.items():
+        failure = row['from_probe_source']
+        if (
+            failure.get('outcome') != 'unreachable'
+            or failure.get('error_class') not in NETWORK_FAILURE_CLASSES
+        ):
+            raise EvidenceError(f'PC006 dual port control port {port} lacks a classified failure from the probe source')
+    if by_port[SERVICE_PORT]['protected_by_formal_rule'] is not True:
+        raise EvidenceError('PC006 dual port control does not mark the formal port as rule-protected')
+    comparison_row = by_port[comparison_port]
+    allowed = comparison_row['from_allowed_source']
+    if (
+        comparison_row['protected_by_formal_rule'] is not False
+        or allowed.get('outcome') != 'responded'
+        or type(allowed.get('http_status')) is not int
+        or not 100 <= allowed['http_status'] <= 599
+    ):
+        raise EvidenceError('PC006 comparison port is not a live unprotected control')
+
     rule_element = _network_element_original(
-        bundle_root, document['firewall_rule'], 'PC006 firewall rule verify', seen,
-        expect_success=True,
+        bundle_root, phase, report, document['firewall_rule'],
+        'PC006 firewall rule verify', seen, expect_success=True,
     )
     try:
         rule_document = json.loads(rule_element['response']['stdout'])
@@ -1448,12 +1610,16 @@ def _verify_pc006_boundary(
     if not isinstance(rules, list) or len(rules) != 1 or not isinstance(rules[0], dict):
         raise EvidenceError('PC006 firewall rule original is not the unique rule readback')
     rule = rules[0]
+    expected_rule_name = f'mcp-velociraptor-{SERVICE_PORT}'
     if (
         set(rule) != {
             'name', 'display_name', 'direction', 'action', 'enabled',
             'protocol', 'local_port', 'local_address', 'remote_address',
         }
-        or rule['name'] != rule['display_name'] != f'mcp-velociraptor-{SERVICE_PORT}'
+        # B01: each rule name is compared on its own; a chained inequality
+        # cannot express that either wrong name must fail.
+        or rule['name'] != expected_rule_name
+        or rule['display_name'] != expected_rule_name
         or rule['direction'] != 'Inbound'
         or rule['action'] != 'Allow'
         or rule['enabled'] is not True
@@ -1468,14 +1634,18 @@ def _verify_pc006_boundary(
 def _verify_schema_identity_originals(
     bundle_root: Path,
     phase: dict[str, Any],
+    report: dict[str, Any],
     reference: Any,
     seen: dict[str, tuple[int, str]],
 ) -> None:
     """Require both HTTP and stdio tools/list originals and equal schemas.
 
     A single ``tools-schema.json`` digest cannot prove dual-adapter identity
-    (CHK-028); both raw listings are normalized with the one frozen algorithm
-    and their normalized bytes must be equal.
+    (CHK-028), and mutual equality alone proves nothing about this phase
+    (B05): the normalized bytes must also equal this report's
+    ``tools_schema_sha256``, the HTTP listing must join the report session and
+    service instance, and the stdio listing must be a distinct original from
+    a distinct session.
     """
     path = _resolve_ref(bundle_root, reference, 'network_evidence.schema_identity', seen)
     document = _read_json(path, 'schema identity')
@@ -1488,15 +1658,51 @@ def _verify_schema_identity_originals(
         or document.get('restore_attempt_id') != phase['restore_attempt_id']
     ):
         raise EvidenceError('schema identity document shape or phase identity is invalid')
-    normalized: list[bytes] = []
-    for transport, key in (('http', 'http_tools_list'), ('stdio', 'stdio_tools_list')):
+    adapter_keys = {'transport', 'session_id', 'instance_id', 'tools_list'}
+    session = report.get('mcp_session')
+    server = report.get('server_identity')
+    if (
+        not isinstance(session, dict) or not _nonempty_string(session.get('id'), 'report mcp_session.id')
+        or not isinstance(server, dict)
+        or not _nonempty_string(server.get('instance_id'), 'report server_identity.instance_id')
+    ):
+        raise EvidenceError('schema identity requires the report session and service identity')
+    adapters = {}
+    normalized: dict[str, bytes] = {}
+    for transport in ('http', 'stdio'):
+        adapter = document.get(transport)
+        if not isinstance(adapter, dict) or set(adapter) != adapter_keys or adapter['transport'] != transport:
+            raise EvidenceError(f'schema identity {transport} adapter shape is invalid')
         original_path = _resolve_ref(
-            bundle_root, document[key], f'network_evidence.schema_identity.{key}', seen,
+            bundle_root, adapter['tools_list'],
+            f'network_evidence.schema_identity.{transport}.tools_list', seen,
         )
         listing = _read_json(original_path, f'{transport} tools/list original')
-        normalized.append(_normalized_tools_bytes(listing))
-    if normalized[0] != normalized[1]:
+        normalized[transport] = _normalized_tools_bytes(listing)
+        adapters[transport] = adapter
+    if (
+        adapters['http']['tools_list']['path'] == adapters['stdio']['tools_list']['path']
+    ):
+        raise EvidenceError('the same file cannot stand in for both adapter originals')
+    if normalized['http'] != normalized['stdio']:
         raise EvidenceError('HTTP and stdio tools/list originals do not normalize to the same schema')
+    tools_hash = report.get('tools_schema_sha256')
+    if (
+        not _sha256_is_valid(tools_hash)
+        or hashlib.sha256(normalized['http']).hexdigest() != tools_hash
+    ):
+        raise EvidenceError("dual-adapter schema does not equal this report's tools_schema_sha256")
+    if (
+        adapters['http']['session_id'] != session['id']
+        or adapters['http']['instance_id'] != server['instance_id']
+    ):
+        raise EvidenceError('HTTP tools/list original does not join the report session and service instance')
+    if (
+        not _nonempty_string(adapters['stdio']['session_id'], 'stdio adapter session_id')
+        or not _nonempty_string(adapters['stdio']['instance_id'], 'stdio adapter instance_id')
+        or adapters['stdio']['session_id'] == adapters['http']['session_id']
+    ):
+        raise EvidenceError('stdio tools/list original is not a distinct adapter session')
 
 
 def _verify_network_evidence(
@@ -1521,20 +1727,20 @@ def _verify_network_evidence(
         or document.get('restore_attempt_id') != phase['restore_attempt_id']
     ):
         raise EvidenceError('network evidence shape or phase identity is invalid')
-    _verify_pc006_boundary(bundle_root, phase, document['non_allowed_source'], seen)
-    _verify_schema_identity_originals(bundle_root, phase, document['schema_identity'], seen)
+    report_reference = phase.get('report')
+    if not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS:
+        raise EvidenceError('network originals require the phase report Ref join')
+    report = _read_json(
+        _resolve_ref(bundle_root, report_reference, 'phase.report', seen),
+        'network service report join',
+    )
+    _verify_pc006_boundary(bundle_root, phase, report, document['non_allowed_source'], seen)
+    _verify_schema_identity_originals(bundle_root, phase, report, document['schema_identity'], seen)
     observation_path = _resolve_ref(
         bundle_root, document['service_observation'],
         'network_evidence.service_observation', seen,
     )
     observation = _read_json(observation_path, 'network service observation')
-    report_reference = phase.get('report')
-    if not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS:
-        raise EvidenceError('network service observation requires the phase report Ref join')
-    report = _read_json(
-        _resolve_ref(bundle_root, report_reference, 'phase.report', seen),
-        'network service report join',
-    )
     if any(
         observation.get(key) != value
         for key, value in report['server_identity'].items()
