@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import stat
+import textwrap
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
-from urllib.parse import urlsplit
 
 
 class EvidenceError(ValueError):
@@ -46,16 +47,137 @@ PC006_BOUNDARY_KEYS = {
     'bound_source_failure', 'dual_port_control', 'firewall_rule',
 }
 PC006_BOUNDARY_KIND = 'p05-pc006-boundary-v1'
-# The two carried PC006 probe originals report their own facts in structured
-# form; a bare exit code or a prose conclusion sentence proves nothing (B03).
-CONNECT_PROBE_KIND = 'p06-connect-probe-v1'
-DUAL_PORT_KIND = 'p06-dual-port-control-v1'
+# The carried PC006 originals are executions of this one frozen host collector.
+# Its script identity is verified by full content, so its structured stdout is
+# collector output that can be recomputed, not a hand-written conclusion (B03).
+PC006_PROBE_KIND = 'p06-pc006-probe-v1'
+PC006_COMMAND_KIND = 'p06-pc006-command-v1'
+PC006_BOUND_MODE = 'bound'
+PC006_DUAL_MODE = 'dual'
+PC006_EXECUTION_KEYS = {
+    'role', 'port', 'request', 'started_at', 'ended_at', 'exit_status', 'response',
+}
 NETWORK_FAILURE_CLASSES = {'connection-refused', 'no-route-to-host', 'connection-timeout'}
+STDIO_LAUNCH_KIND = 'p06-stdio-launch-v1'
 SCHEMA_IDENTITY_KEYS = {
     'schema_version', 'kind', 'workflow_id', 'run_id', 'restore_attempt_id',
     'http', 'stdio',
 }
 SCHEMA_IDENTITY_KIND = 'p06-schema-identity-v1'
+# The fixed guest identity query that every real restore attempt recorded
+# (Logs/P05/wf-01a05d1d-p05/restore-attempts/*/post-restore-identity.json).
+# A script that merely mentions the same terms is not that query (B06).
+RESTORE_GUEST_IDENTITY_SCRIPT = (
+    "$ErrorActionPreference='Stop'; $rows=@(Get-CimInstance Win32_NetworkAdapterConfiguration "
+    "-Filter 'IPEnabled=True' | ForEach-Object { [ordered]@{ MACAddress=[string]$_.MACAddress; "
+    "IPAddress=@($_.IPAddress); DHCPEnabled=[bool]$_.DHCPEnabled; IPEnabled=[bool]$_.IPEnabled } }); "
+    "[ordered]@{ computer_name=$env:COMPUTERNAME; adapters=$rows } | ConvertTo-Json -Depth 4 -Compress"
+)
+
+
+def _pc006_curl_argv(bind, port):
+    """The one approved curl probe command (frozen inside the collector script)."""
+    return [
+        '/usr/bin/curl', '--interface', str(bind),
+        '--connect-timeout', '5', '--max-time', '12',
+        '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+        f'http://192.168.204.232:{int(port)}/mcp',
+    ]
+
+
+def _pc006_collect(argv):
+    """Approved host-side PC006 collector: run the fixed curl probes and report
+    only their raw executions.
+
+    A real collection executes this function as
+    ``/usr/bin/python3 -c PC006_COLLECTOR_SCRIPT bound|dual <probe-source> <port>``
+    and wraps the captured stdout/stderr and exit status in the attempt-bound
+    ``PC006_COMMAND_KIND`` envelope.  Windows seam fixtures call this same
+    function with a controlled ``subprocess.run`` stub, so every synthetic
+    positive uses this collector's format and control flow rather than a
+    separately hand-written expectation.  Passing this unit test still proves
+    only the parser; it never claims a Windows restore or network probe ran.
+    """
+    import hashlib
+    import json
+    import subprocess
+    from datetime import UTC, datetime
+
+    def utc():
+        return datetime.now(UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+    def run(command):
+        started = utc()
+        try:
+            completed = subprocess.run(
+                command, check=False, capture_output=True, timeout=60)
+            stdout = completed.stdout.decode('utf-8')
+            stderr = completed.stderr.decode('utf-8')
+            code = completed.returncode
+        except subprocess.TimeoutExpired as exc:
+            stdout = (exc.stdout or b'').decode('utf-8')
+            stderr = (exc.stderr or b'').decode('utf-8') + '\ncollector timeout after 60 seconds'
+            code = 124
+        except OSError as exc:
+            stdout, stderr, code = '', f'{type(exc).__name__}: {exc}', 127
+        stdout_bytes, stderr_bytes = stdout.encode('utf-8'), stderr.encode('utf-8')
+        return {
+            'request': {'argv': list(command), 'command_line': ' '.join(command)},
+            'started_at': started,
+            'ended_at': utc(),
+            'exit_status': {'code': code},
+            'response': {
+                'stdout': stdout, 'stdout_size': len(stdout_bytes),
+                'stdout_sha256': hashlib.sha256(stdout_bytes).hexdigest(),
+                'stderr': stderr, 'stderr_size': len(stderr_bytes),
+                'stderr_sha256': hashlib.sha256(stderr_bytes).hexdigest(),
+            },
+        }
+
+    if len(argv) != 3 or argv[0] not in {'bound', 'dual'}:
+        raise ValueError('usage: collector bound|dual <probe-source> <comparison-port>')
+    import ipaddress
+    mode, probe_source, comparison_port = argv[0], str(ipaddress.ip_address(argv[1])), int(argv[2])
+    executions = []
+    if mode == 'bound':
+        executions.append({
+            'role': 'probe_source', 'port': 28790,
+            **run(_pc006_curl_argv(probe_source, 28790)),
+        })
+    else:
+        for port in (28790, comparison_port):
+            for role, bind in (('probe_source', probe_source), ('allowed_source', '192.168.204.1')):
+                executions.append({
+                    'role': role, 'port': port,
+                    **run(_pc006_curl_argv(bind, port)),
+                })
+    return {
+        'schema_version': 1,
+        'kind': 'p06-pc006-probe-v1',
+        'mode': mode,
+        'probe_source_address': probe_source,
+        'target_host': '192.168.204.232',
+        'comparison_port': comparison_port,
+        'executions': executions,
+    }
+
+
+PC006_COLLECTOR_SCRIPT = (
+    textwrap.dedent(inspect.getsource(_pc006_curl_argv))
+    + textwrap.dedent(inspect.getsource(_pc006_collect))
+    + "\nif __name__ == '__main__':\n"
+    + "    import json as _json, sys as _sys\n"
+    + "    _json.dump(_pc006_collect(_sys.argv[1:]), _sys.stdout, ensure_ascii=False, "
+      "sort_keys=True, separators=(',', ':'), allow_nan=False)\n"
+)
+
+
+def pc006_collector_argv(mode, source, comparison_port):
+    """Return the exact approved collector command for one PC006 element."""
+    return [
+        '/usr/bin/python3', '-c', PC006_COLLECTOR_SCRIPT,
+        mode, str(source), str(int(comparison_port)),
+    ]
 
 ACTIVATION_KEYS = {
     'schema_version', 'kind', 'workflow_id', 'candidate', 'checkpoint_marker',
@@ -902,11 +1024,11 @@ def _verify_restore_action_originals(
                 or not _nonempty_string(request['tool'], f'{kind}.tool')
             ):
                 raise EvidenceError(f'{kind} original control request is not a complete script transcript')
-            if (
-                'Win32_NetworkAdapterConfiguration' not in request['script']
-                or 'COMPUTERNAME' not in request['script']
-            ):
-                raise EvidenceError(f'{kind} control script is not the fixed guest identity query')
+            if request['script'] != RESTORE_GUEST_IDENTITY_SCRIPT:
+                raise EvidenceError(
+                    f'{kind} control script is not the fixed approved guest identity query; '
+                    'a term that merely mentions COMPUTERNAME or an adapter class is not the executed query'
+                )
             endpoint = document.get('endpoint')
             if (
                 not isinstance(endpoint, str) or not endpoint.startswith('http://192.168.204.232:')
@@ -1336,19 +1458,21 @@ def _verify_entry_gate(
 def _network_element_original(
     bundle_root: Path,
     phase: dict[str, Any],
-    report: dict[str, Any],
     reference: Any,
     label: str,
     seen: dict[str, tuple[int, str]],
     *,
     expect_success: bool,
+    not_before: datetime,
 ) -> dict[str, Any]:
-    """Validate one PC006 element as a run-bound command transcript envelope.
+    """Validate one PC006 collector execution as an attempt-bound envelope.
 
-    The envelope must carry this phase's run/restore identity and sit inside
-    the phase report interval; an original that only re-hashes an old shell
-    with a new run_id, or a 2000-era transcript spliced into this phase, is
-    rejected (B04).
+    The envelope must be this phase's own run/restore identity and a real
+    command execution: it cannot precede the service instance whose boundary
+    it probes.  No formal clause fixes an upper end for the round's security
+    probes (see the PLAN-CHANGE candidate in the result), so only the
+    decidable precedence is enforced here instead of the withdrawn
+    report-interval containment.
     """
     path = _resolve_ref(bundle_root, reference, label, seen)
     document = _read_json(path, label)
@@ -1357,11 +1481,8 @@ def _network_element_original(
         'restore_attempt_id', 'operation_id', 'observation',
         'request', 'started_at', 'ended_at', 'exit_status', 'response', 'vmx',
     }
-    kind = document.get('kind')
-    if kind == RESTORE_GUEST_IDENTITY_KIND:
-        shared_keys = shared_keys | {'endpoint', 'transport'}
-    if kind not in {RESTORE_HOST_COMMAND_KIND, RESTORE_GUEST_IDENTITY_KIND}:
-        raise EvidenceError(f'{label} is not a raw command original')
+    if document.get('kind') != PC006_COMMAND_KIND:
+        raise EvidenceError(f'{label} is not an approved PC006 collector execution')
     if (
         set(document) != shared_keys
         or document.get('schema_version') != 1
@@ -1372,34 +1493,30 @@ def _network_element_original(
         or not _nonempty_string(document.get('observation'), f'{label}.observation')
     ):
         raise EvidenceError(f'{label} envelope shape or phase identity is invalid')
+    try:
+        from tests import p05_snapshot_raw
+
+        p05_snapshot_raw.host_vmx(document.get('vmx'))
+    except (p05_snapshot_raw.SnapshotRawError, TypeError) as exc:
+        raise EvidenceError(f'{label} host VMX identity is invalid') from exc
     request = document.get('request')
-    if kind == RESTORE_HOST_COMMAND_KIND:
-        if (
-            not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
-            or not isinstance(request['argv'], list) or not request['argv']
-            or any(not isinstance(item, str) or not item for item in request['argv'])
-            or not _nonempty_string(request['command_line'], f'{label}.command_line')
-        ):
-            raise EvidenceError(f'{label} request is not a complete command')
-        if any(item not in request['command_line'] for item in request['argv']):
-            raise EvidenceError(f'{label} command_line contradicts its argv')
-    else:
-        if (
-            not isinstance(request, dict) or set(request) != {'script', 'script_sha256', 'tool'}
-            or not _nonempty_string(request['script'], f'{label}.script')
-            or not _sha256_is_valid(request.get('script_sha256'))
-            or request['script_sha256'] != hashlib.sha256(request['script'].encode('utf-8')).hexdigest()
-            or not _nonempty_string(request['tool'], f'{label}.tool')
-        ):
-            raise EvidenceError(f'{label} control request is not a complete script transcript')
+    if (
+        not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
+        or not isinstance(request['argv'], list) or not request['argv']
+        or any(not isinstance(item, str) or not item for item in request['argv'])
+        or not _nonempty_string(request['command_line'], f'{label}.command_line')
+    ):
+        raise EvidenceError(f'{label} request is not a complete command')
+    if any(item not in request['command_line'] for item in request['argv']):
+        raise EvidenceError(f'{label} command_line contradicts its argv')
     started = _parse_utc(document.get('started_at'), f'{label}.started_at')
     ended = _parse_utc(document.get('ended_at'), f'{label}.ended_at')
     if ended < started:
         raise EvidenceError(f'{label} command ends before it starts')
-    window_start = _parse_utc(report.get('started_at'), f'{label} phase report started_at')
-    window_end = _parse_utc(report.get('ended_at'), f'{label} phase report ended_at')
-    if not (window_start <= started and ended <= window_end):
-        raise EvidenceError(f'{label} is outside its phase report interval')
+    if started < not_before:
+        raise EvidenceError(
+            f'{label} precedes the service instance it probes; a spliced transcript is not this round'
+        )
     exit_status = document.get('exit_status')
     if not isinstance(exit_status, dict) or set(exit_status) != {'code'} or type(exit_status['code']) is not int:
         raise EvidenceError(f'{label} lacks an actual command exit code')
@@ -1428,18 +1545,133 @@ def _network_element_original(
     return document
 
 
-def _structured_probe_facts(element: dict[str, Any], label: str, expected_kind: str) -> dict[str, Any]:
+def _pc006_collector_document(
+    element: dict[str, Any],
+    label: str,
+    mode: str,
+    source: str,
+    comparison_port: int,
+) -> dict[str, Any]:
+    """Recompute one PC006 element from the frozen collector's own stdout.
+
+    The recorded command must be the exact approved collector invocation
+    (full script content), so its structured stdout is collector output and
+    not a hand-written ``p06-connect-probe-v1`` conclusion.
+    """
+    request = element['request']
+    expected_argv = pc006_collector_argv(mode, source, comparison_port)
+    if request['argv'] != expected_argv or request['command_line'] != ' '.join(expected_argv):
+        raise EvidenceError(f'{label} is not the approved fixed PC006 collector command')
+    if element['exit_status']['code'] != 0:
+        raise EvidenceError(f'{label} PC006 collector itself did not exit successfully')
     try:
-        facts = json.loads(element['response']['stdout'])
+        document = json.loads(element['response']['stdout'])
     except json.JSONDecodeError as exc:
-        raise EvidenceError(f'{label} stdout is not the structured probe result') from exc
+        raise EvidenceError(f'{label} stdout is not the frozen collector result') from exc
     if (
-        not isinstance(facts, dict)
-        or facts.get('schema_version') != 1
-        or facts.get('kind') != expected_kind
+        not isinstance(document, dict)
+        or set(document) != {
+            'schema_version', 'kind', 'mode', 'probe_source_address',
+            'target_host', 'comparison_port', 'executions',
+        }
+        or document.get('schema_version') != 1
+        or document.get('kind') != PC006_PROBE_KIND
+        or document.get('mode') != mode
+        or document.get('probe_source_address') != source
+        or document.get('target_host') != '192.168.204.232'
+        or document.get('comparison_port') != comparison_port
     ):
-        raise EvidenceError(f'{label} stdout does not carry the {expected_kind} facts')
-    return facts
+        raise EvidenceError(f'{label} collector result identity differs')
+    executions = document.get('executions')
+    expected_rows = 4 if mode == PC006_DUAL_MODE else 1
+    if not isinstance(executions, list) or len(executions) != expected_rows:
+        raise EvidenceError(
+            f'{label} collector result must retain every per-port execution; '
+            'a derived summary line alone is not accepted'
+        )
+    return document
+
+
+def _pc006_execution_row(
+    row: Any,
+    label: str,
+    role: str,
+    port: int,
+    bind: str,
+    *,
+    clock: tuple[datetime, datetime],
+) -> tuple[datetime, datetime]:
+    """Validate one raw curl execution row produced by the frozen collector."""
+    if not isinstance(row, dict) or set(row) != PC006_EXECUTION_KEYS:
+        raise EvidenceError(f'{label} execution row shape is invalid')
+    if row.get('role') != role or row.get('port') != port:
+        raise EvidenceError(f'{label} execution row does not bind role {role!r} port {port}')
+    request = row.get('request')
+    expected_argv = _pc006_curl_argv(bind, port)
+    if (
+        not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
+        or request.get('argv') != expected_argv
+        or request.get('command_line') != ' '.join(expected_argv)
+    ):
+        raise EvidenceError(f'{label} execution row is not the approved bound-source curl probe')
+    started = _parse_utc(row.get('started_at'), f'{label}.started_at')
+    ended = _parse_utc(row.get('ended_at'), f'{label}.ended_at')
+    if ended < started or started < clock[0]:
+        raise EvidenceError(f'{label} execution time order or service-instance precedence differs')
+    if ended > clock[1]:
+        raise EvidenceError(f'{label} execution outlives its collector envelope')
+    status = row.get('exit_status')
+    if not isinstance(status, dict) or set(status) != {'code'} or type(status['code']) is not int:
+        raise EvidenceError(f'{label} execution lacks a real curl exit code')
+    response = row.get('response')
+    response_keys = {
+        'stdout', 'stdout_size', 'stdout_sha256',
+        'stderr', 'stderr_size', 'stderr_sha256',
+    }
+    if not isinstance(response, dict) or set(response) != response_keys:
+        raise EvidenceError(f'{label} execution does not retain complete curl stdout/stderr')
+    for stream in ('stdout', 'stderr'):
+        text = response[stream]
+        if not isinstance(text, str):
+            raise EvidenceError(f'{label} execution {stream} is not text')
+        raw = text.encode('utf-8')
+        if (
+            type(response[f'{stream}_size']) is not int
+            or response[f'{stream}_size'] != len(raw)
+            or response[f'{stream}_sha256'] != hashlib.sha256(raw).hexdigest()
+        ):
+            raise EvidenceError(f'{label} execution {stream} bytes differ from their identity')
+    return started, ended
+
+
+def _pc006_curl_failure_class(row: dict[str, Any], label: str) -> str:
+    """Derive the failure class from curl's own exit code and raw stderr."""
+    code = row['exit_status']['code']
+    stderr = row['response']['stderr']
+    if code == 7 and 'Connection refused' in stderr:
+        failure_class = 'connection-refused'
+    elif code == 7 and 'No route to host' in stderr:
+        failure_class = 'no-route-to-host'
+    elif code == 28 and ('Timeout was reached' in stderr or 'timed out' in stderr.lower()):
+        failure_class = 'connection-timeout'
+    else:
+        raise EvidenceError(
+            f'{label} is not a classified curl network failure (exit {code}); '
+            'a missing command, syntax error, or arbitrary non-zero status is not a boundary'
+        )
+    if failure_class not in NETWORK_FAILURE_CLASSES:
+        raise EvidenceError(f'{label} failure class is not approved')
+    return failure_class
+
+
+def _pc006_allowed_response(row: dict[str, Any], label: str) -> int:
+    """Derive the live HTTP response from curl's own output."""
+    if row['exit_status']['code'] != 0:
+        raise EvidenceError(f'{label} did not respond from the allowed source')
+    status_text = row['response']['stdout'].strip()
+    if not status_text.isdigit() or len(status_text) != 3 or not 100 <= int(status_text) <= 599:
+        raise EvidenceError(f'{label} does not retain a real HTTP status code from curl')
+    return int(status_text)
 
 
 def _verify_pc006_boundary(
@@ -1452,10 +1684,12 @@ def _verify_pc006_boundary(
     """Verify the PC006 three-element originals (PLAN-CHANGE-006 closure).
 
     A verdict summary is rejected, and so is a probe whose facts do not prove
-    the boundary: the bound source must be recoverable from the executed
-    command (B02), each failure must be a classified network fact rather than
-    any non-zero exit (B03), and the rule names are checked individually
-    (B01).
+    the boundary: the bound source must be recoverable from the executed curl
+    command (B02), each failure must be a classified network fact recomputed
+    from curl's own exit code and stderr rather than any non-zero exit (B03),
+    command-not-found, syntax errors, and echo transcripts are rejected, and
+    the firewall original must be the same-round ready collector transcript
+    whose unique rule is re-parsed by the ready parser (B01).
     """
     import ipaddress
 
@@ -1489,146 +1723,338 @@ def _verify_pc006_boundary(
     ):
         raise EvidenceError('PC006 comparison port is invalid')
 
-    bound = _network_element_original(
-        bundle_root, phase, report, document['bound_source_failure'],
-        'PC006 bound source probe', seen, expect_success=False,
+    not_before = _parse_utc(
+        report.get('server_identity', {}).get('process_start_time_utc'),
+        'PC006 service instance start',
     )
-    # B02: recover the actual source binding from the executed command; an
-    # unbound request, a bound allowed source, or an unknown command shape is
-    # not a boundary probe.
-    bound_argv = bound['request']['argv']
-    if PurePosixPath(bound_argv[0]).name != 'curl':
-        raise EvidenceError('PC006 bound source probe is not a recognized collector probe command')
-    binding = None
-    index = 1
-    while index < len(bound_argv):
-        item = bound_argv[index]
-        if item == '--interface':
-            if index + 1 >= len(bound_argv):
-                raise EvidenceError('PC006 bound source probe --interface lacks its value')
-            binding = bound_argv[index + 1]
-            index += 2
-            continue
-        if item.startswith('--interface='):
-            binding = item.split('=', 1)[1]
-        index += 1
-    if binding is None:
-        raise EvidenceError('PC006 bound source probe carries no bound source parameter')
-    try:
-        parsed_binding = ipaddress.ip_address(binding)
-    except ValueError as exc:
-        raise EvidenceError('PC006 bound source parameter is not an IP address') from exc
-    if str(parsed_binding) != str(parsed_source):
-        raise EvidenceError('PC006 bound source parameter differs from the declared probe source')
-    urls = [item for item in bound_argv[1:] if item.startswith('http://') or item.startswith('https://')]
-    if len(urls) != 1:
-        raise EvidenceError('PC006 bound source probe does not name exactly one probe URL')
-    parsed_url = urlsplit(urls[0])
-    if (
-        parsed_url.scheme != 'http' or parsed_url.hostname != GUEST_FIXED_ADDRESS
-        or parsed_url.port != SERVICE_PORT or parsed_url.path != '/mcp'
-        or parsed_url.query or parsed_url.fragment
-        or parsed_url.username is not None or parsed_url.password is not None
-    ):
-        raise EvidenceError('PC006 bound source probe does not target the formal entry')
-    bound_facts = _structured_probe_facts(bound, 'PC006 bound source probe', CONNECT_PROBE_KIND)
-    if set(bound_facts) != {
-        'schema_version', 'kind', 'source', 'target', 'outcome', 'error_class',
-    }:
-        raise EvidenceError('PC006 bound source probe facts shape is invalid')
-    if (
-        bound_facts['source'] != str(parsed_source)
-        or bound_facts['target'] != {
-            'host': GUEST_FIXED_ADDRESS, 'port': SERVICE_PORT, 'path': '/mcp',
-        }
-        or bound_facts['outcome'] != 'unreachable'
-        or bound_facts['error_class'] not in NETWORK_FAILURE_CLASSES
-    ):
-        raise EvidenceError('PC006 bound source probe facts do not prove a classified connection failure')
+
+    bound = _network_element_original(
+        bundle_root, phase, document['bound_source_failure'],
+        'PC006 bound source probe', seen, expect_success=True, not_before=not_before,
+    )
+    bound_clock = (
+        _parse_utc(bound['started_at'], 'PC006 bound source probe.started_at'),
+        _parse_utc(bound['ended_at'], 'PC006 bound source probe.ended_at'),
+    )
+    bound_facts = _pc006_collector_document(
+        bound, 'PC006 bound source probe', PC006_BOUND_MODE, str(parsed_source), comparison_port,
+    )
+    # B02/B03: the only accepted facts are the collector's own raw curl rows.
+    # The curl argv carries the bound source (--interface), and the failure
+    # class is recomputed from curl's exit code and stderr.
+    bound_row = bound_facts['executions'][0]
+    _pc006_execution_row(
+        bound_row, 'PC006 bound source probe', 'probe_source', SERVICE_PORT,
+        str(parsed_source), clock=bound_clock,
+    )
+    _pc006_curl_failure_class(bound_row, 'PC006 bound source probe')
 
     dual = _network_element_original(
-        bundle_root, phase, report, document['dual_port_control'],
-        'PC006 dual port control', seen, expect_success=False,
+        bundle_root, phase, document['dual_port_control'],
+        'PC006 dual port control', seen, expect_success=True, not_before=not_before,
     )
-    dual_argv = dual['request']['argv']
-    dual_tokens = set(dual_argv)
-    if (
-        str(parsed_source) not in dual_tokens
-        or str(SERVICE_PORT) not in dual_tokens or str(comparison_port) not in dual_tokens
-    ):
-        raise EvidenceError('PC006 dual port control does not probe both ports from the bound source')
-    dual_facts = _structured_probe_facts(dual, 'PC006 dual port control', DUAL_PORT_KIND)
-    if set(dual_facts) != {
-        'schema_version', 'kind', 'probe_source_address', 'target_host', 'ports',
+    dual_clock = (
+        _parse_utc(dual['started_at'], 'PC006 dual port control.started_at'),
+        _parse_utc(dual['ended_at'], 'PC006 dual port control.ended_at'),
+    )
+    dual_facts = _pc006_collector_document(
+        dual, 'PC006 dual port control', PC006_DUAL_MODE, str(parsed_source), comparison_port,
+    )
+    by_execution: dict[tuple[str, int], dict[str, Any]] = {}
+    for position, row in enumerate(dual_facts['executions']):
+        row_label = f'PC006 dual port control execution {position}'
+        if not isinstance(row, dict) or set(row) != PC006_EXECUTION_KEYS:
+            raise EvidenceError(f'{row_label} shape is invalid')
+        role, port = row.get('role'), row.get('port')
+        if role not in {'probe_source', 'allowed_source'} or port not in {SERVICE_PORT, comparison_port}:
+            raise EvidenceError(f'{row_label} does not name an approved role and port')
+        bind = str(parsed_source) if role == 'probe_source' else HOST_FIXED_ADDRESS
+        _pc006_execution_row(row, row_label, role, port, bind, clock=dual_clock)
+        if (role, port) in by_execution:
+            raise EvidenceError('PC006 dual port control repeats a role/port execution')
+        by_execution[(role, port)] = row
+    if set(by_execution) != {
+        ('probe_source', SERVICE_PORT), ('probe_source', comparison_port),
+        ('allowed_source', SERVICE_PORT), ('allowed_source', comparison_port),
     }:
-        raise EvidenceError('PC006 dual port control facts shape is invalid')
-    if (
-        dual_facts['probe_source_address'] != str(parsed_source)
-        or dual_facts['target_host'] != GUEST_FIXED_ADDRESS
-    ):
-        raise EvidenceError('PC006 dual port control facts do not bind the probe source and target host')
-    rows = dual_facts['ports']
-    if not isinstance(rows, list) or len(rows) != 2:
-        raise EvidenceError('PC006 dual port control must retain both per-port results')
-    by_port = {}
-    for row in rows:
-        if not isinstance(row, dict) or set(row) != {
-            'port', 'protected_by_formal_rule', 'from_probe_source', 'from_allowed_source',
-        }:
-            raise EvidenceError('PC006 dual port control row shape is invalid')
-        by_port[row['port']] = row
-    if set(by_port) != {SERVICE_PORT, comparison_port}:
-        raise EvidenceError('PC006 dual port control ports differ from the declared comparison')
-    for port, row in by_port.items():
-        failure = row['from_probe_source']
-        if (
-            failure.get('outcome') != 'unreachable'
-            or failure.get('error_class') not in NETWORK_FAILURE_CLASSES
-        ):
-            raise EvidenceError(f'PC006 dual port control port {port} lacks a classified failure from the probe source')
-    if by_port[SERVICE_PORT]['protected_by_formal_rule'] is not True:
-        raise EvidenceError('PC006 dual port control does not mark the formal port as rule-protected')
-    comparison_row = by_port[comparison_port]
-    allowed = comparison_row['from_allowed_source']
-    if (
-        comparison_row['protected_by_formal_rule'] is not False
-        or allowed.get('outcome') != 'responded'
-        or type(allowed.get('http_status')) is not int
-        or not 100 <= allowed['http_status'] <= 599
-    ):
-        raise EvidenceError('PC006 comparison port is not a live unprotected control')
-
-    rule_element = _network_element_original(
-        bundle_root, phase, report, document['firewall_rule'],
-        'PC006 firewall rule verify', seen, expect_success=True,
+        raise EvidenceError('PC006 dual port control must retain both ports from both sources')
+    # The per-port rows are derived from the raw executions here; a merged
+    # summary line carried in the document is neither trusted nor required.
+    for port in (SERVICE_PORT, comparison_port):
+        _pc006_curl_failure_class(
+            by_execution[('probe_source', port)], f'PC006 dual port control port {port}')
+    _pc006_allowed_response(
+        by_execution[('allowed_source', comparison_port)],
+        'PC006 unprotected comparison port',
     )
+    _pc006_allowed_response(
+        by_execution[('allowed_source', SERVICE_PORT)],
+        'PC006 formal port from the allowed source',
+    )
+
+    _verify_pc006_firewall(bundle_root, phase, document, seen)
+
+
+def _verify_pc006_firewall(
+    bundle_root: Path,
+    phase: dict[str, Any],
+    boundary: dict[str, Any],
+    seen: dict[str, tuple[int, str]],
+) -> None:
+    """Bind the PC006 firewall element to the approved ready collector bytes.
+
+    The rule readback must be the exact same-round ready ``firewall`` original
+    already parsed by the P05 ready collector/parser; a re-labelled echo or
+    hand-written rules JSON is not that observation, and the unique rule
+    predicates are re-checked here through the same parser (B01).
+    """
+    from tests.p05_ready_evidence import (
+        GUEST_COMPUTER_NAME,
+        GUEST_FIXED_ADDRESS,
+        ReadyEvidenceError,
+        SERVICE_PORT,
+        _load_transcript,
+        _verify_firewall,
+    )
+
+    ready_reference = phase.get('ready')
+    if not isinstance(ready_reference, dict) or set(ready_reference) != REF_KEYS:
+        raise EvidenceError('PC006 firewall verification requires the phase ready Ref join')
+    ready = _read_json(
+        _resolve_ref(bundle_root, ready_reference, 'phase.ready', seen),
+        'phase ready for the PC006 firewall join',
+    )
+    observations = ready.get('observations')
+    if not isinstance(observations, dict) or not isinstance(observations.get('firewall'), dict):
+        raise EvidenceError('phase ready does not retain a firewall observation')
+    if observations['firewall'] != boundary['firewall_rule']:
+        raise EvidenceError(
+            'PC006 firewall original is not the same-round ready firewall observation; '
+            're-writing the rule bytes under a PC006 label does not prove the rule was read'
+        )
+    firewall_path = _resolve_ref(
+        bundle_root, boundary['firewall_rule'], 'PC006 firewall rule', seen)
     try:
-        rule_document = json.loads(rule_element['response']['stdout'])
-    except json.JSONDecodeError as exc:
-        raise EvidenceError('PC006 firewall rule stdout is not the raw rule JSON') from exc
-    rules = rule_document.get('rules') if isinstance(rule_document, dict) else None
-    if not isinstance(rules, list) or len(rules) != 1 or not isinstance(rules[0], dict):
-        raise EvidenceError('PC006 firewall rule original is not the unique rule readback')
-    rule = rules[0]
-    expected_rule_name = f'mcp-velociraptor-{SERVICE_PORT}'
+        transcript = _load_transcript(firewall_path, 'firewall', boundary, 'guest')
+        if transcript.computer_name != GUEST_COMPUTER_NAME:
+            raise ReadyEvidenceError('firewall transcript does not come from the approved guest host')
+        _verify_firewall(
+            transcript,
+            {'listener': {'LocalPort': SERVICE_PORT, 'LocalAddress': GUEST_FIXED_ADDRESS}},
+        )
+    except ReadyEvidenceError as exc:
+        raise EvidenceError(f'PC006 firewall rule original is invalid: {exc}') from exc
+
+
+def _verify_http_header_capture(
+    path: Path,
+    session_id: str,
+    instance_id: str,
+) -> None:
+    """Require this run's raw response-header capture to carry its identity.
+
+    The HTTP tools/list identity must come from the recorded ``Mcp-Session-Id``
+    and ``X-MCP-Server-Instance`` response headers, not from a shell-declared
+    ``session_id`` field (P05 §0.3).
+    """
+    try:
+        rows = json.loads(path.read_text(encoding='utf-8-sig'))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError('HTTP header capture is not valid UTF-8 JSON') from exc
+    if not isinstance(rows, list) or not rows:
+        raise EvidenceError('HTTP header capture does not retain the response exchanges')
+    row_keys = {
+        'method', 'path', 'status_code', 'mcp_session_id',
+        'server_instance_id', 'request_session_id',
+    }
+    proven = False
+    for position, row in enumerate(rows):
+        if not isinstance(row, dict) or set(row) != row_keys:
+            raise EvidenceError(f'HTTP header capture row {position} shape is invalid')
+        if (
+            row['path'] != '/mcp'
+            or type(row['status_code']) is not int
+            or not 100 <= row['status_code'] <= 599
+            or not isinstance(row['method'], str) or not row['method']
+        ):
+            raise EvidenceError(f'HTTP header capture row {position} is not a real MCP exchange')
+        for field, expected in (
+            ('mcp_session_id', session_id),
+            ('server_instance_id', instance_id),
+            ('request_session_id', session_id),
+        ):
+            if row[field] is not None and row[field] != expected:
+                raise EvidenceError(
+                    f'HTTP header capture row {position} contradicts this report identity'
+                )
+        if (
+            row['method'] == 'POST'
+            and row['mcp_session_id'] == session_id
+            and row['server_instance_id'] == instance_id
+        ):
+            proven = True
+    if not proven:
+        raise EvidenceError(
+            'HTTP header capture does not prove this report session and service instance; '
+            'a declared session_id is not a response header'
+        )
+
+
+def _verify_stdio_capture(
+    path: Path,
+    expected_normalized: bytes,
+) -> list[dict[str, Any]]:
+    """Recompute the stdio tools/list from the passive SDK protocol transcript.
+
+    The stdio adapter has no HTTP-style ``Mcp-Session-Id``; its identity is the
+    captured request/response exchange itself, so a copy of the HTTP listing
+    under a new file name cannot stand in for it (P05 §0.3, CHK-028).
+    """
+    try:
+        text = path.read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeError) as exc:
+        raise EvidenceError('stdio capture is not readable UTF-8 text') from exc
+    rows: list[dict[str, Any]] = []
+    previous_started: datetime | None = None
+    for position, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            raise EvidenceError(f'stdio capture line {position} is empty')
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise EvidenceError(f'stdio capture line {position} is not a raw SDK message') from exc
+        if (
+            not isinstance(row, dict)
+            or set(row) != {'sequence', 'direction', 'started_at', 'ended_at', 'message'}
+            or type(row['sequence']) is not int
+            or row['sequence'] != len(rows) + 1
+            or row['direction'] not in {'client_to_server', 'server_to_client'}
+        ):
+            raise EvidenceError(f'stdio capture line {position} is not the passive SDK message format')
+        started = _parse_utc(row['started_at'], f'stdio capture line {position} started_at')
+        ended = _parse_utc(row['ended_at'], f'stdio capture line {position} ended_at')
+        if ended < started or (previous_started is not None and started < previous_started):
+            raise EvidenceError('stdio capture message times are not ordered UTC instants')
+        previous_started = started
+        message = row['message']
+        if not isinstance(message, dict) or message.get('jsonrpc') != '2.0':
+            raise EvidenceError(f'stdio capture line {position} is not a JSON-RPC 2.0 message')
+        rows.append(row)
+    if not rows:
+        raise EvidenceError('stdio capture retains no protocol messages')
+    requests: dict[Any, dict[str, Any]] = {}
+    responses: dict[Any, dict[str, Any]] = {}
+    for row in rows:
+        message = row['message']
+        if row['direction'] == 'client_to_server':
+            if 'method' in message and message.get('id') is not None:
+                if message['id'] in requests:
+                    raise EvidenceError('stdio capture repeats a JSON-RPC request id')
+                requests[message['id']] = row
+        elif 'id' in message:
+            if message['id'] in responses:
+                raise EvidenceError('stdio capture repeats a JSON-RPC response id')
+            responses[message['id']] = row
+    initialize_ids = [
+        request_id for request_id, row in requests.items()
+        if row['message'].get('method') == 'initialize'
+    ]
+    tools_list_ids = [
+        request_id for request_id, row in requests.items()
+        if row['message'].get('method') == 'tools/list'
+    ]
+    if len(initialize_ids) != 1 or len(tools_list_ids) != 1:
+        raise EvidenceError('stdio capture must retain exactly one initialize and one tools/list exchange')
+    for request_id in initialize_ids + tools_list_ids:
+        request_row, response_row = requests[request_id], responses.get(request_id)
+        if response_row is None or response_row['sequence'] <= request_row['sequence']:
+            raise EvidenceError('stdio capture lacks the matching response for a real exchange')
+    tools_list_result = responses[tools_list_ids[0]]['message'].get('result')
+    if not isinstance(tools_list_result, dict) or _normalized_tools_bytes(tools_list_result) != expected_normalized:
+        raise EvidenceError('stdio capture tools/list response does not normalize to the HTTP schema')
+    return rows
+
+
+def _verify_stdio_launch(
+    path: Path,
+    phase: dict[str, Any],
+    capture_rows: list[dict[str, Any]],
+) -> None:
+    """Bind the stdio diagnostic transcript to its recorded transport launch."""
+    from tests.p05_ready_evidence import GUEST_COMPUTER_NAME
+
+    document = _read_json(path, 'stdio transport launch')
+    document_keys = {
+        'schema_version', 'kind', 'workflow_id', 'run_id', 'restore_attempt_id',
+        'host', 'request', 'started_at', 'ended_at', 'exit_status', 'response',
+    }
     if (
-        set(rule) != {
-            'name', 'display_name', 'direction', 'action', 'enabled',
-            'protocol', 'local_port', 'local_address', 'remote_address',
-        }
-        # B01: each rule name is compared on its own; a chained inequality
-        # cannot express that either wrong name must fail.
-        or rule['name'] != expected_rule_name
-        or rule['display_name'] != expected_rule_name
-        or rule['direction'] != 'Inbound'
-        or rule['action'] != 'Allow'
-        or rule['enabled'] is not True
-        or rule['protocol'] not in {'TCP', '6'}
-        or rule['local_port'] != SERVICE_PORT
-        or rule['local_address'] != GUEST_FIXED_ADDRESS
-        or rule['remote_address'] != HOST_FIXED_ADDRESS
+        set(document) != document_keys
+        or document.get('schema_version') != 1
+        or document.get('kind') != STDIO_LAUNCH_KIND
+        or document.get('workflow_id') != WORKFLOW_ID
+        or document.get('restore_attempt_id') != phase['restore_attempt_id']
+        or not _nonempty_string(document.get('run_id'), 'stdio launch run_id')
     ):
-        raise EvidenceError('PC006 firewall rule is not the unique exact 28790 host-only rule')
+        raise EvidenceError('stdio launch transcript shape or same-round identity is invalid')
+    host = document.get('host')
+    if (
+        not isinstance(host, dict)
+        or set(host) != {'scope', 'computer_name'}
+        or host.get('scope') != 'guest'
+        or host.get('computer_name') != GUEST_COMPUTER_NAME
+    ):
+        raise EvidenceError('stdio launch transcript is not the approved guest observation')
+    request = document.get('request')
+    if (
+        not isinstance(request, dict) or set(request) != {'argv', 'command_line'}
+        or not isinstance(request['argv'], list) or not request['argv']
+        or any(not isinstance(item, str) or not item for item in request['argv'])
+        or not _nonempty_string(request.get('command_line'), 'stdio launch command_line')
+    ):
+        raise EvidenceError('stdio launch request is not a complete command')
+    if any(item not in request['command_line'] for item in request['argv']):
+        raise EvidenceError('stdio launch command_line contradicts its argv')
+    interpreter = request['argv'][0].replace('\\', '/').rsplit('/', 1)[-1].lower()
+    if interpreter not in {'python', 'python3', 'python.exe'}:
+        raise EvidenceError('stdio launch is not a python transport launch')
+    if not any(
+        item.replace('\\', '/').rsplit('/', 1)[-1] == 'mcp_velociraptor_bridge.py'
+        for item in request['argv']
+    ):
+        raise EvidenceError('stdio launch does not start the bridge over stdio')
+    exit_status = document.get('exit_status')
+    if (
+        not isinstance(exit_status, dict) or set(exit_status) != {'code'}
+        or type(exit_status['code']) is not int or exit_status['code'] != 0
+    ):
+        raise EvidenceError('stdio launch did not close successfully')
+    response = document.get('response')
+    response_keys = {
+        'stdout', 'stdout_size', 'stdout_sha256',
+        'stderr', 'stderr_size', 'stderr_sha256',
+    }
+    if not isinstance(response, dict) or set(response) != response_keys:
+        raise EvidenceError('stdio launch does not retain complete stdout/stderr')
+    for stream in ('stdout', 'stderr'):
+        text = response[stream]
+        if not isinstance(text, str):
+            raise EvidenceError(f'stdio launch {stream} is not text')
+        raw = text.encode('utf-8')
+        if (
+            type(response[f'{stream}_size']) is not int
+            or response[f'{stream}_size'] != len(raw)
+            or response[f'{stream}_sha256'] != hashlib.sha256(raw).hexdigest()
+        ):
+            raise EvidenceError(f'stdio launch {stream} bytes differ from their identity')
+    started = _parse_utc(document.get('started_at'), 'stdio launch started_at')
+    ended = _parse_utc(document.get('ended_at'), 'stdio launch ended_at')
+    if ended < started:
+        raise EvidenceError('stdio launch ends before it starts')
+    first = _parse_utc(capture_rows[0]['started_at'], 'stdio capture first message')
+    last = _parse_utc(capture_rows[-1]['ended_at'], 'stdio capture last message')
+    if not (started <= first and last <= ended):
+        raise EvidenceError('stdio capture messages are not inside the recorded transport launch')
 
 
 def _verify_schema_identity_originals(
@@ -1641,11 +2067,11 @@ def _verify_schema_identity_originals(
     """Require both HTTP and stdio tools/list originals and equal schemas.
 
     A single ``tools-schema.json`` digest cannot prove dual-adapter identity
-    (CHK-028), and mutual equality alone proves nothing about this phase
-    (B05): the normalized bytes must also equal this report's
-    ``tools_schema_sha256``, the HTTP listing must join the report session and
-    service instance, and the stdio listing must be a distinct original from
-    a distinct session.
+    (CHK-028): the HTTP listing must be this run's own ``tools-list.json``
+    joined to the raw response-header capture, and the stdio listing must be
+    recomputed from the passive SDK protocol transcript of a recorded bridge
+    launch.  A copy of the HTTP list under another path, or an invented
+    HTTP-style stdio session id, is rejected (B05).
     """
     path = _resolve_ref(bundle_root, reference, 'network_evidence.schema_identity', seen)
     document = _read_json(path, 'schema identity')
@@ -1658,7 +2084,6 @@ def _verify_schema_identity_originals(
         or document.get('restore_attempt_id') != phase['restore_attempt_id']
     ):
         raise EvidenceError('schema identity document shape or phase identity is invalid')
-    adapter_keys = {'transport', 'session_id', 'instance_id', 'tools_list'}
     session = report.get('mcp_session')
     server = report.get('server_identity')
     if (
@@ -1667,42 +2092,52 @@ def _verify_schema_identity_originals(
         or not _nonempty_string(server.get('instance_id'), 'report server_identity.instance_id')
     ):
         raise EvidenceError('schema identity requires the report session and service identity')
-    adapters = {}
-    normalized: dict[str, bytes] = {}
-    for transport in ('http', 'stdio'):
-        adapter = document.get(transport)
-        if not isinstance(adapter, dict) or set(adapter) != adapter_keys or adapter['transport'] != transport:
-            raise EvidenceError(f'schema identity {transport} adapter shape is invalid')
-        original_path = _resolve_ref(
-            bundle_root, adapter['tools_list'],
-            f'network_evidence.schema_identity.{transport}.tools_list', seen,
-        )
-        listing = _read_json(original_path, f'{transport} tools/list original')
-        normalized[transport] = _normalized_tools_bytes(listing)
-        adapters[transport] = adapter
+    report_reference = phase.get('report')
+    if not isinstance(report_reference, dict) or set(report_reference) != REF_KEYS or '/' not in report_reference['path']:
+        raise EvidenceError('schema identity requires the phase report from its run directory')
+    report_parent = report_reference['path'].rsplit('/', 1)[0]
+    http = document.get('http')
+    if not isinstance(http, dict) or set(http) != {'transport', 'headers', 'tools_list'} or http.get('transport') != 'http':
+        raise EvidenceError('schema identity http adapter shape is invalid')
     if (
-        adapters['http']['tools_list']['path'] == adapters['stdio']['tools_list']['path']
+        not isinstance(http['tools_list'], dict) or set(http['tools_list']) != REF_KEYS
+        or not isinstance(http['headers'], dict) or set(http['headers']) != REF_KEYS
     ):
-        raise EvidenceError('the same file cannot stand in for both adapter originals')
-    if normalized['http'] != normalized['stdio']:
-        raise EvidenceError('HTTP and stdio tools/list originals do not normalize to the same schema')
+        raise EvidenceError('schema identity http adapter Ref shape is invalid')
+    if http['tools_list']['path'] != f'{report_parent}/tools-list.json':
+        raise EvidenceError("HTTP tools/list original is not this run's own tools-list.json")
+    if http['headers']['path'] != f'{report_parent}/http-headers.json':
+        raise EvidenceError("HTTP identity is not bound to this run's response-header capture")
+    tools_path = _resolve_ref(
+        bundle_root, http['tools_list'], 'network_evidence.schema_identity.http.tools_list', seen)
+    headers_path = _resolve_ref(
+        bundle_root, http['headers'], 'network_evidence.schema_identity.http.headers', seen)
+    listing = _read_json(tools_path, 'HTTP tools/list original')
+    normalized = _normalized_tools_bytes(listing)
     tools_hash = report.get('tools_schema_sha256')
     if (
         not _sha256_is_valid(tools_hash)
-        or hashlib.sha256(normalized['http']).hexdigest() != tools_hash
+        or hashlib.sha256(normalized).hexdigest() != tools_hash
     ):
         raise EvidenceError("dual-adapter schema does not equal this report's tools_schema_sha256")
+    _verify_http_header_capture(headers_path, session['id'], server['instance_id'])
+    stdio = document.get('stdio')
     if (
-        adapters['http']['session_id'] != session['id']
-        or adapters['http']['instance_id'] != server['instance_id']
+        not isinstance(stdio, dict) or set(stdio) != {'transport', 'launch', 'capture'}
+        or stdio.get('transport') != 'stdio'
     ):
-        raise EvidenceError('HTTP tools/list original does not join the report session and service instance')
-    if (
-        not _nonempty_string(adapters['stdio']['session_id'], 'stdio adapter session_id')
-        or not _nonempty_string(adapters['stdio']['instance_id'], 'stdio adapter instance_id')
-        or adapters['stdio']['session_id'] == adapters['http']['session_id']
-    ):
-        raise EvidenceError('stdio tools/list original is not a distinct adapter session')
+        raise EvidenceError(
+            'schema identity stdio adapter shape is invalid: a captured protocol transcript and '
+            'its transport launch are required, and an invented HTTP-style session identity is not accepted'
+        )
+    capture_path = _resolve_ref(
+        bundle_root, stdio['capture'], 'network_evidence.schema_identity.stdio.capture', seen)
+    launch_path = _resolve_ref(
+        bundle_root, stdio['launch'], 'network_evidence.schema_identity.stdio.launch', seen)
+    if len({path for path in (str(tools_path), str(headers_path), str(capture_path), str(launch_path))}) != 4:
+        raise EvidenceError('HTTP and stdio schema originals must be distinct carried files')
+    capture_rows = _verify_stdio_capture(capture_path, normalized)
+    _verify_stdio_launch(launch_path, phase, capture_rows)
 
 
 def _verify_network_evidence(

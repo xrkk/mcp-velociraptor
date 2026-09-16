@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 import uuid
@@ -557,11 +558,12 @@ class EntryGateTests(unittest.TestCase):
 class NetworkGateFixture:
     """A genuinely valid synthetic network evidence package (B01-B05 shapes).
 
-    Every original here actually satisfies the PC006/schemIdentity predicates:
-    a curl bound-source probe with a classified failure, a dual-port control
-    with per-port structured results, the unique exact firewall rule, two
-    distinct adapter listings joined to the report, and the service
-    observation join.  Synthetic/seam: no Windows network was probed.
+    Every PC006 original here is the frozen host collector's own output, run
+    through this collector's control flow with a controlled ``subprocess.run``
+    stub standing in for the real curl network.  The HTTP adapter joins this
+    run's own tools-list and response-header capture; the stdio adapter is a
+    passive SDK protocol transcript plus its recorded bridge launch.  Synthetic
+    seam: no Windows network was probed and no bridge was launched.
     """
 
     run_id = 'run-network-gate'
@@ -574,7 +576,7 @@ class NetworkGateFixture:
         'computer_name': 'DESKTOP-3FI41GR',
         'service_name': 'mcp-velociraptor',
         'pid': 42,
-        'process_start_time_utc': '2026-09-13T23:59:58Z',
+        'process_start_time_utc': '2026-09-13T11:59:58Z',
         'instance_id': 'synthetic-instance',
         'executable_sha256': 'b' * 64,
     }
@@ -582,6 +584,7 @@ class NetworkGateFixture:
     def __init__(self, root: Path, ref_root: Path | None = None) -> None:
         self.root = root
         self.ref_root = ref_root or root
+        self.run_dir = root / 'runs' / self.run_id
         names = [f'synthetic_tool_{number:03d}' for number in range(130)]
         self.listing = {'tools': [{'name': name, 'inputSchema': {'type': 'object'}} for name in names]}
         self.report = {
@@ -594,8 +597,19 @@ class NetworkGateFixture:
                 evidence._normalized_tools_bytes(self.listing)
             ).hexdigest(),
         }
-        self.report_path = root / 'report.json'
+        self.report_path = self.run_dir / 'report.json'
         _write_json(self.report_path, self.report)
+        _write_json(self.run_dir / 'tools-list.json', self.listing)
+        self.http_headers = [
+            {'method': 'POST', 'path': '/mcp', 'status_code': 200,
+             'mcp_session_id': 'synthetic-session', 'server_instance_id': 'synthetic-instance',
+             'request_session_id': None},
+            {'method': 'POST', 'path': '/mcp', 'status_code': 200,
+             'mcp_session_id': 'synthetic-session', 'server_instance_id': 'synthetic-instance',
+             'request_session_id': 'synthetic-session'},
+        ]
+        _write_json(self.run_dir / 'http-headers.json', self.http_headers)
+        self._write_ready()
         self._write_pc006()
         self._write_schema_identity()
         self._write_service_observation()
@@ -615,80 +629,92 @@ class NetworkGateFixture:
             'restore_attempt_id': self.attempt,
             'network_evidence': _ref(self.ref_root, self.path),
             'report': _ref(self.ref_root, self.report_path),
+            'ready': _ref(self.ref_root, self.ready_path),
         }
 
-    def _element(self, name: str, envelope: dict[str, object]) -> Path:
-        path = self.root / 'pc006' / f'{name}.json'
-        _write_json(path, envelope)
-        return path
+    # --- the same-round ready firewall observation (approved collector shape) ---
 
-    def _element_envelope(
-        self, operation_id: str, observation: str, request: dict[str, object],
-        stdout: str, *, exit_code: int,
-    ) -> dict[str, object]:
-        return {
+    def _write_ready_transcript(self, payload: object, path: Path) -> None:
+        stdout = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+        document = {
             'schema_version': 1,
-            'kind': evidence.RESTORE_HOST_COMMAND_KIND,
+            'kind': 'p05-ready-command-v1',
+            'observation': 'firewall',
             'workflow_id': evidence.WORKFLOW_ID,
             'run_id': self.run_id,
             'restore_attempt_id': self.attempt,
-            'operation_id': operation_id,
-            'observation': observation,
-            'vmx': VMX,
-            'request': request,
-            'started_at': self.probe_started,
-            'ended_at': self.probe_ended,
-            'exit_status': {'code': exit_code},
+            'host': {'scope': 'guest', 'computer_name': 'DESKTOP-3FI41GR'},
+            'request': {
+                'argv': ['powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive',
+                         '-Command', 'fixed-read-only-observation'],
+                'command_line': 'powershell.exe -Command fixed-read-only-observation',
+            },
+            'started_at': '2026-09-13T12:00:30Z',
+            'ended_at': '2026-09-13T12:00:31Z',
+            'exit_status': {'code': 0},
             'response': _streams(stdout),
         }
+        _write_json(path, document)
 
-    def _write_pc006(self) -> None:
-        bound_facts = {
-            'schema_version': 1, 'kind': evidence.CONNECT_PROBE_KIND,
-            'source': self.probe_source,
-            'target': {'host': '192.168.204.232', 'port': 28790, 'path': '/mcp'},
-            'outcome': 'unreachable', 'error_class': 'connection-refused',
-        }
-        bound_argv = ['/usr/bin/curl', '--interface', self.probe_source,
-                      'http://192.168.204.232:28790/mcp']
-        bound = self._element_envelope(
-            'pc006-bound-source', 'bound-source-connect-failure',
-            {'argv': bound_argv, 'command_line': ' '.join(bound_argv)},
-            json.dumps(bound_facts), exit_code=7,
-        )
-        dual_facts = {
-            'schema_version': 1, 'kind': evidence.DUAL_PORT_KIND,
-            'probe_source_address': self.probe_source,
-            'target_host': '192.168.204.232',
-            'ports': [
-                {'port': 28790, 'protected_by_formal_rule': True,
-                 'from_probe_source': {'outcome': 'unreachable', 'error_class': 'connection-refused'},
-                 'from_allowed_source': {'outcome': 'responded', 'http_status': 401}},
-                {'port': self.comparison_port, 'protected_by_formal_rule': False,
-                 'from_probe_source': {'outcome': 'unreachable', 'error_class': 'connection-refused'},
-                 'from_allowed_source': {'outcome': 'responded', 'http_status': 406}},
-            ],
-        }
-        dual_argv = ['/usr/bin/connect-probe', '--source', self.probe_source,
-                     '28790', str(self.comparison_port)]
-        dual = self._element_envelope(
-            'pc006-dual-port', 'dual-port-comparison',
-            {'argv': dual_argv, 'command_line': ' '.join(dual_argv)},
-            json.dumps(dual_facts), exit_code=2,
-        )
-        rule = {
+    def _write_ready(self) -> None:
+        self.ready = {'observations': {}}
+        self.firewall_rule = {
             'name': 'mcp-velociraptor-28790',
             'display_name': 'mcp-velociraptor-28790',
             'direction': 'Inbound', 'action': 'Allow', 'enabled': True,
             'protocol': 'TCP', 'local_port': 28790,
             'local_address': '192.168.204.232', 'remote_address': '192.168.204.1',
         }
-        firewall_argv = ['/usr/bin/ssh', 'guest', 'Get-NetFirewallRule']
-        firewall = self._element_envelope(
-            'pc006-firewall-rule', 'firewall-rule-verify',
-            {'argv': firewall_argv, 'command_line': ' '.join(firewall_argv)},
-            json.dumps({'rules': [rule]}), exit_code=0,
-        )
+        self.firewall_path = self.root / 'pc006' / 'firewall-rule.json'
+        self._write_ready_transcript({'rules': [self.firewall_rule]}, self.firewall_path)
+        self.ready['observations']['firewall'] = _ref(self.ref_root, self.firewall_path)
+        self.ready_path = self.root / 'ready' / 'ready.json'
+        _write_json(self.ready_path, self.ready)
+
+    def ready_firewall_reference(self) -> dict[str, object]:
+        return dict(self.ready['observations']['firewall'])
+
+    # --- PC006 collector executions (frozen collector + controlled stub) ---
+
+    def _stub_curl(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        bind = command[command.index('--interface') + 1]
+        port = int(command[-1].rsplit(':', 1)[1].split('/')[0])
+        if bind == self.probe_source:
+            stderr = (f'curl: (28) Failed to connect to 192.168.204.232 port {port} '
+                      'after 5001 ms: Timeout was reached').encode('utf-8')
+            return subprocess.CompletedProcess(command, 28, b'', stderr)
+        status = b'401' if port == 28790 else b'406'
+        return subprocess.CompletedProcess(command, 0, status, b'')
+
+    def _collect_element(self, mode: str, source: str, comparison_port: int, stub=None) -> dict:
+        with patch('subprocess.run', side_effect=stub or self._stub_curl):
+            document = evidence._pc006_collect([mode, source, str(comparison_port)])
+        for row in document['executions']:
+            row['started_at'] = self.probe_started
+            row['ended_at'] = self.probe_ended
+        stdout = json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        argv = evidence.pc006_collector_argv(mode, source, comparison_port)
+        return {
+            'schema_version': 1,
+            'kind': evidence.PC006_COMMAND_KIND,
+            'workflow_id': evidence.WORKFLOW_ID,
+            'run_id': self.run_id,
+            'restore_attempt_id': self.attempt,
+            'operation_id': f'pc006-{mode}',
+            'observation': f'pc006-{mode}-synthetic',
+            'vmx': VMX,
+            'request': {'argv': argv, 'command_line': ' '.join(argv)},
+            'started_at': self.probe_started,
+            'ended_at': self.probe_ended,
+            'exit_status': {'code': 0},
+            'response': _streams(stdout),
+        }
+
+    def _write_pc006(self) -> None:
+        self.bound_path = self.root / 'pc006' / 'bound-source.json'
+        self.dual_path = self.root / 'pc006' / 'dual-port.json'
+        _write_json(self.bound_path, self._collect_element('bound', self.probe_source, self.comparison_port))
+        _write_json(self.dual_path, self._collect_element('dual', self.probe_source, self.comparison_port))
         self.pc006 = {
             'schema_version': 1,
             'kind': evidence.PC006_BOUNDARY_KIND,
@@ -697,28 +723,88 @@ class NetworkGateFixture:
             'restore_attempt_id': self.attempt,
             'probe_source_address': self.probe_source,
             'comparison_port': self.comparison_port,
-            'bound_source_failure': _ref(self.ref_root, self._element('bound-source', bound)),
-            'dual_port_control': _ref(self.ref_root, self._element('dual-port', dual)),
-            'firewall_rule': _ref(self.ref_root, self._element('firewall-rule', firewall)),
+            'bound_source_failure': _ref(self.ref_root, self.bound_path),
+            'dual_port_control': _ref(self.ref_root, self.dual_path),
+            'firewall_rule': self.ready_firewall_reference(),
         }
         self.pc006_path = self.root / 'pc006' / 'pc006.json'
         _write_json(self.pc006_path, self.pc006)
 
-    def _write_schema_identity(self, *, drift: bool = False, http_path: Path | None = None,
-                               stdio_path: Path | None = None, http_session: str | None = None,
-                               http_instance: str | None = None) -> None:
-        names = [f'synthetic_tool_{number:03d}' for number in range(130)]
-        http_listing = {'tools': [{'name': name, 'inputSchema': {'type': 'object'}} for name in names]}
-        stdio_names = list(names)
+    def bind_firewall(self, ready_document: dict) -> None:
+        self.pc006['firewall_rule'] = dict(ready_document['observations']['firewall'])
+        _write_json(self.pc006_path, self.pc006)
+
+    def refresh(self) -> None:
+        self.document['non_allowed_source'] = _ref(self.ref_root, self.pc006_path)
+        _write_json(self.path, self.document)
+        self.phase['network_evidence'] = _ref(self.ref_root, self.path)
+        self.phase['ready'] = _ref(self.ref_root, self.ready_path)
+
+    def rewrite_bound(self, envelope: dict) -> None:
+        _write_json(self.bound_path, envelope)
+        self.pc006['bound_source_failure'] = _ref(self.ref_root, self.bound_path)
+        _write_json(self.pc006_path, self.pc006)
+        self.refresh()
+
+    def rewrite_dual(self, envelope: dict) -> None:
+        _write_json(self.dual_path, envelope)
+        self.pc006['dual_port_control'] = _ref(self.ref_root, self.dual_path)
+        _write_json(self.pc006_path, self.pc006)
+        self.refresh()
+
+    def rewrite_firewall(self, document: dict) -> None:
+        _write_json(self.firewall_path, document)
+        reference = _ref(self.ref_root, self.firewall_path)
+        self.ready['observations']['firewall'] = reference
+        _write_json(self.ready_path, self.ready)
+        self.pc006['firewall_rule'] = dict(reference)
+        _write_json(self.pc006_path, self.pc006)
+        self.refresh()
+
+    # --- schema identity originals ---
+
+    def _write_schema_identity(
+        self, *, drift: bool = False, http_tools: Path | None = None,
+        http_headers: Path | None = None, stdio_listing: dict | None = None,
+        stdio_capture: Path | None = None, stdio_launch: Path | None = None,
+    ) -> None:
+        if http_tools is None:
+            http_tools = self.run_dir / 'tools-list.json'
+        if http_headers is None:
+            http_headers = self.run_dir / 'http-headers.json'
+        if stdio_listing is None:
+            stdio_listing = self.listing
+        if stdio_capture is None:
+            stdio_capture = self.root / 'stdio' / 'capture.ndjson'
+        if stdio_launch is None:
+            stdio_launch = self.root / 'stdio' / 'launch.json'
+        result = {'tools': [dict(tool) for tool in stdio_listing['tools']]}
         if drift:
-            stdio_names[0] = 'a_different_tool_name'
-        stdio_listing = {'tools': [{'name': name, 'inputSchema': {'type': 'object'}} for name in stdio_names]}
-        if http_path is None:
-            http_path = self.root / 'schema' / 'http-tools-list.json'
-            _write_json(http_path, http_listing)
-        if stdio_path is None:
-            stdio_path = self.root / 'schema' / 'stdio-tools-list.json'
-            _write_json(stdio_path, stdio_listing)
+            result['tools'][0]['name'] = 'a_different_tool_name'
+        exchange = [
+            ('client_to_server', {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {
+                'protocolVersion': '2025-06-18', 'capabilities': {},
+                'clientInfo': {'name': 'p05-sdk-capture', 'version': '1'}}}),
+            ('server_to_client', {'jsonrpc': '2.0', 'id': 1, 'result': {
+                'protocolVersion': '2025-06-18', 'capabilities': {},
+                'serverInfo': {'name': 'velociraptor-mcp', 'version': 'synthetic'}}}),
+            ('client_to_server', {'jsonrpc': '2.0', 'method': 'notifications/initialized'}),
+            ('client_to_server', {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}}),
+            ('server_to_client', {'jsonrpc': '2.0', 'id': 2, 'result': result}),
+        ]
+        capture = ''.join(
+            json.dumps({
+                'sequence': position,
+                'direction': direction,
+                'started_at': f'2026-09-13T12:00:{40 + position:02d}Z',
+                'ended_at': f'2026-09-13T12:00:{40 + position:02d}Z',
+                'message': message,
+            }, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n'
+            for position, (direction, message) in enumerate(exchange, start=1)
+        )
+        stdio_capture.parent.mkdir(parents=True, exist_ok=True)
+        stdio_capture.write_text(capture, encoding='utf-8')
+        _write_json(stdio_launch, self._launch_document())
         self.schema_identity = {
             'schema_version': 1,
             'kind': evidence.SCHEMA_IDENTITY_KIND,
@@ -727,25 +813,58 @@ class NetworkGateFixture:
             'restore_attempt_id': self.attempt,
             'http': {
                 'transport': 'http',
-                'session_id': http_session or self.report['mcp_session']['id'],
-                'instance_id': http_instance or self.server_identity['instance_id'],
-                'tools_list': _ref(self.ref_root, http_path),
+                'headers': _ref(self.ref_root, http_headers),
+                'tools_list': _ref(self.ref_root, http_tools),
             },
             'stdio': {
                 'transport': 'stdio',
-                'session_id': 'synthetic-stdio-session',
-                'instance_id': 'synthetic-stdio-instance',
-                'tools_list': _ref(self.ref_root, stdio_path),
+                'launch': _ref(self.ref_root, stdio_launch),
+                'capture': _ref(self.ref_root, stdio_capture),
             },
         }
         self.schema_identity_path = self.root / 'schema' / 'schema-identity.json'
         _write_json(self.schema_identity_path, self.schema_identity)
 
+    def _launch_document(self, argv: list[str] | None = None) -> dict:
+        if argv is None:
+            argv = [r'C:\mcp-velociraptor\.venv\Scripts\python.exe',
+                    r'C:\mcp-velociraptor\mcp_velociraptor_bridge.py']
+        return {
+            'schema_version': 1,
+            'kind': evidence.STDIO_LAUNCH_KIND,
+            'workflow_id': evidence.WORKFLOW_ID,
+            'run_id': 'run-stdio-diagnostic',
+            'restore_attempt_id': self.attempt,
+            'host': {'scope': 'guest', 'computer_name': 'DESKTOP-3FI41GR'},
+            'request': {'argv': argv, 'command_line': ' '.join(argv)},
+            'started_at': '2026-09-13T12:00:39Z',
+            'ended_at': '2026-09-13T12:00:47Z',
+            'exit_status': {'code': 0},
+            'response': _streams(json.dumps({'synthetic': 'stdio-diagnostic'}, separators=(',', ':'))),
+        }
+
+    def rewrite_headers(self, rows: list[dict]) -> None:
+        _write_json(self.run_dir / 'http-headers.json', rows)
+        self.schema_identity['http']['headers'] = _ref(self.ref_root, self.run_dir / 'http-headers.json')
+        _write_json(self.schema_identity_path, self.schema_identity)
+        self.document['schema_identity'] = _ref(self.ref_root, self.schema_identity_path)
+        _write_json(self.path, self.document)
+        self.phase['network_evidence'] = _ref(self.ref_root, self.path)
+
+    def rewrite_launch(self, document: dict) -> None:
+        launch = self.root / 'stdio' / 'launch.json'
+        _write_json(launch, document)
+        self.schema_identity['stdio']['launch'] = _ref(self.ref_root, launch)
+        _write_json(self.schema_identity_path, self.schema_identity)
+        self.document['schema_identity'] = _ref(self.ref_root, self.schema_identity_path)
+        _write_json(self.path, self.document)
+        self.phase['network_evidence'] = _ref(self.ref_root, self.path)
+
     def _write_service_observation(self, *, instance: str | None = None) -> None:
         observation = {
             **self.server_identity,
             'instance_id': instance or self.server_identity['instance_id'],
-            'observed_at': '2026-09-13T23:59:59Z',
+            'observed_at': '2026-09-13T12:00:30Z',
         }
         self.observation_path = self.root / 'service-observation.json'
         _write_json(self.observation_path, observation)
@@ -792,8 +911,7 @@ class NetworkGateTests(unittest.TestCase):
         for change in ('both', 'name_only', 'display_only', 'both_equal_wrong'):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
                 fixture = NetworkGateFixture(Path(directory))
-                path = fixture.root / 'pc006' / 'firewall-rule.json'
-                document = json.loads(path.read_text(encoding='utf-8'))
+                document = json.loads(fixture.firewall_path.read_text(encoding='utf-8'))
                 rules = json.loads(document['response']['stdout'])
                 if change in ('both', 'both_equal_wrong'):
                     rules['rules'][0]['name'] = rules['rules'][0]['display_name'] = 'wrong-rule'
@@ -802,148 +920,130 @@ class NetworkGateTests(unittest.TestCase):
                 else:
                     rules['rules'][0]['display_name'] = 'wrong-rule'
                 document['response'] = _streams(json.dumps(rules))
-                _write_json(path, document)
-                fixture.pc006['firewall_rule'] = _ref(fixture.root, path)
-                _write_json(fixture.pc006_path, fixture.pc006)
-                fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-                _write_json(fixture.path, fixture.document)
-                fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-                with self.assertRaisesRegex(evidence.EvidenceError, 'unique exact 28790 host-only rule'):
+                fixture.rewrite_firewall(document)
+                with self.assertRaisesRegex(evidence.EvidenceError, 'unique exact 28790 host-only'):
                     evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
-    def test_b02_rejects_unbound_mismatched_or_allowed_bound_source(self) -> None:
-        def rewrite(fixture: NetworkGateFixture, argv: list[str], stdout: str | None = None,
-                    exit_code: int = 7) -> None:
-            path = fixture.root / 'pc006' / 'bound-source.json'
-            document = json.loads(path.read_text(encoding='utf-8'))
-            document['request'] = {'argv': argv, 'command_line': ' '.join(argv)}
-            if stdout is not None:
-                document['response'] = _streams(stdout)
-            document['exit_status']['code'] = exit_code
-            _write_json(path, document)
-            fixture.pc006['bound_source_failure'] = _ref(fixture.root, path)
+    def test_b01_rejects_a_pc006_relabelled_rule_readback(self) -> None:
+        # Re-writing the rule bytes only under the PC006 label (the codex-r02
+        # 'firewall_echo_command' shape) must not detach them from the
+        # same-round ready observation.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            document = json.loads(fixture.firewall_path.read_text(encoding='utf-8'))
+            document['request']['argv'][0] = '/bin/echo'
+            document['request']['command_line'] = ' '.join(document['request']['argv'])
+            _write_json(fixture.firewall_path, document)
+            fixture.pc006['firewall_rule'] = _ref(fixture.root, fixture.firewall_path)
             _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
+            fixture.refresh()
+            with self.assertRaisesRegex(evidence.EvidenceError, 'same-round ready firewall observation'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+    def test_b02_rejects_unbound_mismatched_or_allowed_bound_source(self) -> None:
+        def rewrite_request(fixture: NetworkGateFixture, argv: list[str]) -> None:
+            document = json.loads(fixture.bound_path.read_text(encoding='utf-8'))
+            document['request'] = {'argv': argv, 'command_line': ' '.join(argv)}
+            fixture.rewrite_bound(document)
 
         mutations = {
-            # No binding parameter at all (codex-r01 'unbound_source' shape).
-            'unbound': (['/usr/bin/curl', 'http://192.168.204.232:28790/mcp', '28787'], None, 7,
-                        'carries no bound source parameter'),
-            # Bound to the allowed host source.
-            'allowed_source': (['/usr/bin/curl', '--interface', '192.168.204.1',
-                                'http://192.168.204.232:28790/mcp'], None, 7,
-                               'differs from the declared probe source'),
-            # Binding present but different from the declared probe source.
-            'other_source': (['/usr/bin/curl', '--interface', '192.168.204.98',
-                              'http://192.168.204.232:28790/mcp'], None, 7,
-                             'differs from the declared probe source'),
-            # Unrecognized collector command shape.
+            # No collector at all (codex-r01 'unbound_source' shape).
+            'unbound': (['/usr/bin/curl', 'http://192.168.204.232:28790/mcp', '28787'],
+                        'not the approved fixed PC006 collector command'),
+            # The approved collector invoked with the allowed host source.
+            'allowed_source': (
+                evidence.pc006_collector_argv('bound', '192.168.204.1', NetworkGateFixture.comparison_port),
+                'not the approved fixed PC006 collector command'),
+            # The approved collector invoked with another non-allowed source.
+            'other_source': (
+                evidence.pc006_collector_argv('bound', '192.168.204.98', NetworkGateFixture.comparison_port),
+                'not the approved fixed PC006 collector command'),
+            # Unrecognized command shape (codex-r01 'unrelated_command_failure').
             'not_a_probe': (['false', 'http://192.168.204.232:28790/mcp', '28787'],
-                            'not a network test', 127,
-                            'not a recognized collector probe command'),
-            # Structured facts that do not state the classified failure.
-            'unclassified': (['/usr/bin/curl', '--interface', '192.168.204.99',
-                              'http://192.168.204.232:28790/mcp'],
-                             json.dumps({'schema_version': 1, 'kind': evidence.CONNECT_PROBE_KIND,
-                                         'source': '192.168.204.99',
-                                         'target': {'host': '192.168.204.232', 'port': 28790, 'path': '/mcp'},
-                                         'outcome': 'unreachable', 'error_class': 'syntax-error'}), 7,
-                             'classified connection failure'),
+                            'not the approved fixed PC006 collector command'),
         }
-        for label, (argv, stdout, code, pattern) in mutations.items():
+        for label, (argv, pattern) in mutations.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
                 fixture = NetworkGateFixture(Path(directory))
-                rewrite(fixture, argv, stdout, code)
+                rewrite_request(fixture, argv)
                 with self.assertRaisesRegex(evidence.EvidenceError, pattern):
                     evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
+        def failing_by_other_means(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            # curl failed for a reason that is not a classified network failure.
+            return subprocess.CompletedProcess(command, 2, b'', b'curl: option --bogus: is unknown')
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            fixture.rewrite_bound(fixture._collect_element(
+                'bound', fixture.probe_source, fixture.comparison_port, stub=failing_by_other_means))
+            with self.assertRaisesRegex(evidence.EvidenceError, 'not a classified curl network failure'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+        # codex-r02 'curl_exit127_summary': a non-zero collector envelope exit
+        # status is not evidence that curl observed a network failure.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            document = json.loads(fixture.bound_path.read_text(encoding='utf-8'))
+            document['exit_status']['code'] = 127
+            fixture.rewrite_bound(document)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'did not exit successfully'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
     def test_b03_rejects_unparsed_or_partial_dual_port_results(self) -> None:
-        def rewrite(fixture: NetworkGateFixture, stdout: str, argv: list[str] | None = None) -> None:
-            path = fixture.root / 'pc006' / 'dual-port.json'
-            document = json.loads(path.read_text(encoding='utf-8'))
-            if argv is not None:
-                document['request'] = {'argv': argv, 'command_line': ' '.join(argv)}
+        def rewrite_stdout(fixture: NetworkGateFixture, stdout: str) -> None:
+            document = json.loads(fixture.dual_path.read_text(encoding='utf-8'))
             document['response'] = _streams(stdout)
-            _write_json(path, document)
-            fixture.pc006['dual_port_control'] = _ref(fixture.root, path)
-            _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
+            fixture.rewrite_dual(document)
 
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            rewrite(fixture, 'both unreachable from bound source')
-            with self.assertRaisesRegex(evidence.EvidenceError, 'structured probe result'):
+            rewrite_stdout(fixture, 'both unreachable from bound source')
+            with self.assertRaisesRegex(evidence.EvidenceError, 'not the frozen collector result'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            facts = json.loads(json.dumps({
-                'schema_version': 1, 'kind': evidence.DUAL_PORT_KIND,
-                'probe_source_address': fixture.probe_source, 'target_host': '192.168.204.232',
-                'ports': [
-                    {'port': 28790, 'protected_by_formal_rule': True,
-                     'from_probe_source': {'outcome': 'unreachable', 'error_class': 'connection-refused'},
-                     'from_allowed_source': {'outcome': 'responded', 'http_status': 401}},
-                ],
-            }))
-            rewrite(fixture, json.dumps(facts))
-            with self.assertRaisesRegex(evidence.EvidenceError, 'both per-port results'):
-                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = NetworkGateFixture(Path(directory))
-            facts = json.loads((fixture.root / 'pc006' / 'dual-port.json').read_text(encoding='utf-8'))
-            ports = json.loads(json.dumps(json.loads(facts['response']['stdout'])))
-            ports['ports'][1]['from_allowed_source'] = {'outcome': 'unreachable', 'error_class': 'connection-refused'}
-            rewrite(fixture, json.dumps(ports))
-            with self.assertRaisesRegex(evidence.EvidenceError, 'live unprotected control'):
-                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = NetworkGateFixture(Path(directory))
-            argv = ['/usr/bin/connect-probe', '--source', fixture.probe_source, '--ports', '28790,28787']
-            rewrite(fixture, json.dumps({
-                'schema_version': 1, 'kind': evidence.DUAL_PORT_KIND,
-                'probe_source_address': fixture.probe_source, 'target_host': '192.168.204.232',
-                'ports': [
-                    {'port': 28790, 'protected_by_formal_rule': True,
-                     'from_probe_source': {'outcome': 'unreachable', 'error_class': 'connection-refused'},
-                     'from_allowed_source': {'outcome': 'responded', 'http_status': 401}},
-                    {'port': 28787, 'protected_by_formal_rule': False,
-                     'from_probe_source': {'outcome': 'unreachable', 'error_class': 'connection-refused'},
-                     'from_allowed_source': {'outcome': 'responded', 'http_status': 406}},
-                ],
-            }), argv=argv)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'does not probe both ports'):
+            document = json.loads(fixture.dual_path.read_text(encoding='utf-8'))
+            facts = json.loads(document['response']['stdout'])
+            facts['executions'] = facts['executions'][:3]
+            rewrite_stdout(fixture, json.dumps(facts))
+            with self.assertRaisesRegex(evidence.EvidenceError, 'every per-port execution'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
-    def test_b04_rejects_elements_outside_the_phase_window_or_rebound_run(self) -> None:
+        def all_unreachable(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            stderr = b'curl: (28) Failed to connect to 192.168.204.232 port 28790 after 5001 ms: Timeout was reached'
+            return subprocess.CompletedProcess(command, 28, b'', stderr)
+
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            path = fixture.root / 'pc006' / 'bound-source.json'
-            document = json.loads(path.read_text(encoding='utf-8'))
+            fixture.rewrite_dual(fixture._collect_element(
+                'dual', fixture.probe_source, fixture.comparison_port, stub=all_unreachable))
+            with self.assertRaisesRegex(evidence.EvidenceError, 'did not respond from the allowed source'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            document = json.loads(fixture.dual_path.read_text(encoding='utf-8'))
+            argv = list(document['request']['argv'])
+            argv[-1] = str(fixture.comparison_port + 1)
+            document['request'] = {'argv': argv, 'command_line': ' '.join(argv)}
+            fixture.rewrite_dual(document)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'not the approved fixed PC006 collector command'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+    def test_b04_rejects_pre_restore_or_rebound_elements(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            document = json.loads(fixture.bound_path.read_text(encoding='utf-8'))
             document['started_at'] = '2000-01-01T00:00:00Z'
             document['ended_at'] = '2000-01-01T00:00:01Z'
-            _write_json(path, document)
-            fixture.pc006['bound_source_failure'] = _ref(fixture.root, path)
-            _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'outside its phase report interval'):
+            fixture.rewrite_bound(document)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'precedes the service instance'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            path = fixture.root / 'pc006' / 'dual-port.json'
-            document = json.loads(path.read_text(encoding='utf-8'))
+            document = json.loads(fixture.dual_path.read_text(encoding='utf-8'))
             document['run_id'] = 'another-run'
-            _write_json(path, document)
-            fixture.pc006['dual_port_control'] = _ref(fixture.root, path)
-            _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
+            fixture.rewrite_dual(document)
             with self.assertRaisesRegex(evidence.EvidenceError, 'envelope shape or phase identity'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
@@ -956,43 +1056,53 @@ class NetworkGateTests(unittest.TestCase):
             fixture.phase['report'] = _ref(fixture.root, fixture.report_path)
             with self.assertRaisesRegex(evidence.EvidenceError, "report's tools_schema_sha256"):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        # Drifted stdio listing.
+        # Drifted stdio capture response.
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
             fixture._write_schema_identity(drift=True)
             fixture.document['schema_identity'] = _ref(fixture.root, fixture.schema_identity_path)
             _write_json(fixture.path, fixture.document)
             fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'do not normalize to the same schema'):
+            with self.assertRaisesRegex(evidence.EvidenceError, 'does not normalize to the HTTP schema'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        # The same file standing in for both adapters.
+        # The HTTP listing standing in as the stdio capture (codex-r02
+        # 'schema_copy_relabel' shape, minus the invented identity fields).
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            single = fixture.root / 'schema' / 'http-tools-list.json'
-            fixture._write_schema_identity(stdio_path=single)
-            fixture.document['schema_identity'] = _ref(fixture.root, fixture.schema_identity_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'both adapter originals'):
-                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        # HTTP adapter not joined to this report's session/instance.
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = NetworkGateFixture(Path(directory))
-            fixture._write_schema_identity(http_session='another-session')
-            fixture.document['schema_identity'] = _ref(fixture.root, fixture.schema_identity_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'report session and service instance'):
-                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
-        # stdio adapter reusing the HTTP session.
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = NetworkGateFixture(Path(directory))
-            fixture.schema_identity['stdio']['session_id'] = fixture.report['mcp_session']['id']
+            fixture.schema_identity['stdio']['capture'] = dict(fixture.schema_identity['http']['tools_list'])
             _write_json(fixture.schema_identity_path, fixture.schema_identity)
             fixture.document['schema_identity'] = _ref(fixture.root, fixture.schema_identity_path)
             _write_json(fixture.path, fixture.document)
             fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'distinct adapter session'):
+            with self.assertRaisesRegex(evidence.EvidenceError, 'distinct carried files'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+        # A copied stdio list plus an invented HTTP-style session identity.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            copied = fixture.root / 'schema' / 'copied-list.json'
+            copied.write_bytes((fixture.run_dir / 'tools-list.json').read_bytes())
+            fixture.schema_identity['stdio']['tools_list'] = _ref(fixture.root, copied)
+            fixture.schema_identity['stdio']['session_id'] = 'invented-stdio-session'
+            fixture.schema_identity['stdio']['instance_id'] = 'invented-stdio-instance'
+            _write_json(fixture.schema_identity_path, fixture.schema_identity)
+            fixture.document['schema_identity'] = _ref(fixture.root, fixture.schema_identity_path)
+            _write_json(fixture.path, fixture.document)
+            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'invented HTTP-style session identity'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+        # Response headers that do not carry this report's session identity.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            rows = [dict(row, mcp_session_id='another-session') for row in fixture.http_headers]
+            fixture.rewrite_headers(rows)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'contradicts this report identity'):
+                evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+        # A launch that never started the bridge over stdio.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = NetworkGateFixture(Path(directory))
+            fixture.rewrite_launch(fixture._launch_document(
+                argv=[r'C:\Python313\python.exe', '-c', 'echo NOT EXECUTED']))
+            with self.assertRaisesRegex(evidence.EvidenceError, 'does not start the bridge over stdio'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
     def test_rejects_drifted_service_instance_and_broad_rule(self) -> None:
@@ -1006,33 +1116,24 @@ class NetworkGateTests(unittest.TestCase):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            rule_path = fixture.root / 'pc006' / 'firewall-rule.json'
-            document = json.loads(rule_path.read_text(encoding='utf-8'))
-            rule = json.loads(document['response']['stdout'])['rules'][0]
-            rule['remote_address'] = '192.168.204.0/24'
-            document['response'] = _streams(json.dumps({'rules': [rule]}))
-            _write_json(rule_path, document)
-            fixture.pc006['firewall_rule'] = _ref(fixture.root, rule_path)
-            _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'unique exact 28790 host-only rule'):
+            document = json.loads(fixture.firewall_path.read_text(encoding='utf-8'))
+            rules = json.loads(document['response']['stdout'])
+            rules['rules'][0]['remote_address'] = '192.168.204.0/24'
+            document['response'] = _streams(json.dumps(rules))
+            fixture.rewrite_firewall(document)
+            with self.assertRaisesRegex(evidence.EvidenceError, 'unique exact 28790 host-only'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
     def test_rejects_succeeding_boundary_probe_or_missing_report_join(self) -> None:
+        def responding_probe(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            status = b'200'
+            return subprocess.CompletedProcess(command, 0, status, b'')
+
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
-            bound_path = fixture.root / 'pc006' / 'bound-source.json'
-            document = json.loads(bound_path.read_text(encoding='utf-8'))
-            document['exit_status']['code'] = 0
-            _write_json(bound_path, document)
-            fixture.pc006['bound_source_failure'] = _ref(fixture.root, bound_path)
-            _write_json(fixture.pc006_path, fixture.pc006)
-            fixture.document['non_allowed_source'] = _ref(fixture.root, fixture.pc006_path)
-            _write_json(fixture.path, fixture.document)
-            fixture.phase['network_evidence'] = _ref(fixture.root, fixture.path)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'unexpectedly succeeded'):
+            fixture.rewrite_bound(fixture._collect_element(
+                'bound', fixture.probe_source, fixture.comparison_port, stub=responding_probe))
+            with self.assertRaisesRegex(evidence.EvidenceError, 'not a classified curl network failure'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
@@ -1205,7 +1306,7 @@ class RestoreOriginalGateTests(unittest.TestCase):
             document['request']['script'] = script
             document['request']['script_sha256'] = hashlib.sha256(script.encode('utf-8')).hexdigest()
             _write_json(paths['post_restore_hostname'], document)
-            with self.assertRaisesRegex(evidence.EvidenceError, 'fixed guest identity query'):
+            with self.assertRaisesRegex(evidence.EvidenceError, 'fixed approved guest identity query'):
                 evidence._verify_restore_raw_records(restore, paths)
 
 
@@ -1219,6 +1320,47 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
     """
 
     def test_verify_activation_bundle_accepts_a_fully_closed_synthetic_pack(self) -> None:
+        self._closed_synthetic_bundle()
+
+    def test_verify_activation_bundle_rejects_a_mutated_pc006_original(self) -> None:
+        """A hash-correct but non-executed PC006 original fails at the entry.
+
+        The mutation is applied through the bundle's own Ref/manifest join so
+        the rejection comes from the re-parsed PC006 predicates, not from a
+        stale hash (no semantic gate is mocked here).
+        """
+
+        def mutate(bundle: Path, activation_path: Path) -> None:
+            phase_root = bundle / 'cycle-1'
+            bound_path = phase_root / 'pc006' / 'bound-source.json'
+            bound = json.loads(bound_path.read_text(encoding='utf-8'))
+            bound['exit_status']['code'] = 127
+            _write_json(bound_path, bound)
+            pc006_path = phase_root / 'pc006' / 'pc006.json'
+            pc006 = json.loads(pc006_path.read_text(encoding='utf-8'))
+            pc006['bound_source_failure'] = _ref(bundle, bound_path)
+            _write_json(pc006_path, pc006)
+            network_path = phase_root / 'network-evidence.json'
+            network = json.loads(network_path.read_text(encoding='utf-8'))
+            network['non_allowed_source'] = _ref(bundle, pc006_path)
+            _write_json(network_path, network)
+            manifest_path = phase_root / 'package-manifest.json'
+            members = sorted(
+                (_ref(bundle, member) for member in phase_root.rglob('*')
+                 if member.is_file() and member != manifest_path),
+                key=lambda item: str(item['path']).encode('utf-8'),
+            )
+            _write_json(manifest_path, {'schema_version': 1, 'members': members})
+            activation = json.loads(activation_path.read_text(encoding='utf-8'))
+            cycle = activation['candidate_cycles'][0]
+            cycle['network_evidence'] = _ref(bundle, network_path)
+            cycle['package_manifest'] = _ref(bundle, manifest_path)
+            _write_json(activation_path, activation)
+
+        with self.assertRaisesRegex(evidence.EvidenceError, 'did not exit successfully'):
+            self._closed_synthetic_bundle(mutate)
+
+    def _closed_synthetic_bundle(self, mutate=None) -> dict:
         from tests.test_p05_baseline_adoption import BaselineAdoptionTests
         from tests.test_p06_activation_structure import P05PhaseFixture
 
@@ -1298,6 +1440,16 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
                 _shift_report_times(phase, hour)
                 phase.report['run_id'] = run_id
                 _write_json(phase.report_path, phase.report)
+                _write_json(phase.run_dir / 'http-headers.json', [
+                    {'method': 'POST', 'path': '/mcp', 'status_code': 200,
+                     'mcp_session_id': phase.report['mcp_session']['id'],
+                     'server_instance_id': phase.report['server_identity']['instance_id'],
+                     'request_session_id': None},
+                    {'method': 'POST', 'path': '/mcp', 'status_code': 200,
+                     'mcp_session_id': phase.report['mcp_session']['id'],
+                     'server_instance_id': phase.report['server_identity']['instance_id'],
+                     'request_session_id': phase.report['mcp_session']['id']},
+                ])
 
                 ready = ReadyGateFixture(ready_root, run_id=run_id, attempt=attempt, ref_root=bundle)
                 ready.stage, ready.snapshot, ready.marker = stage, snapshot, phase_marker
@@ -1343,29 +1495,22 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
                 network = NetworkGateFixture(phase_root, ref_root=bundle)
                 network.run_id, network.attempt = run_id, attempt
                 network.server_identity = dict(phase.report['server_identity'])
-                network.report = {
-                    'run_id': run_id,
-                    'server_identity': dict(phase.report['server_identity']),
-                    'started_at': phase.report['started_at'],
-                    'ended_at': phase.report['ended_at'],
-                    'mcp_session': dict(phase.report['mcp_session']),
-                    'tools_schema_sha256': phase.report['tools_schema_sha256'],
-                }
                 network.probe_started = f'2026-09-14T{hour:02d}:00:40Z'
                 network.probe_ended = f'2026-09-14T{hour:02d}:00:41Z'
-                _write_json(network.report_path, network.report)
                 network._write_pc006()
-                # The HTTP adapter original is this phase's own tools/list; a
-                # byte copy is the distinct stdio original, both normalizing
-                # to the report's tools_schema_sha256 (B05).
-                stdio_copy = phase_root / 'schema' / 'stdio-tools-list.json'
-                stdio_copy.parent.mkdir(parents=True, exist_ok=True)
-                stdio_copy.write_bytes((phase.run_dir / 'tools-list.json').read_bytes())
+                # The PC006 firewall element must be this phase's verified
+                # same-round ready firewall observation.
+                network.bind_firewall(ready.ready)
+                # HTTP identity is this phase's own tools-list plus its raw
+                # response-header capture; stdio identity is a passive SDK
+                # transcript of the recorded bridge launch.
                 network._write_schema_identity(
-                    http_path=phase.run_dir / 'tools-list.json',
-                    stdio_path=stdio_copy,
-                    http_session=phase.report['mcp_session']['id'],
-                    http_instance=phase.report['server_identity']['instance_id'],
+                    http_tools=phase.run_dir / 'tools-list.json',
+                    http_headers=phase.run_dir / 'http-headers.json',
+                    stdio_listing=json.loads(
+                        (phase.run_dir / 'tools-list.json').read_text(encoding='utf-8')),
+                    stdio_capture=phase_root / 'stdio' / 'capture.ndjson',
+                    stdio_launch=phase_root / 'stdio' / 'launch.json',
                 )
                 network._write_service_observation()
                 network.document.update({
@@ -1540,10 +1685,13 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
             activation_path = bundle / 'activation-evidence.json'
             _write_json(activation_path, activation)
 
+            if mutate is not None:
+                mutate(bundle, activation_path)
             facts = evidence.verify_activation_bundle(activation_path, require_p05_layout=True)
             self.assertEqual(facts['candidate'], evidence.SNAPSHOT_188)
             self.assertEqual(facts['initial_run_id'], 'run-initial-synthetic')
             self.assertEqual(facts['cycle_run_ids'], ['run-cycle-one-synthetic', 'run-cycle-two-synthetic'])
+            return facts
 
 
 if __name__ == '__main__':
