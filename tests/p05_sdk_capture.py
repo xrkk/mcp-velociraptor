@@ -101,12 +101,15 @@ class _Read:
             raise StopAsyncIteration from None
 
     async def receive(self):
-        started = _utc()
         message = await self.stream.receive()
         if isinstance(message, BaseException):
             # The original exception is delivered unchanged; it is not a
             # JSON-RPC message and its potentially sensitive text is not logged.
             return message
+        # The underlying receive may wait while a request is sent.  Timestamp
+        # the message when it actually becomes available, not when that wait
+        # began, so concurrent pipe waits cannot invert the causal transcript.
+        started = _utc()
         self.capture.record('server_to_client', started, _utc(), message)
         return message
 

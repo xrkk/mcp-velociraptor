@@ -54,6 +54,34 @@ class SDKCaptureTests(unittest.IsolatedAsyncioTestCase):
                 await read.__anext__()
             capture.close()
 
+    async def test_receive_wait_does_not_backdate_a_later_server_message(self):
+        request_document = {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}}
+        response_document = {'jsonrpc': '2.0', 'id': 1, 'result': {}}
+        request = SimpleNamespace(message=Mock())
+        response = SimpleNamespace(message=Mock())
+        request.message.model_dump.return_value = request_document
+        response.message.model_dump.return_value = response_document
+        delivered = anyio.Event()
+
+        async def delayed_receive():
+            await delivered.wait()
+            return response
+
+        reader = Mock(receive=AsyncMock(side_effect=delayed_receive))
+        writer = Mock(send=AsyncMock(side_effect=lambda _: delivered.set()))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'sdk.ndjson'
+            capture = SDKCapture(path)
+            read, write = capture.wrap(reader, writer)
+            receive_task = anyio.create_task_group()
+            async with receive_task as tasks:
+                tasks.start_soon(read.receive)
+                await write.send(request)
+            capture.close()
+            rows = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()]
+        self.assertEqual([row['direction'] for row in rows], ['client_to_server', 'server_to_client'])
+        self.assertLessEqual(rows[0]['started_at'], rows[1]['started_at'])
+
     async def test_existing_original_cannot_be_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'sdk.ndjson'
