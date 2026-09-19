@@ -860,6 +860,27 @@ class NetworkGateFixture:
         _write_json(self.path, self.document)
         self.phase['network_evidence'] = _ref(self.ref_root, self.path)
 
+    def capture_rows(self) -> list[dict]:
+        capture = self.root / 'stdio' / 'capture.ndjson'
+        return [json.loads(line) for line in capture.read_text(encoding='utf-8').splitlines()]
+
+    def rewrite_capture(self, rows: list[dict]) -> None:
+        capture = self.root / 'stdio' / 'capture.ndjson'
+        capture.write_text(''.join(
+            json.dumps({
+                **row,
+                'sequence': position,
+                'started_at': f'2026-09-13T12:00:{40 + position:02d}Z',
+                'ended_at': f'2026-09-13T12:00:{40 + position:02d}Z',
+            }, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n'
+            for position, row in enumerate(rows, start=1)
+        ), encoding='utf-8')
+        self.schema_identity['stdio']['capture'] = _ref(self.ref_root, capture)
+        _write_json(self.schema_identity_path, self.schema_identity)
+        self.document['schema_identity'] = _ref(self.ref_root, self.schema_identity_path)
+        _write_json(self.path, self.document)
+        self.phase['network_evidence'] = _ref(self.ref_root, self.path)
+
     def _write_service_observation(self, *, instance: str | None = None) -> None:
         observation = {
             **self.server_identity,
@@ -1104,6 +1125,100 @@ class NetworkGateTests(unittest.TestCase):
                 argv=[r'C:\Python313\python.exe', '-c', 'echo NOT EXECUTED']))
             with self.assertRaisesRegex(evidence.EvidenceError, 'does not start the bridge over stdio'):
                 evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+    def test_stdio_launch_requires_the_repo_venv_to_execute_the_bridge_directly(self) -> None:
+        bridge = r'C:\mcp-velociraptor\mcp_velociraptor_bridge.py'
+        interpreter = r'C:\mcp-velociraptor\.venv\Scripts\python.exe'
+        invalid_argv = {
+            'c_before_bridge': [interpreter, '-c', 'print("NOT EXECUTED")', bridge],
+            'bridge_before_c': [interpreter, bridge, '-c', 'print("NOT EXECUTED")'],
+            'module': [interpreter, '-m', 'mcp_velociraptor_bridge'],
+            'stdin': [interpreter, '-', bridge],
+            'other_script': [interpreter, r'C:\mcp-velociraptor\other.py'],
+            'bridge_as_argument': [interpreter, r'C:\mcp-velociraptor\other.py', bridge],
+            'system_python': [r'C:\Python313\python.exe', bridge],
+        }
+        for name, argv in invalid_argv.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                fixture = NetworkGateFixture(Path(directory))
+                fixture.rewrite_launch(fixture._launch_document(argv))
+                with self.assertRaises(evidence.EvidenceError):
+                    evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+    def test_stdio_capture_enforces_initialize_notification_and_tools_list_lifecycle(self) -> None:
+        def initialize_error(rows: list[dict]) -> None:
+            rows[1]['message'].pop('result')
+            rows[1]['message']['error'] = {'code': -32603, 'message': 'initialization failed'}
+
+        def initialize_result_and_error(rows: list[dict]) -> None:
+            rows[1]['message']['error'] = {'code': -32603, 'message': 'contradictory'}
+
+        def initialize_missing_protocol(rows: list[dict]) -> None:
+            del rows[1]['message']['result']['protocolVersion']
+
+        def initialize_missing_server_version(rows: list[dict]) -> None:
+            del rows[1]['message']['result']['serverInfo']['version']
+
+        def duplicate_request_id(rows: list[dict]) -> None:
+            rows[3]['message']['id'] = rows[0]['message']['id']
+            rows[4]['message']['id'] = rows[0]['message']['id']
+
+        def wrong_response_id(rows: list[dict]) -> None:
+            rows[1]['message']['id'] = 99
+
+        def missing_initialized(rows: list[dict]) -> None:
+            del rows[2]
+
+        def initialized_too_early(rows: list[dict]) -> None:
+            rows[1], rows[2] = rows[2], rows[1]
+
+        def tools_list_too_early(rows: list[dict]) -> None:
+            rows[2], rows[3] = rows[3], rows[2]
+
+        def tools_before_initialize(rows: list[dict]) -> None:
+            rows[:] = [rows[3], rows[4], rows[0], rows[1], rows[2]]
+
+        def response_before_request(rows: list[dict]) -> None:
+            rows[0], rows[1] = rows[1], rows[0]
+
+        def initialize_wrong_direction(rows: list[dict]) -> None:
+            rows[0]['direction'] = 'server_to_client'
+
+        def response_wrong_direction(rows: list[dict]) -> None:
+            rows[1]['direction'] = 'client_to_server'
+
+        def notification_has_id(rows: list[dict]) -> None:
+            rows[2]['message']['id'] = 17
+
+        def tools_list_error(rows: list[dict]) -> None:
+            rows[4]['message'].pop('result')
+            rows[4]['message']['error'] = {'code': -32603, 'message': 'listing failed'}
+
+        mutations = {
+            'initialize_error': initialize_error,
+            'initialize_result_and_error': initialize_result_and_error,
+            'initialize_missing_protocol': initialize_missing_protocol,
+            'initialize_missing_server_version': initialize_missing_server_version,
+            'duplicate_request_id': duplicate_request_id,
+            'wrong_response_id': wrong_response_id,
+            'missing_initialized': missing_initialized,
+            'initialized_too_early': initialized_too_early,
+            'tools_list_too_early': tools_list_too_early,
+            'tools_before_initialize': tools_before_initialize,
+            'response_before_request': response_before_request,
+            'initialize_wrong_direction': initialize_wrong_direction,
+            'response_wrong_direction': response_wrong_direction,
+            'notification_has_id': notification_has_id,
+            'tools_list_error': tools_list_error,
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                fixture = NetworkGateFixture(Path(directory))
+                rows = fixture.capture_rows()
+                mutate(rows)
+                fixture.rewrite_capture(rows)
+                with self.assertRaises(evidence.EvidenceError):
+                    evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
     def test_rejects_drifted_service_instance_and_broad_rule(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1359,6 +1474,79 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
 
         with self.assertRaisesRegex(evidence.EvidenceError, 'did not exit successfully'):
             self._closed_synthetic_bundle(mutate)
+
+    def test_verify_activation_bundle_rejects_stdio_launch_and_lifecycle_mutations(self) -> None:
+        def python_c_not_bridge(schema: dict, capture_path: Path, launch_path: Path) -> None:
+            launch = json.loads(launch_path.read_text(encoding='utf-8'))
+            bridge = r'C:\mcp-velociraptor\mcp_velociraptor_bridge.py'
+            launch['request']['argv'] = [
+                r'C:\mcp-velociraptor\.venv\Scripts\python.exe',
+                '-c', 'print("NOT EXECUTED")', bridge,
+            ]
+            launch['request']['command_line'] = ' '.join(launch['request']['argv'])
+            _write_json(launch_path, launch)
+
+        def initialize_error(schema: dict, capture_path: Path, launch_path: Path) -> None:
+            rows = [json.loads(line) for line in capture_path.read_text(encoding='utf-8').splitlines()]
+            rows[1]['message'].pop('result')
+            rows[1]['message']['error'] = {'code': -32603, 'message': 'initialization failed'}
+            self._rewrite_capture_rows(capture_path, rows)
+
+        def tools_before_initialize(schema: dict, capture_path: Path, launch_path: Path) -> None:
+            rows = [json.loads(line) for line in capture_path.read_text(encoding='utf-8').splitlines()]
+            rows[:] = [rows[3], rows[4], rows[0], rows[1], rows[2]]
+            self._rewrite_capture_rows(capture_path, rows)
+
+        for name, mutation in {
+            'python_c_not_bridge': python_c_not_bridge,
+            'initialize_error': initialize_error,
+            'tools_before_initialize': tools_before_initialize,
+        }.items():
+            with self.subTest(name=name), self.assertRaises(evidence.EvidenceError):
+                self._closed_synthetic_bundle(
+                    lambda bundle, activation_path, mutation=mutation:
+                    self._mutate_cycle_stdio(bundle, activation_path, mutation)
+                )
+
+    @staticmethod
+    def _rewrite_capture_rows(path: Path, rows: list[dict]) -> None:
+        path.write_text(''.join(
+            json.dumps({
+                **row,
+                'sequence': position,
+                'started_at': f'2026-09-14T02:00:{40 + position:02d}Z',
+                'ended_at': f'2026-09-14T02:00:{40 + position:02d}Z',
+            }, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n'
+            for position, row in enumerate(rows, start=1)
+        ), encoding='utf-8')
+
+    @staticmethod
+    def _mutate_cycle_stdio(bundle: Path, activation_path: Path, mutate) -> None:
+        phase_root = bundle / 'cycle-1'
+        schema_path = phase_root / 'schema' / 'schema-identity.json'
+        capture_path = phase_root / 'stdio' / 'capture.ndjson'
+        launch_path = phase_root / 'stdio' / 'launch.json'
+        schema = json.loads(schema_path.read_text(encoding='utf-8'))
+        mutate(schema, capture_path, launch_path)
+        schema['stdio']['capture'] = _ref(bundle, capture_path)
+        schema['stdio']['launch'] = _ref(bundle, launch_path)
+        _write_json(schema_path, schema)
+        network_path = phase_root / 'network-evidence.json'
+        network = json.loads(network_path.read_text(encoding='utf-8'))
+        network['schema_identity'] = _ref(bundle, schema_path)
+        _write_json(network_path, network)
+        manifest_path = phase_root / 'package-manifest.json'
+        members = sorted(
+            (_ref(bundle, member) for member in phase_root.rglob('*')
+             if member.is_file() and member != manifest_path),
+            key=lambda item: str(item['path']).encode('utf-8'),
+        )
+        _write_json(manifest_path, {'schema_version': 1, 'members': members})
+        activation = json.loads(activation_path.read_text(encoding='utf-8'))
+        cycle = activation['candidate_cycles'][0]
+        cycle['network_evidence'] = _ref(bundle, network_path)
+        cycle['package_manifest'] = _ref(bundle, manifest_path)
+        _write_json(activation_path, activation)
 
     def _closed_synthetic_bundle(self, mutate=None) -> dict:
         from tests.test_p05_baseline_adoption import BaselineAdoptionTests

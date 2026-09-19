@@ -1904,11 +1904,14 @@ def _verify_stdio_capture(
     path: Path,
     expected_normalized: bytes,
 ) -> list[dict[str, Any]]:
-    """Recompute the stdio tools/list from the passive SDK protocol transcript.
+    """Recompute the stdio tools/list from a completed SDK lifecycle.
 
     The stdio adapter has no HTTP-style ``Mcp-Session-Id``; its identity is the
     captured request/response exchange itself, so a copy of the HTTP listing
-    under a new file name cannot stand in for it (P05 §0.3, CHK-028).
+    under a new file name cannot stand in for it (P05 §0.3, CHK-028).  The
+    lifecycle is causal, not a bag of messages: initialize request, successful
+    initialize response, initialized notification, tools/list request, and
+    successful tools/list response must occur once in that order.
     """
     try:
         text = path.read_text(encoding='utf-8-sig')
@@ -1944,17 +1947,32 @@ def _verify_stdio_capture(
         raise EvidenceError('stdio capture retains no protocol messages')
     requests: dict[Any, dict[str, Any]] = {}
     responses: dict[Any, dict[str, Any]] = {}
+    initialized_notifications: list[dict[str, Any]] = []
+    lifecycle_methods = {'initialize', 'notifications/initialized', 'tools/list'}
     for row in rows:
         message = row['message']
-        if row['direction'] == 'client_to_server':
-            if 'method' in message and message.get('id') is not None:
-                if message['id'] in requests:
-                    raise EvidenceError('stdio capture repeats a JSON-RPC request id')
-                requests[message['id']] = row
-        elif 'id' in message:
-            if message['id'] in responses:
-                raise EvidenceError('stdio capture repeats a JSON-RPC response id')
-            responses[message['id']] = row
+        method = message.get('method')
+        if method in lifecycle_methods and row['direction'] != 'client_to_server':
+            raise EvidenceError('stdio lifecycle message has the wrong protocol direction')
+        if method is not None:
+            if not isinstance(method, str) or not method:
+                raise EvidenceError('stdio capture JSON-RPC method is invalid')
+            if row['direction'] == 'client_to_server' and method == 'notifications/initialized':
+                if 'id' in message:
+                    raise EvidenceError('stdio initialized message is not a JSON-RPC notification')
+                initialized_notifications.append(row)
+            if row['direction'] == 'client_to_server' and 'id' in message:
+                request_id = message['id']
+                if (not isinstance(request_id, (str, int)) or isinstance(request_id, bool)
+                        or request_id in requests):
+                    raise EvidenceError('stdio capture repeats or has an invalid JSON-RPC request id')
+                requests[request_id] = row
+        elif row['direction'] == 'server_to_client' and 'id' in message:
+            response_id = message['id']
+            if (not isinstance(response_id, (str, int)) or isinstance(response_id, bool)
+                    or response_id in responses):
+                raise EvidenceError('stdio capture repeats or has an invalid JSON-RPC response id')
+            responses[response_id] = row
     initialize_ids = [
         request_id for request_id, row in requests.items()
         if row['message'].get('method') == 'initialize'
@@ -1963,13 +1981,78 @@ def _verify_stdio_capture(
         request_id for request_id, row in requests.items()
         if row['message'].get('method') == 'tools/list'
     ]
-    if len(initialize_ids) != 1 or len(tools_list_ids) != 1:
-        raise EvidenceError('stdio capture must retain exactly one initialize and one tools/list exchange')
-    for request_id in initialize_ids + tools_list_ids:
-        request_row, response_row = requests[request_id], responses.get(request_id)
-        if response_row is None or response_row['sequence'] <= request_row['sequence']:
-            raise EvidenceError('stdio capture lacks the matching response for a real exchange')
-    tools_list_result = responses[tools_list_ids[0]]['message'].get('result')
+    if (len(initialize_ids) != 1 or len(tools_list_ids) != 1
+            or len(initialized_notifications) != 1):
+        raise EvidenceError(
+            'stdio capture must retain exactly one initialize exchange, initialized notification, '
+            'and tools/list exchange'
+        )
+    initialize_id, tools_list_id = initialize_ids[0], tools_list_ids[0]
+    initialize_request = requests[initialize_id]
+    initialize_response = responses.get(initialize_id)
+    initialized = initialized_notifications[0]
+    tools_list_request = requests[tools_list_id]
+    tools_list_response = responses.get(tools_list_id)
+    if initialize_response is None or tools_list_response is None:
+        raise EvidenceError('stdio capture lacks the unique matching response for a real exchange')
+    if not (
+        initialize_request['sequence'] < initialize_response['sequence']
+        < initialized['sequence'] < tools_list_request['sequence']
+        < tools_list_response['sequence']
+    ):
+        raise EvidenceError('stdio initialize/initialized/tools-list lifecycle order is invalid')
+    initialize_request_end = _parse_utc(
+        initialize_request['ended_at'], 'stdio initialize request ended_at')
+    initialize_response_end = _parse_utc(
+        initialize_response['ended_at'], 'stdio initialize response ended_at')
+    initialized_start = _parse_utc(
+        initialized['started_at'], 'stdio initialized notification started_at')
+    initialized_end = _parse_utc(
+        initialized['ended_at'], 'stdio initialized notification ended_at')
+    tools_list_request_start = _parse_utc(
+        tools_list_request['started_at'], 'stdio tools/list request started_at')
+    tools_list_request_end = _parse_utc(
+        tools_list_request['ended_at'], 'stdio tools/list request ended_at')
+    tools_list_response_end = _parse_utc(
+        tools_list_response['ended_at'], 'stdio tools/list response ended_at')
+    if not (
+        initialize_request_end <= initialize_response_end <= initialized_start
+        <= initialized_end <= tools_list_request_start
+        <= tools_list_request_end <= tools_list_response_end
+    ):
+        raise EvidenceError('stdio lifecycle timestamps contradict its causal order')
+
+    initialize_params = initialize_request['message'].get('params')
+    client_info = initialize_params.get('clientInfo') if isinstance(initialize_params, dict) else None
+    if (
+        not isinstance(initialize_params, dict)
+        or not _nonempty_string(initialize_params.get('protocolVersion'), 'stdio initialize protocolVersion')
+        or not isinstance(initialize_params.get('capabilities'), dict)
+        or not isinstance(client_info, dict)
+        or not _nonempty_string(client_info.get('name'), 'stdio initialize client name')
+        or not _nonempty_string(client_info.get('version'), 'stdio initialize client version')
+    ):
+        raise EvidenceError('stdio initialize request lacks required MCP fields')
+
+    initialize_message = initialize_response['message']
+    if 'result' not in initialize_message or 'error' in initialize_message:
+        raise EvidenceError('stdio initialize did not return one successful result')
+    initialize_result = initialize_message['result']
+    server_info = initialize_result.get('serverInfo') if isinstance(initialize_result, dict) else None
+    if (
+        not isinstance(initialize_result, dict)
+        or not _nonempty_string(initialize_result.get('protocolVersion'), 'stdio initialize result protocolVersion')
+        or not isinstance(initialize_result.get('capabilities'), dict)
+        or not isinstance(server_info, dict)
+        or not _nonempty_string(server_info.get('name'), 'stdio initialize server name')
+        or not isinstance(server_info.get('version'), str)
+    ):
+        raise EvidenceError('stdio initialize result lacks required MCP fields')
+
+    tools_list_message = tools_list_response['message']
+    if 'result' not in tools_list_message or 'error' in tools_list_message:
+        raise EvidenceError('stdio tools/list did not return one successful result')
+    tools_list_result = tools_list_message['result']
     if not isinstance(tools_list_result, dict) or _normalized_tools_bytes(tools_list_result) != expected_normalized:
         raise EvidenceError('stdio capture tools/list response does not normalize to the HTTP schema')
     return rows
@@ -2013,16 +2096,25 @@ def _verify_stdio_launch(
         or not _nonempty_string(request.get('command_line'), 'stdio launch command_line')
     ):
         raise EvidenceError('stdio launch request is not a complete command')
-    if any(item not in request['command_line'] for item in request['argv']):
-        raise EvidenceError('stdio launch command_line contradicts its argv')
-    interpreter = request['argv'][0].replace('\\', '/').rsplit('/', 1)[-1].lower()
-    if interpreter not in {'python', 'python3', 'python.exe'}:
-        raise EvidenceError('stdio launch is not a python transport launch')
-    if not any(
-        item.replace('\\', '/').rsplit('/', 1)[-1] == 'mcp_velociraptor_bridge.py'
-        for item in request['argv']
+    argv = request['argv']
+    if request['command_line'] != ' '.join(argv):
+        raise EvidenceError('stdio launch command_line contradicts its exact argv expression')
+    if len(argv) != 2:
+        raise EvidenceError(
+            'stdio launch does not start the bridge over stdio as the fixed direct script invocation'
+        )
+    interpreter_path = PureWindowsPath(argv[0])
+    bridge_path = PureWindowsPath(argv[1])
+    if (
+        not interpreter_path.is_absolute()
+        or not bridge_path.is_absolute()
+        or interpreter_path.name.lower() != 'python.exe'
+        or bridge_path.name != 'mcp_velociraptor_bridge.py'
+        or interpreter_path != bridge_path.parent / '.venv' / 'Scripts' / 'python.exe'
     ):
-        raise EvidenceError('stdio launch does not start the bridge over stdio')
+        raise EvidenceError(
+            'stdio launch must execute the project bridge directly with its repository virtualenv python'
+        )
     exit_status = document.get('exit_status')
     if (
         not isinstance(exit_status, dict) or set(exit_status) != {'code'}
