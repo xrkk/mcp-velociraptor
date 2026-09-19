@@ -207,6 +207,46 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
                 self._collect_pc006(root, fixture)
             self.assertFalse((root / "produced-pc006" / "pc006.json").exists())
 
+    def test_pc006_rejects_unapproved_ready_firewall_before_read_or_execute(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            approved = bundle / "phase"
+            approved.mkdir()
+            fixture = NetworkGateFixture(approved, ref_root=bundle)
+            fixture.ready.update({
+                "run_id": fixture.run_id,
+                "restore_attempt_id": fixture.attempt,
+            })
+            outside = bundle / "outside-approved-firewall.json"
+            outside.write_bytes(fixture.firewall_path.read_bytes())
+            fixture.ready["observations"]["firewall"] = _ref(bundle, outside)
+            _write_json(fixture.ready_path, fixture.ready)
+            protected = (fixture.ready_path, outside)
+            before = {path: _sha(path) for path in protected}
+            calls: list[list[str]] = []
+            outside_reads: list[Path] = []
+            original_read_bytes = Path.read_bytes
+
+            def audit_read_bytes(path: Path) -> bytes:
+                if path == outside:
+                    outside_reads.append(path)
+                return original_read_bytes(path)
+
+            with patch.object(Path, "read_bytes", audit_read_bytes):
+                with self.assertRaisesRegex(collect.CollectionError, "approved root"):
+                    collect.collect_pc006(
+                        approved_root=approved, bundle_root=bundle,
+                        output_root=approved / "produced", ready_path=fixture.ready_path,
+                        run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                        probe_source_address=fixture.probe_source,
+                        comparison_port=fixture.comparison_port, vmx=VMX,
+                        executor=self._pc_executor(fixture, calls=calls),
+                    )
+            self.assertEqual(outside_reads, [])
+            self.assertEqual(calls, [])
+            self.assertFalse((approved / "produced").exists())
+            self.assertEqual({path: _sha(path) for path in protected}, before)
+
     def test_output_collision_escape_and_input_bytes_are_protected(self) -> None:
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
             root = Path(directory)
@@ -557,6 +597,53 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse((target / "network-evidence.json").exists())
             self.assertFalse((target / "schema-identity.json").exists())
             self.assertTrue((target / "collection-failure.json").is_file())
+
+    def test_assembler_rejects_unapproved_pc006_originals_before_read_or_output(self) -> None:
+        for field in ("bound_source_failure", "dual_port_control"):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                bundle = Path(directory)
+                approved = bundle / "phase"
+                approved.mkdir()
+                fixture = NetworkGateFixture(approved, ref_root=bundle)
+                fixture.ready.update({
+                    "run_id": fixture.run_id,
+                    "restore_attempt_id": fixture.attempt,
+                })
+                _write_json(fixture.ready_path, fixture.ready)
+                boundary = json.loads(fixture.pc006_path.read_text(encoding="utf-8"))
+                original = bundle / boundary[field]["path"]
+                outside = bundle / f"outside-approved-{field}.json"
+                outside.write_bytes(original.read_bytes())
+                boundary[field] = _ref(bundle, outside)
+                _write_json(fixture.pc006_path, boundary)
+                protected = (fixture.pc006_path, outside)
+                before = {path: _sha(path) for path in protected}
+                outside_reads: list[Path] = []
+                original_read_bytes = Path.read_bytes
+
+                def audit_read_bytes(path: Path) -> bytes:
+                    if path == outside:
+                        outside_reads.append(path)
+                    return original_read_bytes(path)
+
+                target = approved / "assembled"
+                with patch.object(Path, "read_bytes", audit_read_bytes):
+                    with self.assertRaisesRegex(collect.CollectionError, "approved root"):
+                        collect.assemble_network_evidence(
+                            approved_root=approved, bundle_root=bundle,
+                            output_root=target, run_id=fixture.run_id,
+                            restore_attempt_id=fixture.attempt,
+                            report_path=fixture.report_path, ready_path=fixture.ready_path,
+                            http_tools_path=fixture.run_dir / "tools-list.json",
+                            http_headers_path=fixture.run_dir / "http-headers.json",
+                            service_observation_path=fixture.observation_path,
+                            pc006_boundary_path=fixture.pc006_path,
+                            stdio_launch_path=approved / "stdio" / "launch.json",
+                            stdio_capture_path=approved / "stdio" / "capture.ndjson",
+                        )
+                self.assertEqual(outside_reads, [])
+                self.assertFalse(target.exists())
+                self.assertEqual({path: _sha(path) for path in protected}, before)
 
     def test_assembler_write_failure_removes_only_its_final_documents(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

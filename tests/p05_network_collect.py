@@ -154,6 +154,18 @@ def _plain_evidence_input(
     return bundled
 
 
+def _plain_evidence_reference(
+    approved_root: Path, bundle_root: Path, reference: Any, label: str
+) -> Path:
+    if not isinstance(reference, dict) or set(reference) != gate.REF_KEYS:
+        raise CollectionError(f"{label} Ref does not have exact path/size/sha256 keys")
+    try:
+        bundled = gate.plain_file(bundle_root, reference.get("path"))
+    except gate.EvidenceError as exc:
+        raise CollectionError(f"{label} Ref path is invalid in the bundle root: {exc}") from exc
+    return _plain_evidence_input(approved_root, bundle_root, bundled, label)
+
+
 def _preflight_evidence_output(bundle_root: Path, output_root: Path) -> Path:
     bundle_root = _plain_directory(bundle_root, "bundle root")
     output_root = _lexical_absolute(output_root, "output root")
@@ -359,6 +371,9 @@ def collect_pc006(
     if not isinstance(observations, dict) or not isinstance(observations.get("firewall"), dict):
         raise CollectionError("ready original lacks its firewall Ref")
     firewall_ref = dict(observations["firewall"])
+    _plain_evidence_reference(
+        approved_root, bundle_root, firewall_ref, "ready firewall"
+    )
     try:
         gate._resolve_ref(bundle_root, firewall_ref, "ready firewall", {})
     except gate.EvidenceError as exc:
@@ -696,6 +711,19 @@ def assemble_network_evidence(
     report = _load_json(plain["report"], "report")
     ready = _load_json(plain["ready"], "ready")
     pc006 = _load_json(plain["PC006 boundary"], "PC006 boundary")
+    observations = ready.get("observations")
+    ready_firewall = observations.get("firewall") if isinstance(observations, dict) else None
+    _plain_evidence_reference(
+        approved_root, bundle_root, ready_firewall, "ready firewall"
+    )
+    for key, label in (
+        ("bound_source_failure", "PC006 bound source probe"),
+        ("dual_port_control", "PC006 dual port control"),
+        ("firewall_rule", "PC006 firewall rule"),
+    ):
+        _plain_evidence_reference(
+            approved_root, bundle_root, pc006.get(key), label
+        )
     launch = _load_json(plain["stdio launch"], "stdio launch")
     service = _load_json(plain["service observation"], "service observation")
     if report.get("run_id") != run_id:

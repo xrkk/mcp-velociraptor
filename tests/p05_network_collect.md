@@ -42,10 +42,14 @@ Before creating an output directory or launching an executor/subprocess, each
 public entry preflights the approved root, bundle root, every input, the output
 parent, and the absent output target.  Evidence inputs and outputs must be in
 both their approved scope and the bundle; repository/interpreter/bridge inputs
-need only be in the approved workspace.  Dotdot components are rejected rather
-than normalized, and absolute escapes, links, Windows reparse points, special
-files, and missing parents are also rejected.  Thus an invalid path cannot
-first create raw originals and only fail later while calculating a Ref.
+need only be in the approved workspace.  This applies to indirect evidence too:
+the ready firewall Ref and the PC006 boundary's bound-source, dual-port, and
+firewall Refs are path-checked against both roots before their target bytes or
+hashes are read.  Dotdot components are rejected rather than normalized, and
+absolute escapes, links, Windows reparse points, special files, and missing
+parents are also rejected.  Thus an invalid path cannot first read an
+unapproved original, create raw originals, or fail only later while calculating
+a Ref.
 
 ```python
 pc006 = collect_pc006(
