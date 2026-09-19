@@ -1220,6 +1220,83 @@ class NetworkGateTests(unittest.TestCase):
                 with self.assertRaises(evidence.EvidenceError):
                     evidence._verify_network_evidence(fixture.root, fixture.phase, {})
 
+    def test_stdio_capture_uses_the_locked_sdk_models_and_handshake_versions(self) -> None:
+        from mcp.client.session import HANDSHAKE_PROTOCOL_VERSIONS
+        from mcp.types import InitializeRequest, InitializeResult, InitializedNotification
+
+        self.assertGreater(len(HANDSHAKE_PROTOCOL_VERSIONS), 1)
+
+        def assert_capture(mutate, *, accepted: bool) -> None:
+            with tempfile.TemporaryDirectory() as directory:
+                fixture = NetworkGateFixture(Path(directory))
+                rows = fixture.capture_rows()
+                mutate(rows)
+                fixture.rewrite_capture(rows)
+                if accepted:
+                    evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+                else:
+                    with self.assertRaises(evidence.EvidenceError):
+                        evidence._verify_network_evidence(fixture.root, fixture.phase, {})
+
+        def result_version(version):
+            return lambda rows: rows[1]['message']['result'].__setitem__('protocolVersion', version)
+
+        def request_version(version):
+            return lambda rows: rows[0]['message']['params'].__setitem__('protocolVersion', version)
+
+        # The SDK models deliberately accept arbitrary protocol strings; the
+        # ClientSession negotiation step supplies the support-set predicate.
+        unsupported = 'NOT-A-SUPPORTED-MCP-VERSION'
+        model_result = {
+            'protocolVersion': unsupported, 'capabilities': {},
+            'serverInfo': {'name': 'synthetic', 'version': '1'},
+        }
+        self.assertEqual(InitializeResult.model_validate(model_result).protocol_version, unsupported)
+        assert_capture(result_version(unsupported), accepted=False)
+        assert_capture(request_version(unsupported), accepted=False)
+        assert_capture(result_version(''), accepted=False)
+        assert_capture(request_version(''), accepted=False)
+        assert_capture(result_version(7), accepted=False)
+        assert_capture(request_version(7), accepted=False)
+
+        # ClientSession permits a server to choose any locked handshake
+        # version, rather than requiring it to echo the requested one.
+        request_supported, response_supported = HANDSHAKE_PROTOCOL_VERSIONS[:2]
+        assert_capture(request_version(request_supported), accepted=True)
+        assert_capture(result_version(response_supported), accepted=True)
+        self.assertNotEqual(request_supported, response_supported)
+
+        def invalid_request_params(rows):
+            rows[0]['message']['params']['clientInfo'] = 'invalid-client-info'
+
+        def invalid_result_shape(rows):
+            rows[1]['message']['result']['capabilities'] = 'invalid-capabilities'
+
+        def invalid_initialized_params(rows):
+            rows[2]['message']['params'] = 'invalid-params-type'
+
+        for mutation in (invalid_request_params, invalid_result_shape, invalid_initialized_params):
+            assert_capture(mutation, accepted=False)
+
+        # Match the SDK's open-model behavior: unknown envelope fields are
+        # ignored, including a request/result collision, while params are
+        # still validated by the SDK's concrete message classes.
+        def allowed_extensions(rows):
+            rows[0]['message']['result'] = {'unexpected': True}
+            rows[0]['message']['extensionField'] = {'kept-in-original': True}
+            rows[1]['message']['result']['extensionField'] = {'allowed': True}
+            rows[2]['message']['params'] = {'extensionField': {'allowed': True}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            request = NetworkGateFixture(Path(directory)).capture_rows()[0]['message']
+        self.assertIsNotNone(InitializeRequest.model_validate({**request, 'result': {}}))
+        self.assertIsNotNone(InitializedNotification.model_validate({
+            'method': 'notifications/initialized', 'params': {'extensionField': True},
+        }))
+        assert_capture(allowed_extensions, accepted=True)
+        with patch('importlib.metadata.version', return_value='0.0-mismatched'):
+            assert_capture(lambda rows: None, accepted=False)
+
     def test_rejects_drifted_service_instance_and_broad_rule(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = NetworkGateFixture(Path(directory))
@@ -1497,16 +1574,44 @@ class FullSyntheticActivationBundleTests(unittest.TestCase):
             rows[:] = [rows[3], rows[4], rows[0], rows[1], rows[2]]
             self._rewrite_capture_rows(capture_path, rows)
 
+        def unsupported_version(schema: dict, capture_path: Path, launch_path: Path) -> None:
+            rows = [json.loads(line) for line in capture_path.read_text(encoding='utf-8').splitlines()]
+            rows[1]['message']['result']['protocolVersion'] = 'NOT-A-SUPPORTED-MCP-VERSION'
+            capture_path.write_text(''.join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n'
+                for row in rows
+            ), encoding='utf-8')
+
         for name, mutation in {
             'python_c_not_bridge': python_c_not_bridge,
             'initialize_error': initialize_error,
             'tools_before_initialize': tools_before_initialize,
+            'unsupported_version': unsupported_version,
         }.items():
             with self.subTest(name=name), self.assertRaises(evidence.EvidenceError):
                 self._closed_synthetic_bundle(
                     lambda bundle, activation_path, mutation=mutation:
                     self._mutate_cycle_stdio(bundle, activation_path, mutation)
                 )
+
+    def test_verify_activation_bundle_accepts_a_different_supported_negotiated_version(self) -> None:
+        from mcp.client.session import HANDSHAKE_PROTOCOL_VERSIONS
+
+        self.assertGreater(len(HANDSHAKE_PROTOCOL_VERSIONS), 1)
+
+        def negotiate(schema: dict, capture_path: Path, launch_path: Path) -> None:
+            rows = [json.loads(line) for line in capture_path.read_text(encoding='utf-8').splitlines()]
+            rows[0]['message']['params']['protocolVersion'] = HANDSHAKE_PROTOCOL_VERSIONS[0]
+            rows[1]['message']['result']['protocolVersion'] = HANDSHAKE_PROTOCOL_VERSIONS[1]
+            capture_path.write_text(''.join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(',', ':')) + '\n'
+                for row in rows
+            ), encoding='utf-8')
+
+        self._closed_synthetic_bundle(
+            lambda bundle, activation_path:
+            self._mutate_cycle_stdio(bundle, activation_path, negotiate)
+        )
 
     @staticmethod
     def _rewrite_capture_rows(path: Path, rows: list[dict]) -> None:

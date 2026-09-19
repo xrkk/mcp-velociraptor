@@ -2022,32 +2022,39 @@ def _verify_stdio_capture(
     ):
         raise EvidenceError('stdio lifecycle timestamps contradict its causal order')
 
-    initialize_params = initialize_request['message'].get('params')
-    client_info = initialize_params.get('clientInfo') if isinstance(initialize_params, dict) else None
-    if (
-        not isinstance(initialize_params, dict)
-        or not _nonempty_string(initialize_params.get('protocolVersion'), 'stdio initialize protocolVersion')
-        or not isinstance(initialize_params.get('capabilities'), dict)
-        or not isinstance(client_info, dict)
-        or not _nonempty_string(client_info.get('name'), 'stdio initialize client name')
-        or not _nonempty_string(client_info.get('version'), 'stdio initialize client version')
-    ):
-        raise EvidenceError('stdio initialize request lacks required MCP fields')
+    try:
+        from importlib.metadata import version
+        from mcp.client.session import HANDSHAKE_PROTOCOL_VERSIONS
+        from mcp.types import InitializeRequest, InitializeResult, InitializedNotification
+
+        requirements = Path(__file__).resolve().parents[1] / 'requirements.txt'
+        locked = [
+            line.partition('==')[2].strip()
+            for line in requirements.read_text(encoding='utf-8').splitlines()
+            if line.strip().lower().startswith('mcp==')
+        ]
+        if len(locked) != 1 or version('mcp') != locked[0]:
+            raise EvidenceError('runtime MCP SDK version does not match the repository lock')
+        initialize_model = InitializeRequest.model_validate(initialize_request['message'])
+        InitializedNotification.model_validate(initialized['message'])
+    except EvidenceError:
+        raise
+    except Exception as exc:
+        raise EvidenceError('stdio initialize request/notification fails the locked MCP SDK model') from exc
+
+    if initialize_model.params.protocol_version not in HANDSHAKE_PROTOCOL_VERSIONS:
+        raise EvidenceError('stdio initialize request uses an unsupported MCP handshake version')
 
     initialize_message = initialize_response['message']
     if 'result' not in initialize_message or 'error' in initialize_message:
         raise EvidenceError('stdio initialize did not return one successful result')
     initialize_result = initialize_message['result']
-    server_info = initialize_result.get('serverInfo') if isinstance(initialize_result, dict) else None
-    if (
-        not isinstance(initialize_result, dict)
-        or not _nonempty_string(initialize_result.get('protocolVersion'), 'stdio initialize result protocolVersion')
-        or not isinstance(initialize_result.get('capabilities'), dict)
-        or not isinstance(server_info, dict)
-        or not _nonempty_string(server_info.get('name'), 'stdio initialize server name')
-        or not isinstance(server_info.get('version'), str)
-    ):
-        raise EvidenceError('stdio initialize result lacks required MCP fields')
+    try:
+        result_model = InitializeResult.model_validate(initialize_result)
+    except Exception as exc:
+        raise EvidenceError('stdio initialize result fails the locked MCP SDK model') from exc
+    if result_model.protocol_version not in HANDSHAKE_PROTOCOL_VERSIONS:
+        raise EvidenceError('stdio initialize result uses an unsupported MCP handshake version')
 
     tools_list_message = tools_list_response['message']
     if 'result' not in tools_list_message or 'error' in tools_list_message:
