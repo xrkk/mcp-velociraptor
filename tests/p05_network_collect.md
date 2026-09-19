@@ -34,6 +34,14 @@ root is created exclusively and is never reused.  `bundle_root` is the stable
 root against which emitted POSIX Refs are calculated.  The HTTP and stdio run
 IDs must differ, while their restore attempt IDs must be equal.
 
+Before creating an output directory or launching an executor/subprocess, each
+public entry preflights the approved root, bundle root, every input, the output
+parent, and the absent output target.  Dotdot components are rejected rather
+than normalized; absolute escapes, links, Windows reparse points, special
+files, missing parents, and a bundle that does not contain the approved root
+are also rejected.  Thus an invalid path cannot first create raw originals and
+only fail later while calculating a Ref.
+
 ```python
 pc006 = collect_pc006(
     approved_root=phase_root,
@@ -71,6 +79,11 @@ stdio = await collect_stdio(
 - Failed attempts retain `collection-failure.json` and any already obtained raw
   command/capture/launch files, but never publish `pc006.json` or a final
   `network-evidence.json` that could be mistaken for success.
+- The assembler first sends pending, non-final schema/network names through the
+  existing gate.  It creates the final names only after that succeeds, verifies
+  the final Ref graph again, and removes only files owned by that new attempt
+  on any validation, unexpected-type, or write exception.  The exclusive
+  output root prevents cleanup from touching an earlier attempt.
 - stdio timeout and cancellation close the SDK streams and invoke the SDK's
   platform process-tree shutdown before control returns.  The launch exit code
   comes from that owned child; leaving an SDK context is not treated as exit 0.
@@ -82,6 +95,10 @@ The Windows tests use an isolated, file-backed synthetic MCP server to verify
 the pipe and owned-process seam.  It is explicitly not a formal bridge or real
 PC006 observation.  The PC006 executor seam likewise exercises the frozen
 collector with controlled curl results and does not claim a network probe.
+One full synthetic activation test replaces a cycle's fixture network graph
+with artifacts produced by all three public functions, rebuilds its Ref and
+manifest chain, and invokes the public `verify_activation_bundle` entry.  A
+hash-recomputed semantic mutation of that produced PC006 graph is rejected.
 
 ## Preconditions still outside this module
 

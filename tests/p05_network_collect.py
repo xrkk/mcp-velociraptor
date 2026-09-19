@@ -86,9 +86,47 @@ def _write_json(path: Path, value: object) -> None:
     _write_new(path, _json_bytes(value))
 
 
+def _lexical_absolute(path: Path, label: str) -> Path:
+    path = Path(path)
+    if ".." in path.parts:
+        raise CollectionError(f"{label} contains a dotdot component")
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    return Path(os.path.abspath(path))
+
+
+def _plain_directory(path: Path, label: str) -> Path:
+    path = _lexical_absolute(path, label)
+    current = Path(path.anchor)
+    parts = path.parts[1:] if path.anchor else path.parts
+    for part in parts:
+        current /= part
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            raise CollectionError(f"{label} does not exist") from exc
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or stat.S_ISLNK(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & 0x400
+        ):
+            raise CollectionError(f"{label} contains a link, reparse point, or non-directory")
+    return path
+
+
+def _validated_roots(approved_root: Path, bundle_root: Path) -> tuple[Path, Path]:
+    approved = _plain_directory(approved_root, "approved root")
+    bundle = _plain_directory(bundle_root, "bundle root")
+    try:
+        approved.relative_to(bundle)
+    except ValueError as exc:
+        raise CollectionError("approved root is outside the bundle root") from exc
+    return approved, bundle
+
+
 def _plain_input(root: Path, path: Path, label: str) -> Path:
-    root = root.absolute()
-    path = path.absolute()
+    root = _plain_directory(root, "input root")
+    path = _lexical_absolute(path, label)
     try:
         relative = path.relative_to(root).as_posix()
     except ValueError as exc:
@@ -99,47 +137,47 @@ def _plain_input(root: Path, path: Path, label: str) -> Path:
         raise CollectionError(f"{label} is not a contained plain file: {exc}") from exc
 
 
+def _plain_directory_input(root: Path, path: Path, label: str) -> Path:
+    root = _plain_directory(root, "directory input root")
+    path = _plain_directory(path, label)
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise CollectionError(f"{label} is outside the approved root") from exc
+    return path
+
+
 def _new_output_root(approved_root: Path, output_root: Path) -> Path:
-    approved_root = approved_root.absolute()
-    output_root = output_root.absolute()
+    approved_root = _plain_directory(approved_root, "approved output root")
+    output_root = _lexical_absolute(output_root, "output root")
     try:
         relative = output_root.relative_to(approved_root)
     except ValueError as exc:
         raise CollectionError("output root is outside the approved root") from exc
     if not relative.parts:
         raise CollectionError("output root must be a new child, not the approved root")
-    current = approved_root
-    current_info = current.lstat() if current.exists() else None
-    if (
-        current_info is None
-        or not stat.S_ISDIR(current_info.st_mode)
-        or stat.S_ISLNK(current_info.st_mode)
-        or getattr(current_info, "st_file_attributes", 0) & 0x400
-    ):
-        raise CollectionError("approved output root is not a plain directory")
-    for part in relative.parts[:-1]:
-        current = current / part
-        try:
-            info = current.lstat()
-        except OSError as exc:
-            raise CollectionError("output parent does not exist") from exc
-        if (
-            not stat.S_ISDIR(info.st_mode)
-            or stat.S_ISLNK(info.st_mode)
-            or getattr(info, "st_file_attributes", 0) & 0x400
-        ):
-            raise CollectionError("output path contains a link or non-directory")
+    _plain_directory(output_root.parent, "output parent")
+    try:
+        output_root.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise CollectionError("output target could not be inspected") from exc
+    else:
+        raise CollectionError("output root already exists; evidence is never overwritten")
     try:
         output_root.mkdir()
     except FileExistsError as exc:
         raise CollectionError("output root already exists; evidence is never overwritten") from exc
+    except OSError as exc:
+        raise CollectionError("output root could not be created") from exc
     return output_root
 
 
 def _ref(bundle_root: Path, path: Path) -> dict[str, Any]:
     plain = _plain_input(bundle_root, path, "reference target")
     return {
-        "path": plain.relative_to(bundle_root.absolute()).as_posix(),
+        "path": plain.relative_to(_lexical_absolute(bundle_root, "bundle root")).as_posix(),
         "size": plain.stat().st_size,
         "sha256": gate.digest(plain),
     }
@@ -278,6 +316,7 @@ def collect_pc006(
     ``executor`` is the explicit isolated-test seam.  Production uses
     ``subprocess.run(..., shell=False)`` with the exact frozen argv.
     """
+    approved_root, bundle_root = _validated_roots(approved_root, bundle_root)
     run_id = _identity(run_id, "run_id")
     restore_attempt_id = _identity(restore_attempt_id, "restore_attempt_id")
     _identity(vmx, "vmx")
@@ -478,6 +517,7 @@ async def collect_stdio(
     spawn_observer: Callable[[int], None] | None = None,
 ) -> StdioArtifacts:
     """Launch one owned bridge, capture initialize/tools-list, and reap it."""
+    approved_root, bundle_root = _validated_roots(approved_root, bundle_root)
     for value, label in ((host_name, "host_name"), (http_run_id, "http_run_id"),
                          (stdio_run_id, "stdio_run_id"),
                          (restore_attempt_id, "restore_attempt_id")):
@@ -486,7 +526,7 @@ async def collect_stdio(
         raise CollectionError("stdio diagnostic run_id must differ from the HTTP report run_id")
     if host_name != "DESKTOP-3FI41GR":
         raise CollectionError("stdio host is not the approved guest")
-    repository_root = repository_root.absolute()
+    repository_root = _plain_directory_input(approved_root, repository_root, "repository root")
     python_executable = _plain_input(approved_root, python_executable, "stdio interpreter")
     bridge_script = _plain_input(approved_root, bridge_script, "stdio bridge")
     expected_http_tools = _plain_input(approved_root, expected_http_tools, "HTTP tools/list")
@@ -617,6 +657,7 @@ def assemble_network_evidence(
     stdio_capture_path: Path,
 ) -> NetworkArtifacts:
     """Join already collected originals and run the existing network gate."""
+    approved_root, bundle_root = _validated_roots(approved_root, bundle_root)
     run_id = _identity(run_id, "run_id")
     restore_attempt_id = _identity(restore_attempt_id, "restore_attempt_id")
     inputs = {
@@ -668,37 +709,69 @@ def assemble_network_evidence(
         },
     }
     schema_path = root / "schema-identity.json"
-    _write_json(schema_path, schema)
-    network = {
-        "schema_version": 1,
-        "workflow_id": gate.WORKFLOW_ID,
-        "run_id": run_id,
-        "restore_attempt_id": restore_attempt_id,
-        "non_allowed_source": _ref(bundle_root, plain["PC006 boundary"]),
-        "schema_identity": _ref(bundle_root, schema_path),
-        "service_observation": _ref(bundle_root, plain["service observation"]),
-    }
     network_path = root / "network-evidence.json"
-    _write_json(network_path, network)
-    phase = {
-        "run_id": run_id,
-        "restore_attempt_id": restore_attempt_id,
-        "report": _ref(bundle_root, plain["report"]),
-        "ready": _ref(bundle_root, plain["ready"]),
-        "network_evidence": _ref(bundle_root, network_path),
-    }
+    pending_schema_path = root / ".schema-identity.pending.json"
+    pending_network_path = root / ".network-evidence.pending.json"
+    owned_paths = (pending_network_path, pending_schema_path, network_path, schema_path)
+    stage = "pending schema write"
     try:
-        gate._verify_network_evidence(bundle_root, phase, {})
-    except gate.EvidenceError as exc:
-        with suppress(OSError):
-            network_path.unlink()
-        with suppress(OSError):
-            schema_path.unlink()
-        _write_json(root / "collection-failure.json", {
-            "schema_version": 1, "kind": "p05-network-collection-failure-v1",
-            "workflow_id": gate.WORKFLOW_ID, "run_id": run_id,
+        # First validate an unpublished graph.  Only after this existing gate
+        # passes are the caller-visible final names created.  The final graph
+        # is verified again because its schema Ref necessarily has a new path.
+        _write_json(pending_schema_path, schema)
+        pending_network = {
+            "schema_version": 1,
+            "workflow_id": gate.WORKFLOW_ID,
+            "run_id": run_id,
             "restore_attempt_id": restore_attempt_id,
-            "error_type": type(exc).__name__,
-        })
-        raise CollectionError(f"assembled network evidence fails the existing gate: {exc}") from exc
+            "non_allowed_source": _ref(bundle_root, plain["PC006 boundary"]),
+            "schema_identity": _ref(bundle_root, pending_schema_path),
+            "service_observation": _ref(bundle_root, plain["service observation"]),
+        }
+        stage = "pending network write"
+        _write_json(pending_network_path, pending_network)
+        pending_phase = {
+            "run_id": run_id,
+            "restore_attempt_id": restore_attempt_id,
+            "report": _ref(bundle_root, plain["report"]),
+            "ready": _ref(bundle_root, plain["ready"]),
+            "network_evidence": _ref(bundle_root, pending_network_path),
+        }
+        stage = "pending graph verification"
+        gate._verify_network_evidence(bundle_root, pending_phase, {})
+        pending_network_path.unlink()
+        pending_schema_path.unlink()
+
+        stage = "final schema write"
+        _write_json(schema_path, schema)
+        network = {
+            **pending_network,
+            "schema_identity": _ref(bundle_root, schema_path),
+        }
+        stage = "final network write"
+        _write_json(network_path, network)
+        phase = {
+            **pending_phase,
+            "network_evidence": _ref(bundle_root, network_path),
+        }
+        stage = "final graph verification"
+        gate._verify_network_evidence(bundle_root, phase, {})
+    except Exception as exc:
+        for owned_path in owned_paths:
+            with suppress(OSError):
+                owned_path.unlink()
+        try:
+            _write_json(root / "collection-failure.json", {
+                "schema_version": 1, "kind": "p05-network-collection-failure-v1",
+                "workflow_id": gate.WORKFLOW_ID, "run_id": run_id,
+                "restore_attempt_id": restore_attempt_id,
+                "stage": stage, "error_type": type(exc).__name__,
+            })
+        except Exception as record_exc:
+            raise CollectionError(
+                f"assembled network evidence failed during {stage}; failure record could not be written"
+            ) from record_exc
+        raise CollectionError(
+            f"assembled network evidence fails the existing gate during {stage}: {type(exc).__name__}"
+        ) from exc
     return NetworkArtifacts(network_path, schema_path)

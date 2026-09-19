@@ -226,6 +226,112 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertEqual(_sha(fixture.ready_path), before)
 
+    def test_dotdot_outputs_are_rejected_before_side_effects_or_execution(self) -> None:
+        for relative, escaped_name in (("../escaped", "escaped"),
+                                       ("nested/../../nested-escaped", "nested-escaped")):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                root = base / "approved"
+                root.mkdir()
+                (root / "nested").mkdir()
+                fixture = self._fixture(root)
+                calls: list[list[str]] = []
+                with self.assertRaises(collect.CollectionError):
+                    self._collect_pc006(
+                        root, fixture, output_name=relative,
+                        executor=self._pc_executor(fixture, calls=calls),
+                    )
+                self.assertEqual(calls, [])
+                self.assertFalse((base / escaped_name).exists())
+
+    async def test_all_public_entries_preflight_roots_inputs_and_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "approved"
+            root.mkdir()
+            nested = root / "nested"
+            nested.mkdir()
+            fixture = self._fixture(root)
+            calls: list[list[str]] = []
+            disguised_ready = nested / ".." / fixture.ready_path.relative_to(root)
+            with self.assertRaisesRegex(collect.CollectionError, "dotdot"):
+                collect.collect_pc006(
+                    approved_root=root, bundle_root=root, output_root=root / "unused",
+                    ready_path=disguised_ready, run_id=fixture.run_id,
+                    restore_attempt_id=fixture.attempt,
+                    probe_source_address=fixture.probe_source,
+                    comparison_port=fixture.comparison_port, vmx=VMX,
+                    executor=self._pc_executor(fixture, calls=calls),
+                )
+            self.assertEqual(calls, [])
+            self.assertFalse((root / "unused").exists())
+
+            with self.assertRaisesRegex(collect.CollectionError, "dotdot"):
+                collect.collect_pc006(
+                    approved_root=nested / "..", bundle_root=root,
+                    output_root=root / "unused-approved", ready_path=fixture.ready_path,
+                    run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                    probe_source_address=fixture.probe_source,
+                    comparison_port=fixture.comparison_port, vmx=VMX,
+                    executor=self._pc_executor(fixture, calls=calls),
+                )
+            self.assertEqual(calls, [])
+            self.assertFalse((root / "unused-approved").exists())
+
+            repo, python, bridge = self._synthetic_repo(root, fixture.listing, "preflight")
+            spawned: list[int] = []
+            with self.assertRaisesRegex(collect.CollectionError, "dotdot"):
+                await collect.collect_stdio(
+                    approved_root=root, bundle_root=root,
+                    output_root=root / "nested" / ".." / ".." / "stdio-escaped",
+                    repository_root=repo, python_executable=python, bridge_script=bridge,
+                    host_name="DESKTOP-3FI41GR", http_run_id=fixture.run_id,
+                    stdio_run_id="stdio-preflight", restore_attempt_id=fixture.attempt,
+                    expected_http_tools=fixture.run_dir / "tools-list.json",
+                    environment={"PYTHONUTF8": "1"}, spawn_observer=spawned.append,
+                )
+            self.assertEqual(spawned, [])
+            self.assertFalse((base / "stdio-escaped").exists())
+
+            with self.assertRaisesRegex(collect.CollectionError, "dotdot"):
+                collect.assemble_network_evidence(
+                    approved_root=root, bundle_root=nested / "..", output_root=root / "assembled",
+                    run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                    report_path=fixture.report_path, ready_path=fixture.ready_path,
+                    http_tools_path=fixture.run_dir / "tools-list.json",
+                    http_headers_path=fixture.run_dir / "http-headers.json",
+                    service_observation_path=fixture.observation_path,
+                    pc006_boundary_path=fixture.pc006_path,
+                    stdio_launch_path=root / "stdio" / "launch.json",
+                    stdio_capture_path=root / "stdio" / "capture.ndjson",
+                )
+            self.assertFalse((root / "assembled").exists())
+
+    def test_reparse_output_parent_is_rejected_without_writing_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real = root / "real"
+            link = root / "link"
+            real.mkdir()
+            completed = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(link), str(real)],
+                capture_output=True, check=False,
+            )
+            if completed.returncode != 0:
+                self.skipTest("junction creation unavailable; dotdot/absolute bounds remain covered")
+            try:
+                fixture = self._fixture(root)
+                calls: list[list[str]] = []
+                with self.assertRaisesRegex(collect.CollectionError, "link|reparse"):
+                    self._collect_pc006(
+                        root, fixture, output_name="link/new",
+                        executor=self._pc_executor(fixture, calls=calls),
+                    )
+                self.assertEqual(calls, [])
+                self.assertFalse((real / "new").exists())
+            finally:
+                os.rmdir(link)
+
     async def test_stdio_real_sdk_pipeline_records_owned_zero_exit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -361,14 +467,155 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertFalse((root / "cross-attempt").exists())
 
-    def test_public_activation_entry_accepts_existing_full_synthetic_pack_without_mocking_gate(self) -> None:
+    def test_assembler_contains_unexpected_gate_error_without_published_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+            capture = root / "stdio" / "capture.ndjson"
+            rows = [json.loads(line) for line in capture.read_text(encoding="utf-8").splitlines()]
+            rows[0]["message"]["method"] = []
+            capture.write_text("".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+                for row in rows
+            ), encoding="utf-8")
+            target = root / "malformed-network"
+            with self.assertRaisesRegex(collect.CollectionError, "existing gate"):
+                collect.assemble_network_evidence(
+                    approved_root=root, bundle_root=root, output_root=target,
+                    run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                    report_path=fixture.report_path, ready_path=fixture.ready_path,
+                    http_tools_path=fixture.run_dir / "tools-list.json",
+                    http_headers_path=fixture.run_dir / "http-headers.json",
+                    service_observation_path=fixture.observation_path,
+                    pc006_boundary_path=fixture.pc006_path,
+                    stdio_launch_path=root / "stdio" / "launch.json",
+                    stdio_capture_path=capture,
+                )
+            self.assertFalse((target / "network-evidence.json").exists())
+            self.assertFalse((target / "schema-identity.json").exists())
+            self.assertTrue((target / "collection-failure.json").is_file())
+
+    def test_assembler_write_failure_removes_only_its_final_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = self._fixture(root)
+            target = root / "write-failure-network"
+            original_write = collect._write_json
+
+            def fail_final_network(path: Path, value: object) -> None:
+                if path.name == "network-evidence.json":
+                    raise OSError("synthetic final network write failure")
+                original_write(path, value)
+
+            with patch.object(collect, "_write_json", side_effect=fail_final_network):
+                with self.assertRaisesRegex(collect.CollectionError, "final network write"):
+                    collect.assemble_network_evidence(
+                        approved_root=root, bundle_root=root, output_root=target,
+                        run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                        report_path=fixture.report_path, ready_path=fixture.ready_path,
+                        http_tools_path=fixture.run_dir / "tools-list.json",
+                        http_headers_path=fixture.run_dir / "http-headers.json",
+                        service_observation_path=fixture.observation_path,
+                        pc006_boundary_path=fixture.pc006_path,
+                        stdio_launch_path=root / "stdio" / "launch.json",
+                        stdio_capture_path=root / "stdio" / "capture.ndjson",
+                    )
+            self.assertFalse((target / "network-evidence.json").exists())
+            self.assertFalse((target / "schema-identity.json").exists())
+            self.assertTrue((target / "collection-failure.json").is_file())
+
+    def _install_produced_network_in_activation(
+        self, bundle: Path, activation_path: Path, *, corrupt_pc006: bool = False
+    ) -> str:
+        activation = json.loads(activation_path.read_text(encoding="utf-8"))
+        cycle = activation["candidate_cycles"][0]
+        phase_root = bundle / "cycle-1"
+        report_path = bundle / cycle["report"]["path"]
+        ready_path = bundle / cycle["ready"]["path"]
+        old_network_path = bundle / cycle["network_evidence"]["path"]
+        old_network = json.loads(old_network_path.read_text(encoding="utf-8"))
+        service_path = bundle / old_network["service_observation"]["path"]
+        executor_fixture = NetworkGateFixture(bundle / "producer-executor-fixture", ref_root=bundle)
+        pc006 = collect.collect_pc006(
+            approved_root=bundle, bundle_root=bundle,
+            output_root=phase_root / "producer-pc006", ready_path=ready_path,
+            run_id=cycle["run_id"], restore_attempt_id=cycle["restore_attempt_id"],
+            probe_source_address=executor_fixture.probe_source,
+            comparison_port=executor_fixture.comparison_port, vmx=VMX,
+            executor=self._pc_executor(executor_fixture),
+        )
+        listing = json.loads((report_path.parent / "tools-list.json").read_text(encoding="utf-8"))
+        repo, python, bridge = self._synthetic_repo(bundle, listing, "activation-producer")
+        stdio = asyncio.run(collect.collect_stdio(
+            approved_root=bundle, bundle_root=bundle,
+            output_root=phase_root / "producer-stdio", repository_root=repo,
+            python_executable=python, bridge_script=bridge,
+            host_name="DESKTOP-3FI41GR", http_run_id=cycle["run_id"],
+            stdio_run_id="stdio-cycle-one-produced",
+            restore_attempt_id=cycle["restore_attempt_id"],
+            expected_http_tools=report_path.parent / "tools-list.json",
+            environment={"PYTHONUTF8": "1"}, timeout=10,
+        ))
+        assembled = collect.assemble_network_evidence(
+            approved_root=bundle, bundle_root=bundle,
+            output_root=phase_root / "producer-network", run_id=cycle["run_id"],
+            restore_attempt_id=cycle["restore_attempt_id"], report_path=report_path,
+            ready_path=ready_path, http_tools_path=report_path.parent / "tools-list.json",
+            http_headers_path=report_path.parent / "http-headers.json",
+            service_observation_path=service_path, pc006_boundary_path=pc006.boundary,
+            stdio_launch_path=stdio.launch, stdio_capture_path=stdio.capture,
+        )
+        if corrupt_pc006:
+            bound = json.loads(pc006.bound_source.read_text(encoding="utf-8"))
+            bound["exit_status"]["code"] = 127
+            _write_json(pc006.bound_source, bound)
+            boundary = json.loads(pc006.boundary.read_text(encoding="utf-8"))
+            boundary["bound_source_failure"] = _ref(bundle, pc006.bound_source)
+            _write_json(pc006.boundary, boundary)
+            network = json.loads(assembled.network_evidence.read_text(encoding="utf-8"))
+            network["non_allowed_source"] = _ref(bundle, pc006.boundary)
+            _write_json(assembled.network_evidence, network)
+        cycle["network_evidence"] = _ref(bundle, assembled.network_evidence)
+        manifest_path = bundle / cycle["package_manifest"]["path"]
+        members = sorted(
+            (_ref(bundle, member) for member in phase_root.rglob("*")
+             if member.is_file() and member != manifest_path),
+            key=lambda item: str(item["path"]).encode("utf-8"),
+        )
+        _write_json(manifest_path, {"schema_version": 1, "members": members})
+        cycle["package_manifest"] = _ref(bundle, manifest_path)
+        _write_json(activation_path, activation)
+        return cycle["network_evidence"]["path"]
+
+    async def test_public_activation_entry_consumes_producer_graph_without_mocking_gate(self) -> None:
         from tests.test_p06_semantic_gates import FullSyntheticActivationBundleTests
 
         case = FullSyntheticActivationBundleTests(
             "test_verify_activation_bundle_accepts_a_fully_closed_synthetic_pack"
         )
-        facts = case._closed_synthetic_bundle()
+        consumed: list[str] = []
+
+        def install(bundle: Path, activation_path: Path) -> None:
+            consumed.append(self._install_produced_network_in_activation(bundle, activation_path))
+
+        facts = await asyncio.to_thread(case._closed_synthetic_bundle, install)
         self.assertEqual(facts["candidate"], gate.SNAPSHOT_188)
+        self.assertEqual(consumed, ["cycle-1/producer-network/network-evidence.json"])
+
+    async def test_public_activation_entry_rejects_hash_recomputed_producer_semantic_damage(self) -> None:
+        from tests.test_p06_semantic_gates import FullSyntheticActivationBundleTests
+
+        case = FullSyntheticActivationBundleTests(
+            "test_verify_activation_bundle_accepts_a_fully_closed_synthetic_pack"
+        )
+
+        def install_and_corrupt(bundle: Path, activation_path: Path) -> None:
+            self._install_produced_network_in_activation(
+                bundle, activation_path, corrupt_pc006=True
+            )
+
+        with self.assertRaisesRegex(gate.EvidenceError, "did not exit successfully"):
+            await asyncio.to_thread(case._closed_synthetic_bundle, install_and_corrupt)
 
 
 if __name__ == "__main__":
