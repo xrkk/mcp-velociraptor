@@ -307,6 +307,69 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertFalse((root / "assembled").exists())
 
+    async def test_parent_approved_never_expands_bundle_evidence_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            approved = Path(directory)
+            bundle = approved / "evidence-bundle"
+            bundle.mkdir()
+            fixture = self._fixture(bundle)
+            calls: list[list[str]] = []
+            with self.assertRaisesRegex(collect.CollectionError, "bundle root"):
+                collect.collect_pc006(
+                    approved_root=approved, bundle_root=bundle,
+                    output_root=approved / "escaped-pc006", ready_path=fixture.ready_path,
+                    run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                    probe_source_address=fixture.probe_source,
+                    comparison_port=fixture.comparison_port, vmx=VMX,
+                    executor=self._pc_executor(fixture, calls=calls),
+                )
+            self.assertEqual(calls, [])
+            self.assertFalse((approved / "escaped-pc006").exists())
+
+            outside_ready = approved / "outside-ready.json"
+            outside_ready.write_bytes(fixture.ready_path.read_bytes())
+            with self.assertRaisesRegex(collect.CollectionError, "bundle root"):
+                collect.collect_pc006(
+                    approved_root=approved, bundle_root=bundle,
+                    output_root=bundle / "unused-pc006", ready_path=outside_ready,
+                    run_id=fixture.run_id, restore_attempt_id=fixture.attempt,
+                    probe_source_address=fixture.probe_source,
+                    comparison_port=fixture.comparison_port, vmx=VMX,
+                    executor=self._pc_executor(fixture, calls=calls),
+                )
+            self.assertEqual(calls, [])
+            self.assertFalse((bundle / "unused-pc006").exists())
+
+            repo, python, bridge = self._synthetic_repo(approved, fixture.listing, "sibling")
+            spawned: list[int] = []
+            with self.assertRaisesRegex(collect.CollectionError, "bundle root"):
+                await collect.collect_stdio(
+                    approved_root=approved, bundle_root=bundle,
+                    output_root=approved / "escaped-stdio", repository_root=repo,
+                    python_executable=python, bridge_script=bridge,
+                    host_name="DESKTOP-3FI41GR", http_run_id=fixture.run_id,
+                    stdio_run_id="stdio-sibling", restore_attempt_id=fixture.attempt,
+                    expected_http_tools=fixture.run_dir / "tools-list.json",
+                    environment={"PYTHONUTF8": "1"}, spawn_observer=spawned.append,
+                )
+            self.assertEqual(spawned, [])
+            self.assertFalse((approved / "escaped-stdio").exists())
+
+            with self.assertRaisesRegex(collect.CollectionError, "bundle root"):
+                collect.assemble_network_evidence(
+                    approved_root=approved, bundle_root=bundle,
+                    output_root=approved / "escaped-network", run_id=fixture.run_id,
+                    restore_attempt_id=fixture.attempt, report_path=fixture.report_path,
+                    ready_path=fixture.ready_path,
+                    http_tools_path=fixture.run_dir / "tools-list.json",
+                    http_headers_path=fixture.run_dir / "http-headers.json",
+                    service_observation_path=fixture.observation_path,
+                    pc006_boundary_path=fixture.pc006_path,
+                    stdio_launch_path=bundle / "stdio" / "launch.json",
+                    stdio_capture_path=bundle / "stdio" / "capture.ndjson",
+                )
+            self.assertFalse((approved / "escaped-network").exists())
+
     def test_reparse_output_parent_is_rejected_without_writing_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -525,8 +588,10 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue((target / "collection-failure.json").is_file())
 
     def _install_produced_network_in_activation(
-        self, bundle: Path, activation_path: Path, *, corrupt_pc006: bool = False
+        self, bundle: Path, activation_path: Path, *, corrupt_pc006: bool = False,
+        separate_workspace: bool = False,
     ) -> str:
+        approved = bundle.parent if separate_workspace else bundle
         activation = json.loads(activation_path.read_text(encoding="utf-8"))
         cycle = activation["candidate_cycles"][0]
         phase_root = bundle / "cycle-1"
@@ -537,7 +602,7 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
         service_path = bundle / old_network["service_observation"]["path"]
         executor_fixture = NetworkGateFixture(bundle / "producer-executor-fixture", ref_root=bundle)
         pc006 = collect.collect_pc006(
-            approved_root=bundle, bundle_root=bundle,
+            approved_root=approved, bundle_root=bundle,
             output_root=phase_root / "producer-pc006", ready_path=ready_path,
             run_id=cycle["run_id"], restore_attempt_id=cycle["restore_attempt_id"],
             probe_source_address=executor_fixture.probe_source,
@@ -545,9 +610,9 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
             executor=self._pc_executor(executor_fixture),
         )
         listing = json.loads((report_path.parent / "tools-list.json").read_text(encoding="utf-8"))
-        repo, python, bridge = self._synthetic_repo(bundle, listing, "activation-producer")
+        repo, python, bridge = self._synthetic_repo(approved, listing, "activation-producer")
         stdio = asyncio.run(collect.collect_stdio(
-            approved_root=bundle, bundle_root=bundle,
+            approved_root=approved, bundle_root=bundle,
             output_root=phase_root / "producer-stdio", repository_root=repo,
             python_executable=python, bridge_script=bridge,
             host_name="DESKTOP-3FI41GR", http_run_id=cycle["run_id"],
@@ -557,7 +622,7 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
             environment={"PYTHONUTF8": "1"}, timeout=10,
         ))
         assembled = collect.assemble_network_evidence(
-            approved_root=bundle, bundle_root=bundle,
+            approved_root=approved, bundle_root=bundle,
             output_root=phase_root / "producer-network", run_id=cycle["run_id"],
             restore_attempt_id=cycle["restore_attempt_id"], report_path=report_path,
             ready_path=ready_path, http_tools_path=report_path.parent / "tools-list.json",
@@ -587,7 +652,7 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
         _write_json(activation_path, activation)
         return cycle["network_evidence"]["path"]
 
-    async def test_public_activation_entry_consumes_producer_graph_without_mocking_gate(self) -> None:
+    async def test_public_activation_entry_consumes_sibling_repo_and_bundle_producer_graph(self) -> None:
         from tests.test_p06_semantic_gates import FullSyntheticActivationBundleTests
 
         case = FullSyntheticActivationBundleTests(
@@ -596,7 +661,9 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
         consumed: list[str] = []
 
         def install(bundle: Path, activation_path: Path) -> None:
-            consumed.append(self._install_produced_network_in_activation(bundle, activation_path))
+            consumed.append(self._install_produced_network_in_activation(
+                bundle, activation_path, separate_workspace=True
+            ))
 
         facts = await asyncio.to_thread(case._closed_synthetic_bundle, install)
         self.assertEqual(facts["candidate"], gate.SNAPSHOT_188)
@@ -611,7 +678,7 @@ class NetworkCollectTests(unittest.IsolatedAsyncioTestCase):
 
         def install_and_corrupt(bundle: Path, activation_path: Path) -> None:
             self._install_produced_network_in_activation(
-                bundle, activation_path, corrupt_pc006=True
+                bundle, activation_path, corrupt_pc006=True, separate_workspace=True
             )
 
         with self.assertRaisesRegex(gate.EvidenceError, "did not exit successfully"):

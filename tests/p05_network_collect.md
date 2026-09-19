@@ -29,18 +29,23 @@ reconstruct missing history, or activate Snapshot 188.
    `p06-schema-identity-v1` and `network-evidence.json` Ref graph and calls the
    existing `_verify_network_evidence` gate before returning.
 
-All path arguments must be ordinary files inside `approved_root`; every output
-root is created exclusively and is never reused.  `bundle_root` is the stable
-root against which emitted POSIX Refs are calculated.  The HTTP and stdio run
-IDs must differ, while their restore attempt IDs must be equal.
+All touched paths must be ordinary files or directories inside
+`approved_root`; every output root is created exclusively and is never reused.
+`bundle_root` independently bounds evidence inputs, outputs, and emitted POSIX
+Refs.  It may equal the approved root, contain a narrower approved phase, or be
+a child of a larger approved workspace.  In that last layout the repository
+and `.venv` may be a sibling of the bundle: they remain approved execution
+inputs but are not evidence-package members.  The HTTP and stdio run IDs must
+differ, while their restore attempt IDs must be equal.
 
 Before creating an output directory or launching an executor/subprocess, each
 public entry preflights the approved root, bundle root, every input, the output
-parent, and the absent output target.  Dotdot components are rejected rather
-than normalized; absolute escapes, links, Windows reparse points, special
-files, missing parents, and a bundle that does not contain the approved root
-are also rejected.  Thus an invalid path cannot first create raw originals and
-only fail later while calculating a Ref.
+parent, and the absent output target.  Evidence inputs and outputs must be in
+both their approved scope and the bundle; repository/interpreter/bridge inputs
+need only be in the approved workspace.  Dotdot components are rejected rather
+than normalized, and absolute escapes, links, Windows reparse points, special
+files, and missing parents are also rejected.  Thus an invalid path cannot
+first create raw originals and only fail later while calculating a Ref.
 
 ```python
 pc006 = collect_pc006(

@@ -117,10 +117,6 @@ def _plain_directory(path: Path, label: str) -> Path:
 def _validated_roots(approved_root: Path, bundle_root: Path) -> tuple[Path, Path]:
     approved = _plain_directory(approved_root, "approved root")
     bundle = _plain_directory(bundle_root, "bundle root")
-    try:
-        approved.relative_to(bundle)
-    except ValueError as exc:
-        raise CollectionError("approved root is outside the bundle root") from exc
     return approved, bundle
 
 
@@ -145,6 +141,27 @@ def _plain_directory_input(root: Path, path: Path, label: str) -> Path:
     except ValueError as exc:
         raise CollectionError(f"{label} is outside the approved root") from exc
     return path
+
+
+def _plain_evidence_input(
+    approved_root: Path, bundle_root: Path, path: Path, label: str
+) -> Path:
+    plain = _plain_input(approved_root, path, label)
+    try:
+        bundled = _plain_input(bundle_root, plain, label)
+    except CollectionError as exc:
+        raise CollectionError(f"{label} is outside or invalid in the bundle root") from exc
+    return bundled
+
+
+def _preflight_evidence_output(bundle_root: Path, output_root: Path) -> Path:
+    bundle_root = _plain_directory(bundle_root, "bundle root")
+    output_root = _lexical_absolute(output_root, "output root")
+    try:
+        output_root.relative_to(bundle_root)
+    except ValueError as exc:
+        raise CollectionError("output root is outside the bundle root") from exc
+    return output_root
 
 
 def _new_output_root(approved_root: Path, output_root: Path) -> Path:
@@ -332,7 +349,9 @@ def collect_pc006(
         or comparison_port == 28790
     ):
         raise CollectionError("comparison port is invalid")
-    ready_path = _plain_input(approved_root, ready_path, "ready original")
+    ready_path = _plain_evidence_input(
+        approved_root, bundle_root, ready_path, "ready original"
+    )
     ready = _load_json(ready_path, "ready original")
     if ready.get("run_id") != run_id or ready.get("restore_attempt_id") != restore_attempt_id:
         raise CollectionError("ready original belongs to another run or restore attempt")
@@ -345,6 +364,7 @@ def collect_pc006(
     except gate.EvidenceError as exc:
         raise CollectionError(f"ready firewall Ref is invalid: {exc}") from exc
 
+    output_root = _preflight_evidence_output(bundle_root, output_root)
     root = _new_output_root(approved_root, output_root)
     failures: list[dict[str, Any]] = []
     paths: dict[str, Path] = {}
@@ -529,7 +549,9 @@ async def collect_stdio(
     repository_root = _plain_directory_input(approved_root, repository_root, "repository root")
     python_executable = _plain_input(approved_root, python_executable, "stdio interpreter")
     bridge_script = _plain_input(approved_root, bridge_script, "stdio bridge")
-    expected_http_tools = _plain_input(approved_root, expected_http_tools, "HTTP tools/list")
+    expected_http_tools = _plain_evidence_input(
+        approved_root, bundle_root, expected_http_tools, "HTTP tools/list"
+    )
     if python_executable != repository_root / ".venv" / "Scripts" / "python.exe":
         raise CollectionError("stdio interpreter is not the selected repository virtualenv python.exe")
     if bridge_script != repository_root / "mcp_velociraptor_bridge.py":
@@ -546,6 +568,7 @@ async def collect_stdio(
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     expected_listing = _load_json(expected_http_tools, "HTTP tools/list")
     expected_normalized = gate._normalized_tools_bytes(expected_listing)
+    output_root = _preflight_evidence_output(bundle_root, output_root)
     root = _new_output_root(approved_root, output_root)
     capture_path = root / "capture.ndjson"
     stderr_path = root / "stderr.txt"
@@ -666,7 +689,10 @@ def assemble_network_evidence(
         "PC006 boundary": pc006_boundary_path, "stdio launch": stdio_launch_path,
         "stdio capture": stdio_capture_path,
     }
-    plain = {name: _plain_input(approved_root, path, name) for name, path in inputs.items()}
+    plain = {
+        name: _plain_evidence_input(approved_root, bundle_root, path, name)
+        for name, path in inputs.items()
+    }
     report = _load_json(plain["report"], "report")
     ready = _load_json(plain["ready"], "ready")
     pc006 = _load_json(plain["PC006 boundary"], "PC006 boundary")
@@ -690,6 +716,7 @@ def assemble_network_evidence(
     if plain["HTTP headers"] != report_parent / "http-headers.json":
         raise CollectionError("HTTP headers are not the report run's http-headers.json")
 
+    output_root = _preflight_evidence_output(bundle_root, output_root)
     root = _new_output_root(approved_root, output_root)
     schema = {
         "schema_version": 1,
