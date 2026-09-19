@@ -214,6 +214,9 @@ if (-not $process.CommandLine.Contains($WorkflowId) -or -not $process.CommandLin
     throw 'fixture process command line is missing ownership tokens'
 }
 
+# The frozen spec records the canonical unexpanded %SystemRoot% form; the
+# ScheduledTasks API always returns the expanded interpreter path.
+$canonicalExecute = $taskAction.Execute -replace [regex]::Escape("$env:SystemRoot\System32\cmd.exe"), '%SystemRoot%\System32\cmd.exe'
 $instance = [ordered]@{
     schema_version = 1
     fixture_spec_sha256 = $specHash
@@ -225,7 +228,7 @@ $instance = [ordered]@{
     files = $fileRows
     registry = [ordered]@{ path = $registryPath; values = $expectedRegistry }
     event = [ordered]@{ log = 'Application'; source = $eventSource; event_id = $eventId; message = $eventMessage; record_id = [int64]$matchingEvents[0].Index }
-    task = [ordered]@{ path = $taskPath; name = $taskName; enabled = $false; triggers = @(); execute = $taskAction.Execute; arguments = $taskAction.Arguments }
+    task = [ordered]@{ path = $taskPath; name = $taskName; enabled = $false; triggers = @(); execute = $canonicalExecute; arguments = $taskAction.Arguments }
     process = [ordered]@{ pid = [int]$process.ProcessId; creation_time_utc = $processCreation; token = "$WorkflowId|$AttemptId"; interpreter = $pythonPath; command_line = $process.CommandLine; sleep_seconds = 86400 }
 }
 $json = $instance | ConvertTo-Json -Depth 12
