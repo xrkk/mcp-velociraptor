@@ -92,6 +92,18 @@ retain their ordinary resource defaults. P06/P07 acceptance is currently reopene
 the new resource qualification and admission implementation is under verification,
 not a claim that the five formal scenarios have passed again.
 
+The fixed no-argument `collect_forensic_triage` entry separately requests the
+complete `Windows.Triage.Targets` `_BasicCollection` once, with a 2400-second
+timeout and a 4 GiB (`4294967296`-byte) upload budget. The budget is private to
+that entry: a generic call to the same artifact and all other collection paths
+keep their prior defaults. It is measured from pre-compression
+`FileBuffer.DataLength` blocks, with cancellation only after the accumulated
+value is strictly greater than the cap; parallel or in-flight data can exceed
+it. It is not a disk/network limit, MCP file quota, or caller-controlled
+setting. The local source and isolated request fixtures implement this rule,
+but it is not deployed and does not replace P05 source locking, initial plus
+two recovery acceptances, or later P06 qualification.
+
 The P06 resource qualifier runs outside the VM with the official SDK against
 `http://<guest-host-only-ip>:28790/mcp`, using the deployer's token from
 `VELOCIRAPTOR_MCP_BEARER_TOKEN`. It requires complete original Snapshot 188

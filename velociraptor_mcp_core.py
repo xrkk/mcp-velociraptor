@@ -711,10 +711,11 @@ class VelociraptorBackend:
         parameters: Mapping[str, Any] | None = None,
         *,
         timeout: int | None = None,
+        max_upload_bytes: int | None = None,
     ) -> FlowReferenceResult:
         from velociraptor_api import get_flow_details, start_collection
 
-        max_bytes = None
+        max_bytes = max_upload_bytes
         if artifact == "Windows.Memory.Acquisition":
             timeout = max(timeout or 0, self.MEMORY_ACQUISITION_TIMEOUT_SECONDS)
             max_bytes = self.MEMORY_ACQUISITION_MAX_UPLOAD_BYTES

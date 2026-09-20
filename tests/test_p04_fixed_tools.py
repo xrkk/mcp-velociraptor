@@ -148,9 +148,26 @@ class FakeBackend:
         self.calls.append(("cancel_flow", client_id, flow_id))
         self.flows[flow_id] = {**self.flows[flow_id], "state": "ERROR", "status": "cancelled"}
 
-    def start_collection(self, client_id, artifact, parameters=None, *, timeout=None):
+    def start_collection(
+        self,
+        client_id,
+        artifact,
+        parameters=None,
+        *,
+        timeout=None,
+        max_upload_bytes=None,
+    ):
         flow_id = "F.started"
-        self.calls.append(("start_collection", client_id, artifact, parameters, timeout))
+        self.calls.append(
+            (
+                "start_collection",
+                client_id,
+                artifact,
+                parameters,
+                timeout,
+                max_upload_bytes,
+            )
+        )
         self.flows[flow_id] = flow_row(flow_id)
         self.flows[flow_id]["artifacts"] = [artifact]
         self.flows[flow_id]["request"] = {"artifacts": [artifact]}

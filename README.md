@@ -175,6 +175,17 @@ other artifacts. P06 resource qualification still checks available memory and
 disk before admitting the full execution scenarios. The new admission code is
 under verification; old successful reports are not proof of the new qualification.
 
+The fixed no-argument `collect_forensic_triage` entry is a second, separate
+exception: only that entry requests a 2400-second timeout and a 4 GiB upload
+budget for the full `Windows.Triage.Targets` `_BasicCollection`. The budget is
+not a public argument, a global default, an MCP download quota, or a physical
+disk/network-compression ceiling. Velociraptor charges the pre-compression
+`FileBuffer.DataLength` of each block and cancels only when the accumulated
+value is strictly greater than the requested cap; parallel or in-flight data
+may therefore exceed it. Other calls to the same artifact and all other tools
+retain their existing defaults. These semantics have local isolated request
+tests, not a real 4 GiB cancellation or completed-triage acceptance run.
+
 The P05 test infrastructure is intentionally separate from the MCP API:
 
 ```text

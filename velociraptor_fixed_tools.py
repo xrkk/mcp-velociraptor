@@ -77,6 +77,7 @@ FINAL_TOOL_COUNT = 130
 VFS_CHUNK_BYTES = 1024 * 1024
 TERMINAL_FLOW_STATES = frozenset({"FINISHED", "ERROR"})
 TRIAGE_ARTIFACT = "Windows.Triage.Targets"
+TRIAGE_MAX_UPLOAD_BYTES = 4 * 1024**3
 KILL_PROCESS_ARTIFACT = "Generic.Utils.KillProcess"
 FILE_ARTIFACT = "Generic.Collectors.File"
 
@@ -1043,6 +1044,7 @@ class FixedToolService:
         artifact: str,
         parameters: Mapping[str, Any],
         timeout: int | None,
+        max_upload_bytes: int | None = None,
         operation: str,
     ) -> FixedFlowReferenceResult:
         exists = _backend_call(
@@ -1050,11 +1052,14 @@ class FixedToolService:
         )
         if not exists:
             raise DependencyMissingError(details={"artifact": artifact})
+        collection_options = {"timeout": timeout}
+        if max_upload_bytes is not None:
+            collection_options["max_upload_bytes"] = max_upload_bytes
         flow = self._target.run_with_client(
             lambda client_id: _backend_call(
                 operation,
                 lambda: self._backend.start_collection(
-                    client_id, artifact, parameters, timeout=timeout
+                    client_id, artifact, parameters, **collection_options
                 ),
             )
         )
@@ -1068,8 +1073,11 @@ class FixedToolService:
     def collect_forensic_triage(self) -> FixedFlowReferenceResult:
         return self._dependency_collection(
             artifact=TRIAGE_ARTIFACT,
-            parameters={"Targets": ["_BasicCollection"]},
+            parameters={
+                "Targets": json.dumps(["_BasicCollection"], separators=(",", ":"))
+            },
             timeout=2400,
+            max_upload_bytes=TRIAGE_MAX_UPLOAD_BYTES,
             operation="collect_forensic_triage",
         )
 
