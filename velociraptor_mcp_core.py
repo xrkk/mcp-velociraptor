@@ -29,7 +29,7 @@ class Pagination(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cursor: str
-    next_cursor: str | None = None
+    next_cursor: str | None
     page_size: int = Field(ge=1, le=MAX_PAGE_SIZE)
     returned: int = Field(ge=0)
     truncated: bool
@@ -79,6 +79,7 @@ class FixedUnpagedDataResult(FixedResultBase):
 
 class FixedFlowReferenceResult(FixedResultBase):
     flow_id: str
+    state: str = Field(min_length=1)
 
 
 class HuntStartedResult(FixedResultBase):
@@ -86,6 +87,7 @@ class HuntStartedResult(FixedResultBase):
     flow_id: str
     client_id: str
     state: str
+    flow_state: str = Field(min_length=1)
 
 
 class HuntStatusResult(FixedResultBase):
@@ -353,10 +355,19 @@ def error_model(exc: Exception, *, operation: str = "") -> ErrorResult:
     )
 
 
+def structured_result_payload(model: BaseModel) -> dict[str, Any]:
+    """Serialize a result while retaining the required terminal cursor null."""
+    payload = model.model_dump(mode="json", exclude_none=True)
+    pagination = getattr(model, "pagination", None)
+    if isinstance(pagination, Pagination):
+        payload["pagination"]["next_cursor"] = pagination.next_cursor
+    return payload
+
+
 def success_result(model: BaseModel) -> CallToolResult:
     return CallToolResult(
         content=[],
-        structuredContent=model.model_dump(mode="json", exclude_none=True),
+        structuredContent=structured_result_payload(model),
         isError=False,
     )
 
@@ -499,7 +510,7 @@ def paginate_result(
             page_size=size,
             total=total,
         )
-        payload = current.model_dump(mode="json", exclude_none=True)
+        payload = structured_result_payload(current)
         if len(canonical_json_bytes(payload)) <= RESPONSE_BYTE_LIMIT:
             best = current
 
@@ -512,7 +523,7 @@ def paginate_result(
             total=total,
         )
         actual = len(
-            canonical_json_bytes(first.model_dump(mode="json", exclude_none=True))
+            canonical_json_bytes(structured_result_payload(first))
         )
         raise RowTooLargeError(
             details={
@@ -561,14 +572,14 @@ def paginate_window_result(
     best: DataResult | None = None
     for count in range(1, len(candidate) + 1):
         current = build(count)
-        payload = current.model_dump(mode="json", exclude_none=True)
+        payload = structured_result_payload(current)
         if len(canonical_json_bytes(payload)) <= RESPONSE_BYTE_LIMIT:
             best = current
 
     if best is None:
         first = build(1)
         actual = len(
-            canonical_json_bytes(first.model_dump(mode="json", exclude_none=True))
+            canonical_json_bytes(structured_result_payload(first))
         )
         raise RowTooLargeError(
             details={

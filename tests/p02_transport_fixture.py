@@ -79,7 +79,7 @@ class FakeBackend:
         return []
 
     def read_vfs_buffer(
-        self, components, *, offset: int, length: int
+        self, components, *, offset: int, length: int, padding: bool
     ) -> bytes:
         return b""
 

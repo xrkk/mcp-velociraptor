@@ -304,6 +304,20 @@ tool. P07 has removed it physically.
 The current bridge returns MCP-native `structuredContent` from both dynamic and
 fixed tools. This historical agent still expects older tool names and response
 handling, so it is not a compatibility client for P04.
+The current fixed startup contract distinguishes control-call completion from
+backend work: `collect_file`, `collect_forensic_triage`, and `kill_process`
+return required `state`, while `start_hunt` returns Hunt `state` plus required
+Flow `flow_state`. The first immediate backend value is preserved, including
+`ERROR`; clients must inspect it rather than treating `status="success"` as a
+successful collection outcome. Missing or empty initial state is a
+`BACKEND_ERROR`.
+For `get_flow_results`, `v1:<offset>` is interpreted only in the explicitly
+supplied `flow_id`/`source` context. A paged response always carries
+`pagination.next_cursor`: a string for another page or JSON `null` at the end;
+unpaged responses omit `pagination`. This historical agent has not been updated
+or qualified for those additions. The isolated contract work does not deploy
+the locally implemented PC017 logical-file download support, and the separate
+triage budget is likewise only locally implemented and isolation-tested.
 `collect_artifact` is no longer registered. Call the exact approved Windows
 artifact tool and pass its generated structured arguments instead.
 The fixed surface includes bounded VQL, Hunt and Flow lifecycle, one-file

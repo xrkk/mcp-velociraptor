@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
@@ -18,9 +19,12 @@ from velociraptor_mcp_core import (
     BackendError,
     DependencyMissingError,
     FlowReferenceResult,
+    InvalidArgumentError,
+    NotFoundError,
     NotCancellableError,
     TargetContext,
     canonical_json_bytes,
+    success_result,
 )
 
 
@@ -91,6 +95,8 @@ class FakeBackend:
         self.hunt_state = "PAUSED"
         self.hunt_flow = None
         self.fail_vfs_at = None
+        self.initial_state = "WAITING"
+        self.results_by_flow_source = None
 
     def list_windows_clients(self):
         return [{"client_id": "C.one"}]
@@ -117,7 +123,9 @@ class FakeBackend:
             ("get_flow_results_window", client_id, flow_id, artifact, source, start_row, count)
         )
         rows = (
-            self.results_by_source[source]
+            self.results_by_flow_source[(flow_id, source)]
+            if self.results_by_flow_source is not None
+            else self.results_by_source[source]
             if self.results_by_source is not None
             else self.results
         )
@@ -126,7 +134,9 @@ class FakeBackend:
     def get_flow_result_count(self, client_id, flow_id, artifact, *, source):
         self.calls.append(("get_flow_result_count", client_id, flow_id, artifact, source))
         rows = (
-            self.results_by_source[source]
+            self.results_by_flow_source[(flow_id, source)]
+            if self.results_by_flow_source is not None
+            else self.results_by_source[source]
             if self.results_by_source is not None
             else self.results
         )
@@ -171,9 +181,11 @@ class FakeBackend:
         self.flows[flow_id] = flow_row(flow_id)
         self.flows[flow_id]["artifacts"] = [artifact]
         self.flows[flow_id]["request"] = {"artifacts": [artifact]}
+        if self.initial_state is None:
+            return SimpleNamespace(flow_id=flow_id)
         return FlowReferenceResult(
             operation="start_collection",
-            status="WAITING",
+            status=self.initial_state,
             warnings=[],
             flow_id=flow_id,
         )
@@ -235,6 +247,49 @@ class FixedToolServiceTests(unittest.TestCase):
             [page.pagination.cursor for page in (first, second, third)],
             ["v1:0", "v1:1", "v1:2"],
         )
+
+    def test_cursor_is_a_pure_offset_in_each_explicit_context(self):
+        for flow_id in ("F.alpha", "F.beta"):
+            self.backend.flows[flow_id] = {
+                **flow_row(flow_id),
+                "artifacts_with_results": [ARTIFACT + "/A", ARTIFACT + "/B"],
+            }
+        self.backend.results_by_flow_source = {
+            (flow_id, source): [{"context": f"{flow_id}:{source}:0"}, {"context": f"{flow_id}:{source}:1"}]
+            for flow_id in ("F.alpha", "F.beta")
+            for source in ("A", "B")
+        }
+        for flow_id in ("F.alpha", "F.beta"):
+            for source in ("A", "B"):
+                page = self.service.get_flow_results(flow_id, source, "v1:1", 1)
+                self.assertEqual(page.data, [{"context": f"{flow_id}:{source}:1"}])
+                self.assertIsNone(page.pagination.next_cursor)
+
+    def test_paging_errors_and_terminal_shapes(self):
+        empty = self.service.get_flow_results("F.test", "Rows", "v1:5", 1)
+        empty_payload = success_result(empty).structured_content
+        self.assertEqual(empty_payload["data"], [])
+        self.assertIsNone(empty_payload["pagination"]["next_cursor"])
+        first = success_result(
+            self.service.get_flow_results("F.test", "Rows", None, 1)
+        ).structured_content
+        self.assertEqual(first["pagination"]["next_cursor"], "v1:1")
+        self.assertNotIn("pagination", success_result(self.service.run_vql("SELECT 1")).structured_content)
+        for cursor in (
+            "v1:00",
+            "v1:-1",
+            "v2:0",
+            "v1:2147483648",
+            "v1:" + "1" * 11,
+        ):
+            with self.subTest(cursor=cursor), self.assertRaises(InvalidArgumentError):
+                self.service.get_flow_results("F.test", "Rows", cursor, 1)
+        with self.assertRaises(InvalidArgumentError):
+            self.service.get_flow_results("F.test", "Rows", "v1:6", 1)
+        with self.assertRaises(InvalidArgumentError):
+            self.service.get_flow_results("F.test", "Missing", None, 1)
+        with self.assertRaises(NotFoundError):
+            self.service.get_flow_results("F.missing", "Rows", None, 1)
 
     def test_omitted_source_pages_across_all_known_sources(self):
         self.backend.flows["F.test"]["artifacts_with_results"] = [
@@ -369,6 +424,7 @@ class FixedToolServiceTests(unittest.TestCase):
     def test_hunt_trace_is_paused_collect_then_exact_add_and_stop_does_not_cancel(self):
         started = self.service.start_hunt(ARTIFACT, None, "test hunt")
         self.assertEqual((started.hunt_id, started.flow_id, started.client_id), ("H.real", "F.started", "C.one"))
+        self.assertEqual((started.state, started.flow_state), ("PAUSED", "WAITING"))
         operation_names = [call[0] for call in self.backend.calls]
         self.assertLess(operation_names.index("create_paused_hunt"), operation_names.index("start_collection"))
         self.assertLess(operation_names.index("start_collection"), operation_names.index("add_hunt_flow"))
@@ -387,6 +443,7 @@ class FixedToolServiceTests(unittest.TestCase):
     def test_collect_file_uses_drive_and_csv_without_exposing_target(self):
         result = self.service.collect_file(r"C:\fixture\a file.txt")
         self.assertEqual(result.flow_id, "F.started")
+        self.assertEqual(result.state, "WAITING")
         call = next(item for item in self.backend.calls if item[0] == "start_collection")
         self.assertEqual(call[1:3], ("C.one", "Generic.Collectors.File"))
         self.assertEqual(call[3]["Root"], "C:")
@@ -398,6 +455,51 @@ class FixedToolServiceTests(unittest.TestCase):
         with self.assertRaises(DependencyMissingError):
             self.service.kill_process(123)
         self.assertFalse(any(call[0] == "start_collection" for call in self.backend.calls))
+
+    def test_all_fixed_starts_preserve_first_real_flow_state_once(self):
+        cases = (
+            ("collect_file", lambda service: service.collect_file(r"C:\fixture\x.txt")),
+            ("collect_forensic_triage", lambda service: service.collect_forensic_triage()),
+            ("kill_process", lambda service: service.kill_process(123)),
+            ("start_hunt", lambda service: service.start_hunt(ARTIFACT, None, None)),
+        )
+        for state in ("WAITING", "IN_PROGRESS", "FINISHED", "ERROR", "FUTURE_STATE"):
+            for name, invoke in cases:
+                with self.subTest(state=state, tool=name):
+                    backend = FakeBackend()
+                    backend.initial_state = state
+                    backend.dependencies.update({"Windows.Triage.Targets", "Generic.Utils.KillProcess"})
+                    service = FixedToolService(
+                        [SPEC], TargetContext(backend), backend, download_root=self.temp.name
+                    )
+                    result = invoke(service)
+                    self.assertEqual(
+                        result.flow_state if name == "start_hunt" else result.state,
+                        state,
+                    )
+                    self.assertEqual(result.status, "success")
+                    self.assertEqual(
+                        len([call for call in backend.calls if call[0] == "start_collection"]),
+                        1,
+                    )
+        for state in (None, ""):
+            for name, invoke in cases:
+                with self.subTest(state=state, tool=name):
+                    backend = FakeBackend()
+                    backend.initial_state = state
+                    backend.dependencies.update({"Windows.Triage.Targets", "Generic.Utils.KillProcess"})
+                    service = FixedToolService(
+                        [SPEC], TargetContext(backend), backend, download_root=self.temp.name
+                    )
+                    with self.assertRaises(BackendError):
+                        invoke(service)
+                    self.assertEqual(
+                        len([call for call in backend.calls if call[0] == "start_collection"]),
+                        1,
+                    )
+                    if name == "start_hunt":
+                        self.assertTrue(any(call[0] == "cancel_flow" for call in backend.calls))
+                        self.assertTrue(any(call[0] == "stop_hunt" for call in backend.calls))
 
 
 class FlowResultCountTests(unittest.TestCase):

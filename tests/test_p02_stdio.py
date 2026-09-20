@@ -57,6 +57,7 @@ class FixtureStdioTests(unittest.TestCase):
         self.assertFalse(success.is_error)
         self.assertEqual(success.content, [])
         self.assertEqual(success.structured_content["data"], [{"value": 1}])
+        self.assertIsNone(success.structured_content["pagination"]["next_cursor"])
         self.assertTrue(failed.is_error)
         self.assertEqual(failed.content, [])
         self.assertEqual(failed.structured_content["code"], "INVALID_ARGUMENT")

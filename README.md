@@ -133,7 +133,31 @@ the documented operation fields, real backend identifiers/states, and public
 warnings. Errors use stable
 `code/message/retryable/details` fields. Paged results use opaque canonical
 `v1:<offset>` cursors, default to 50 rows, accept at most 250 rows, and enforce a
-245554-byte limit on the complete serialized `structuredContent` object.
+245554-byte limit on the complete serialized `structuredContent` object. A
+cursor is only an offset interpreted against the `flow_id` and `source` supplied
+on that call; it is not an issued or object-bound token. Whenever `pagination`
+is present, `next_cursor` is also present: it is a cursor string for a
+non-terminal page and JSON `null` for an empty or terminal page. Unpaged tools
+omit `pagination` entirely, and the terminal `null` counts toward the byte
+limit.
+
+The fixed `collect_file`, `collect_forensic_triage`, and `kill_process` startup
+responses keep `status="success"` for a completed control call and include the
+new required `state` field. `start_hunt` keeps `state` for the Hunt and includes
+the new required `flow_state` for its created Flow. These values are the first
+non-empty backend state read immediately after creation; they are not a wait for
+completion. In particular, an initial `ERROR` is reported verbatim and must not
+be treated as a successful collection outcome. Missing or empty backend state
+is a `BACKEND_ERROR`.
+
+This contract implementation and its isolated fixtures do not constitute a
+formal service deployment. PC017 logical-file download support is implemented
+in the local source tree but is not deployed by this slice. The local fixed
+`collect_forensic_triage` implementation now requests one complete
+`_BasicCollection` with a 2400-second timeout and a 4 GiB
+(`4294967296`-byte) upload budget. This is isolated code/test evidence only;
+the deployed service still requires P05 source locking, initial acceptance and
+two recovery checks before any later P06 qualification.
 
 The historical Windows environment used the Snapshot 186 network deployment baseline.
 Its restored fixture/process prerequisites have failed revalidation; it is not

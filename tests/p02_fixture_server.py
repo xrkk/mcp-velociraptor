@@ -46,6 +46,7 @@ def p02_success() -> Annotated[CallToolResult, DataResult]:
         data=[{"value": 1}],
         pagination=Pagination(
             cursor="v1:0",
+            next_cursor=None,
             page_size=50,
             returned=1,
             truncated=False,
@@ -75,6 +76,7 @@ def p02_target() -> Annotated[CallToolResult, DataResult]:
             data=[{"client_id": client_id, "resolution_queries": backend.queries}],
             pagination=Pagination(
                 cursor="v1:0",
+                next_cursor=None,
                 page_size=50,
                 returned=1,
                 truncated=False,

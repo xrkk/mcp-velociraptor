@@ -120,6 +120,13 @@ def _backend_call(operation: str, callback):
         ) from exc
 
 
+def _initial_flow_state(flow, *, operation: str) -> str:
+    state = getattr(flow, "status", None)
+    if not isinstance(state, str) or not state:
+        raise BackendError(details={"operation": operation, "reason": "missing_state"})
+    return state
+
+
 def _int_field(row: Mapping[str, Any], name: str) -> int:
     value = row.get(name, 0)
     try:
@@ -567,6 +574,7 @@ class FixedToolService:
                     ),
                 )
                 flow_id = flow.flow_id
+                flow_state = _initial_flow_state(flow, operation="start_hunt_flow")
                 _backend_call(
                     "add_hunt_flow",
                     lambda: self._backend.add_hunt_flow(client_id, hunt_id, flow_id),
@@ -586,6 +594,7 @@ class FixedToolService:
                     flow_id=flow_id,
                     client_id=client_id,
                     state=details["state"],
+                    flow_state=flow_state,
                 )
             except Exception:
                 if flow_id:
@@ -1036,6 +1045,7 @@ class FixedToolService:
             status="success",
             warnings=[],
             flow_id=flow.flow_id,
+            state=_initial_flow_state(flow, operation="collect_file"),
         )
 
     def _dependency_collection(
@@ -1068,6 +1078,7 @@ class FixedToolService:
             status="success",
             warnings=[],
             flow_id=flow.flow_id,
+            state=_initial_flow_state(flow, operation=operation),
         )
 
     def collect_forensic_triage(self) -> FixedFlowReferenceResult:

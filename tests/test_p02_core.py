@@ -33,6 +33,7 @@ from velociraptor_mcp_core import (
     error_result,
     limit_unpaged_result,
     paginate_result,
+    structured_result_payload,
     success_result,
 )
 
@@ -80,6 +81,7 @@ class CoreContractTests(unittest.TestCase):
         self.assertFalse(result.is_error)
         self.assertEqual(result.content, [])
         self.assertEqual(result.structured_content["operation"], "query")
+        self.assertIsNone(result.structured_content["pagination"]["next_cursor"])
         self.assertNotIn("flow_id", result.structured_content)
         self.assertNotIn("hunt_id", result.structured_content)
 
@@ -172,6 +174,23 @@ class CoreContractTests(unittest.TestCase):
         with self.assertRaises(RowTooLargeError) as caught:
             paginate_result(base, [{"text": "x" * RESPONSE_BYTE_LIMIT}], page_size=1)
         self.assertGreater(caught.exception.public_details["actual_bytes"], RESPONSE_BYTE_LIMIT)
+
+    def test_terminal_null_is_required_and_counted_in_byte_limit(self):
+        empty = paginate_result(self.base, [{"text": ""}], page_size=1)
+        overhead = len(canonical_json_bytes(structured_result_payload(empty)))
+        exact = paginate_result(
+            self.base, [{"text": "x" * (RESPONSE_BYTE_LIMIT - overhead)}], page_size=1
+        )
+        payload = success_result(exact).structured_content
+        self.assertIn("next_cursor", payload["pagination"])
+        self.assertIsNone(payload["pagination"]["next_cursor"])
+        self.assertEqual(len(canonical_json_bytes(payload)), RESPONSE_BYTE_LIMIT)
+        with self.assertRaises(RowTooLargeError):
+            paginate_result(
+                self.base,
+                [{"text": "x" * (RESPONSE_BYTE_LIMIT - overhead + 1)}],
+                page_size=1,
+            )
 
     def test_unpaged_limit_uses_row_and_byte_caps(self):
         rows = [{"i": i} for i in range(1000)]
@@ -267,6 +286,27 @@ class TargetContextTests(unittest.TestCase):
 
 
 class BackendAdapterTests(unittest.TestCase):
+    def test_vfs_padding_is_explicitly_forwarded(self):
+        backend = VelociraptorBackend()
+        for padding in (False, True):
+            with self.subTest(padding=padding):
+                with patch("velociraptor_api.read_vfs_buffer", return_value=b"x") as read:
+                    self.assertEqual(
+                        backend.read_vfs_buffer(
+                            ("clients", "C.one", "file"),
+                            offset=3,
+                            length=7,
+                            padding=padding,
+                        ),
+                        b"x",
+                    )
+                read.assert_called_once_with(
+                    ("clients", "C.one", "file"),
+                    offset=3,
+                    length=7,
+                    padding=padding,
+                )
+
     def test_collection_returns_real_id_and_state(self):
         backend = VelociraptorBackend()
         with (
@@ -274,7 +314,9 @@ class BackendAdapterTests(unittest.TestCase):
                 "velociraptor_api.start_collection",
                 return_value=[{"flow_id": "F.real"}],
             ) as start,
-            patch("velociraptor_api.get_flow_details", return_value={"state": "RUNNING"}),
+            patch(
+                "velociraptor_api.get_flow_details", return_value={"state": "RUNNING"}
+            ) as details,
         ):
             result = backend.start_collection(
                 "C.real", "Windows.System.Pslist", {"ProcessRegex": "x"}
@@ -283,6 +325,9 @@ class BackendAdapterTests(unittest.TestCase):
         self.assertEqual(result.status, "RUNNING")
         self.assertIsNone(start.call_args.kwargs["timeout"])
         self.assertIsNone(start.call_args.kwargs["max_bytes"])
+        details.assert_called_once_with(
+            "C.real", "F.real", org_id=None, root_org=True
+        )
 
     def test_collection_rejects_missing_real_id_or_state(self):
         backend = VelociraptorBackend()
