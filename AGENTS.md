@@ -26,6 +26,11 @@ portable, testable, and safe to run under stdio-based MCP clients.
   iteration.
 - When tool names, parameters, or startup behavior change, update both READMEs in
   the same iteration.
+- After each feature or fix passes its scoped acceptance, create a separate
+  local commit containing its code, tests, and relevant documentation. Confirm
+  delegated writers have stopped before staging shared files; retain unverified
+  work separately. Report the commit and verification scope; do not push unless
+  explicitly authorized.
 
 ## Local Commands
 

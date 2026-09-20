@@ -17,3 +17,8 @@ api_client*.yaml
 
 # local agent outputs
 agent_poc/output/*
+/.tmp
+/Logs/handoff/20260914-takeover-executor/__pycache__
+/Logs
+/tests/__pycache__
+**/__pycache__/
