@@ -299,6 +299,19 @@ collection/download, basic triage, and process termination. File retrieval is
 explicit: list a Flow's uploads, then download one `file_id` beneath the
 existing absolute `VELOCIRAPTOR_DOWNLOAD_ROOT`; completed files are not
 overwritten. Hunt stop and Flow cancel are separate operations.
+
+The list is a logical-source-file view: validated sparse `Type="idx"` range
+metadata stays internal and is disclosed only as
+`sparse_indexes_internal:<count>`, while a naturally named `.idx` source file
+is still listed. Sparse download adds one complete compact read before padded
+logical reconstruction; returned size/SHA-256 cover the delivered logical
+bytes, and there is no raw compact/index export. Publication uses a
+non-overwriting hard link. A post-publication validation or owned-part cleanup
+failure returns `BACKEND_ERROR/download_post_publish_failed` without a success
+payload, but the completed file or owned `.part` may remain; callers must not
+automatically retry or overwrite it. Cleanup never deletes completed files or
+objects whose safe ownership cannot be proved. No download quota, retention,
+or automatic cleanup policy is supplied by this interface.
 The bridge no longer exposes the old Linux, macOS, generic collection, or
 artifact-discovery wrappers. The 12 P04 fixed tools are not a compatibility
 guarantee for this historical agent.

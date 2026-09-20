@@ -254,6 +254,15 @@ class BackendError(PublicError):
     code = "BACKEND_ERROR"
 
 
+class DownloadPostPublishError(BackendError):
+    """Stable warning for failures after the output hard-link was published."""
+
+    default_message = (
+        "The file was published, but post-publication validation or cleanup failed. "
+        "The completed file may remain; do not automatically retry or overwrite it."
+    )
+
+
 ERROR_DETAIL_FIELDS: dict[str, frozenset[str]] = {
     "CONFIG_NOT_FOUND": frozenset({"source"}),
     "AUTHENTICATION_FAILED": frozenset({"grpc_status"}),
@@ -805,10 +814,13 @@ class VelociraptorBackend:
         *,
         offset: int,
         length: int,
+        padding: bool,
     ) -> bytes:
         from velociraptor_api import read_vfs_buffer
 
-        return read_vfs_buffer(components, offset=offset, length=length)
+        return read_vfs_buffer(
+            components, offset=offset, length=length, padding=padding
+        )
 
     def cancel_flow(self, client_id: str, flow_id: str) -> None:
         from velociraptor_api import cancel_flow_by_id

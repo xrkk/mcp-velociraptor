@@ -136,8 +136,10 @@ class FakeBackend:
         self.calls.append(("list_flow_uploads", client_id, flow_id))
         return list(self.uploads)
 
-    def read_vfs_buffer(self, components, *, offset, length):
-        self.calls.append(("read_vfs_buffer", tuple(components), offset, length))
+    def read_vfs_buffer(self, components, *, offset, length, padding):
+        self.calls.append(
+            ("read_vfs_buffer", tuple(components), offset, length, padding)
+        )
         if self.fail_vfs_at == offset:
             raise OSError(errno.ENOSPC, "injected no-space failure")
         return self.file_bytes[offset : offset + length]

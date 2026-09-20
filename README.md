@@ -311,6 +311,28 @@ then pass one returned `file_id` to `download_flow_file`. A Hunt is a container
 for the unique endpoint's real Flow: stopping the Hunt does not cancel that
 Flow, so call `cancel_flow` separately when that is intended.
 
+The file list represents collected logical source files. Velociraptor sparse
+range indexes (`Type="idx"`) are validated and consumed internally rather than
+listed as separately downloadable files; `warnings` reports
+`sparse_indexes_internal:<count>`. A genuinely collected filename ending in
+`.idx` remains an ordinary file. Downloads are always explicit, one returned
+data `file_id` at a time. For sparse files the bridge first performs an extra
+compact, non-padding read and then reconstructs the logical file with padding;
+the returned size and SHA-256 cover the reconstructed logical bytes. This adds
+one full compact-read pass and does not provide a raw compact/index export.
+
+Completed output is published without overwrite using `os.link`. A failure
+before publication creates no new completed file, although a failed cleanup
+may leave this request's owned `.part`. A failure after publication validation
+or `.part` cleanup returns `BACKEND_ERROR` with reason
+`download_post_publish_failed`; the completed file, and sometimes the owned
+part, may remain. Do not automatically retry or overwrite it. The bridge never
+rolls back by deleting a completed path and stops cleanup when path ownership
+cannot be proved. The reported hash proves the bytes actually delivered, not a
+backend atomic snapshot or protection against arbitrary privileged local
+interference. Download quotas, retention, and automatic cleanup are not part
+of this interface.
+
 If a separate hosted AI service is connected, review that service's licensing
 and data-processing terms before sending endpoint evidence. This is independent
 of Velociraptor Community Edition and its local API.

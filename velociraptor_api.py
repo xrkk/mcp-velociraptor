@@ -861,6 +861,7 @@ def read_vfs_buffer(
     *,
     offset: int,
     length: int,
+    padding: bool,
 ) -> bytes:
     if stub is None:
         raise RuntimeError("Stub not initialized. Call init_stub() first.")
@@ -868,13 +869,22 @@ def read_vfs_buffer(
         raise ValueError("components must be a non-empty sequence of strings")
     if offset < 0 or length < 1:
         raise ValueError("invalid VFS buffer window")
-    response = stub.VFSGetBuffer(
-        api_pb2.VFSFileBuffer(
-            components=list(components),
-            offset=offset,
-            length=length,
-        )
+    if not isinstance(padding, bool):
+        raise ValueError("padding must be a boolean")
+    fields = api_pb2.VFSFileBuffer.DESCRIPTOR.fields_by_name
+    request = api_pb2.VFSFileBuffer(
+        components=list(components),
+        offset=offset,
+        length=length,
+        **({"padding": padding} if "padding" in fields else {}),
     )
+    if "padding" not in fields:
+        # pyvelociraptor 0.77.2 ships an older generated Python descriptor than
+        # its server.  The server's authoritative api.proto defines optional
+        # bool padding as field 8.  Preserve an explicit false as an unknown
+        # protobuf field instead of silently falling back to server default.
+        request.MergeFromString(b"\x40" + (b"\x01" if padding else b"\x00"))
+    response = stub.VFSGetBuffer(request)
     return bytes(response.data)
 
 

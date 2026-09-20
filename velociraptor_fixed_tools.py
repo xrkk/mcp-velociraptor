@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
+import logging
 import os
 import stat
 import uuid
@@ -33,6 +35,7 @@ from velociraptor_mcp_core import (
     FixedFlowReferenceResult,
     FixedUnpagedDataResult,
     DependencyMissingError,
+    DownloadPostPublishError,
     DownloadResult,
     FlowFileListResult,
     FlowStatusResult,
@@ -83,6 +86,8 @@ FILE_ARTIFACT = "Generic.Collectors.File"
 NonEmptyString = StrictStr
 Pid = StrictInt
 PageSize = StrictInt
+
+logger = logging.getLogger(__name__)
 
 
 def _require_text(value: Any, field: str) -> str:
@@ -148,6 +153,7 @@ class _FileRecord:
     file_size: int
     uploaded_size: int
     accessor: str
+    index_selector: tuple[str, ...] | None = None
 
     def public_row(self) -> dict[str, Any]:
         return {
@@ -159,30 +165,58 @@ class _FileRecord:
         }
 
 
+@dataclass(frozen=True)
+class _UploadRecord:
+    kind: str
+    file: _FileRecord
+    selector: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _FileInventory:
+    records: tuple[_FileRecord, ...]
+    sparse_count: int
+
+
+def _metadata_error(reason: str) -> BackendError:
+    return BackendError(
+        details={"operation": "list_flow_files", "reason": reason}
+    )
+
+
 def _upload_record(
     row: Mapping[str, Any], *, client_id: str, flow_id: str
-) -> _FileRecord:
+) -> _UploadRecord:
     upload = row.get("Upload")
     upload_map = upload if isinstance(upload, Mapping) else {}
-    components = upload_map.get("Components") or row.get("_Components")
+    raw_type = row.get("Type", "")
+    if not isinstance(raw_type, str) or raw_type not in {"", "idx"}:
+        raise _metadata_error("unsupported_upload_type")
+    nested_type = upload_map.get("Type", "")
+    if nested_type is None:
+        nested_type = ""
+    if not isinstance(nested_type, str):
+        raise _metadata_error("unsupported_upload_type")
+    if nested_type and nested_type != raw_type:
+        raise _metadata_error("unsupported_upload_type")
+    kind = "idx" if raw_type == "idx" else "data"
+    components = (
+        upload_map["Components"]
+        if "Components" in upload_map
+        else row.get("_Components")
+    )
     if not isinstance(components, list) or not components or any(
         not isinstance(item, str) for item in components
     ):
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "missing_file_components"}
-        )
+        raise _metadata_error("invalid_sparse_pair")
     expected_prefix = ["clients", client_id, "collections", flow_id, "uploads"]
     if components[: len(expected_prefix)] != expected_prefix:
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "file_scope_mismatch"}
-        )
+        raise _metadata_error("invalid_sparse_pair")
     accessor = upload_map.get("Accessor")
     if accessor is None:
         accessor = row.get("_accessor", "")
     if not isinstance(accessor, str):
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "invalid_accessor"}
-        )
+        raise _metadata_error("invalid_sparse_pair")
     upload_id = upload_map.get("UploadId")
     identity = {
         "accessor": accessor,
@@ -190,52 +224,105 @@ def _upload_record(
         "upload_id": upload_id,
     }
     file_id = hashlib.sha256(canonical_json_bytes(identity)).hexdigest()
-    original_path = upload_map.get("Path") or row.get("client_path") or ""
+    original_path = (
+        upload_map["Path"] if "Path" in upload_map else row.get("client_path", "")
+    )
     if not isinstance(original_path, str):
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "invalid_original_path"}
-        )
-    raw_file_size = upload_map.get("Size", row.get("file_size", 0))
-    raw_uploaded_size = upload_map.get("StoredSize", row.get("uploaded_size", 0))
-    try:
-        file_size = int(raw_file_size or 0)
-        uploaded_size = int(raw_uploaded_size or 0)
-    except (TypeError, ValueError) as exc:
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "invalid_file_size"}
-        ) from exc
-    if file_size < 0 or uploaded_size < 0:
-        raise BackendError(
-            details={"operation": "list_flow_files", "reason": "invalid_file_size"}
-        )
-    return _FileRecord(
+        raise _metadata_error("invalid_sparse_pair")
+    raw_file_size = (
+        upload_map["Size"] if "Size" in upload_map else row.get("file_size")
+    )
+    raw_uploaded_size = (
+        upload_map["StoredSize"]
+        if "StoredSize" in upload_map
+        else row.get("uploaded_size")
+    )
+    if (
+        not isinstance(raw_file_size, int)
+        or isinstance(raw_file_size, bool)
+        or not isinstance(raw_uploaded_size, int)
+        or isinstance(raw_uploaded_size, bool)
+        or raw_file_size < 0
+        or raw_uploaded_size < 0
+        or raw_uploaded_size > raw_file_size
+    ):
+        raise _metadata_error("invalid_file_size")
+    file = _FileRecord(
         file_id=file_id,
         identity=identity,
         components=tuple(components),
         original_path=original_path,
-        file_size=file_size,
-        uploaded_size=uploaded_size,
+        file_size=raw_file_size,
+        uploaded_size=raw_uploaded_size,
         accessor=accessor,
     )
+    selector = tuple(components)
+    if kind == "idx":
+        selector = (*selector[:-1], selector[-1] + ".idx")
+    return _UploadRecord(kind=kind, file=file, selector=selector)
 
 
 def _deduplicated_uploads(
     rows: Sequence[Mapping[str, Any]], *, client_id: str, flow_id: str
-) -> list[_FileRecord]:
+) -> _FileInventory:
     records: list[_FileRecord] = []
     by_id: dict[str, _FileRecord] = {}
+    indexes: dict[str, _UploadRecord] = {}
+    selectors: dict[tuple[str, ...], tuple[str, str]] = {}
     for row in rows:
-        record = _upload_record(row, client_id=client_id, flow_id=flow_id)
+        upload = _upload_record(row, client_id=client_id, flow_id=flow_id)
+        record = upload.file
+        selector_key = tuple(part.casefold() for part in upload.selector)
+        selector_value = (upload.kind, record.file_id)
+        previous_selector = selectors.get(selector_key)
+        if previous_selector is None:
+            selectors[selector_key] = selector_value
+        elif previous_selector != selector_value:
+            raise _metadata_error("file_selector_conflict")
+        if upload.kind == "idx":
+            previous_index = indexes.get(record.file_id)
+            if previous_index is None:
+                indexes[record.file_id] = upload
+            elif previous_index != upload:
+                raise _metadata_error("invalid_sparse_pair")
+            continue
         previous = by_id.get(record.file_id)
         if previous is None:
             by_id[record.file_id] = record
             records.append(record)
             continue
         if previous != record:
-            raise BackendError(
-                details={"operation": "list_flow_files", "reason": "file_identity_conflict"}
+            raise _metadata_error("file_identity_conflict")
+
+    sparse_count = 0
+    paired: list[_FileRecord] = []
+    for record in records:
+        index = indexes.pop(record.file_id, None)
+        if index is None:
+            if record.file_size != record.uploaded_size:
+                raise _metadata_error("invalid_sparse_pair")
+            paired.append(record)
+            continue
+        index_record = index.file
+        if (
+            index_record.original_path != record.original_path + ".idx"
+            or index_record.file_size != record.file_size
+            or index_record.uploaded_size != record.uploaded_size
+            or index_record.identity != record.identity
+        ):
+            raise _metadata_error("invalid_sparse_pair")
+        sparse_count += 1
+        paired.append(
+            _FileRecord(
+                **{
+                    **record.__dict__,
+                    "index_selector": index.selector,
+                }
             )
-    return records
+        )
+    if indexes:
+        raise _metadata_error("invalid_sparse_pair")
+    return _FileInventory(records=tuple(paired), sparse_count=sparse_count)
 
 
 def _is_reparse(path: Path) -> bool:
@@ -296,6 +383,83 @@ def _ensure_child(root: Path, parent: Path, segment: str) -> Path:
     _assert_plain_path(child, operation="download_flow_file")
     _assert_contained(root, child, strict=True)
     return child
+
+
+def _assert_safe_chain(root: Path, *paths: Path) -> None:
+    _assert_plain_path(root, operation="download_flow_file")
+    if root.resolve(strict=True) != root:
+        raise BackendError(
+            details={"operation": "download_flow_file", "reason": "path_escape"}
+        )
+    for path in paths:
+        _assert_plain_path(path, operation="download_flow_file")
+        _assert_contained(root, path, strict=True)
+
+
+def _read_vfs_stream(
+    backend: VelociraptorBackend,
+    record: _FileRecord,
+    *,
+    padding: bool,
+    stream=None,
+) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    size = 0
+    while True:
+        chunk = _backend_call(
+            "download_flow_file",
+            lambda: backend.read_vfs_buffer(
+                record.components,
+                offset=size,
+                length=VFS_CHUNK_BYTES,
+                padding=padding,
+            ),
+        )
+        if not isinstance(chunk, bytes) or len(chunk) > VFS_CHUNK_BYTES:
+            raise BackendError(
+                details={
+                    "operation": "download_flow_file",
+                    "reason": "invalid_vfs_chunk",
+                }
+            )
+        if not chunk:
+            break
+        if stream is not None:
+            stream.write(chunk)
+        digest.update(chunk)
+        size += len(chunk)
+    return size, digest.hexdigest()
+
+
+def _cleanup_owned_temp(
+    root: Path,
+    parent: Path,
+    temp: Path,
+    identity: tuple[int, int],
+) -> bool:
+    try:
+        _assert_plain_path(parent, operation="download_flow_file")
+        _assert_contained(root, parent, strict=True)
+        info = temp.lstat()
+        if (info.st_dev, info.st_ino) != identity or _is_reparse(temp):
+            return False
+        _assert_contained(root, temp, strict=True)
+        temp.unlink()
+        return True
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    except BackendError:
+        return False
+
+
+def _assert_owned_file(path: Path, identity: tuple[int, int]) -> None:
+    info = path.lstat()
+    if (info.st_dev, info.st_ino) != identity or _is_reparse(path):
+        raise BackendError(
+            details={"operation": "download_flow_file", "reason": "path_escape"}
+        )
 
 
 class FixedToolService:
@@ -613,7 +777,7 @@ class FixedToolService:
 
         return self._target.run_with_client(operation)
 
-    def _file_records(self, client_id: str, flow_id: str) -> list[_FileRecord]:
+    def _file_records(self, client_id: str, flow_id: str) -> _FileInventory:
         self._flow(client_id, flow_id)
         rows = _backend_call(
             "list_flow_files",
@@ -626,12 +790,23 @@ class FixedToolService:
         return _deduplicated_uploads(rows, client_id=client_id, flow_id=flow_id)
 
     def list_flow_files(self, flow_id: str) -> FlowFileListResult:
-        generic = self._target.run_with_client(
-            lambda client_id: limit_unpaged_result(
-                {"operation": "list_flow_files", "status": "success", "warnings": []},
-                [record.public_row() for record in self._file_records(client_id, flow_id)],
+        def operation(client_id: str):
+            inventory = self._file_records(client_id, flow_id)
+            warnings = (
+                [f"sparse_indexes_internal:{inventory.sparse_count}"]
+                if inventory.sparse_count
+                else []
             )
-        )
+            return limit_unpaged_result(
+                {
+                    "operation": "list_flow_files",
+                    "status": "success",
+                    "warnings": warnings,
+                },
+                [record.public_row() for record in inventory.records],
+            )
+
+        generic = self._target.run_with_client(operation)
         return FlowFileListResult.model_validate(generic.model_dump(mode="json"))
 
     def download_flow_file(self, flow_id: str, file_id: str) -> DownloadResult:
@@ -646,9 +821,14 @@ class FixedToolService:
         )
 
         def operation(client_id: str) -> DownloadResult:
-            records = self._file_records(client_id, flow_id)
+            inventory = self._file_records(client_id, flow_id)
             selected = next(
-                (record for record in records if record.file_id == normalized_file_id), None
+                (
+                    record
+                    for record in inventory.records
+                    if record.file_id == normalized_file_id
+                ),
+                None,
             )
             if selected is None:
                 raise NotFoundError(
@@ -670,40 +850,63 @@ class FixedToolService:
                     details={"object_type": "flow_file", "object_id": normalized_file_id}
                 )
             temp = file_dir / f".{uuid.uuid4().hex}.part"
-            digest = hashlib.sha256()
-            size = 0
             linked = False
+            temp_identity: tuple[int, int] | None = None
+            cleanup_attempted = False
             try:
-                with temp.open("xb") as stream:
-                    while True:
-                        chunk = _backend_call(
-                            "download_flow_file",
-                            lambda: self._backend.read_vfs_buffer(
-                                selected.components,
-                                offset=size,
-                                length=VFS_CHUNK_BYTES,
-                            ),
+                _assert_safe_chain(root, flow_dir, file_dir)
+                if selected.index_selector is not None:
+                    compact_size, _ = _read_vfs_stream(
+                        self._backend, selected, padding=False
+                    )
+                    if compact_size != selected.uploaded_size:
+                        raise BackendError(
+                            details={
+                                "operation": "download_flow_file",
+                                "reason": "size_mismatch",
+                            }
                         )
-                        if not isinstance(chunk, bytes) or len(chunk) > VFS_CHUNK_BYTES:
-                            raise BackendError(
-                                details={
-                                    "operation": "download_flow_file",
-                                    "reason": "invalid_vfs_chunk",
-                                }
-                            )
-                        if not chunk:
-                            break
-                        stream.write(chunk)
-                        digest.update(chunk)
-                        size += len(chunk)
+                with temp.open("xb") as stream:
+                    info = os.fstat(stream.fileno())
+                    temp_identity = (info.st_dev, info.st_ino)
+                    size, digest = _read_vfs_stream(
+                        self._backend,
+                        selected,
+                        padding=selected.index_selector is not None,
+                        stream=stream,
+                    )
                     stream.flush()
                     os.fsync(stream.fileno())
-                _assert_plain_path(file_dir, operation="download_flow_file")
-                _assert_contained(root, temp, strict=True)
-                if size != selected.uploaded_size:
+                _assert_safe_chain(root, flow_dir, file_dir, temp)
+                if size != selected.file_size:
                     raise BackendError(
                         details={"operation": "download_flow_file", "reason": "size_mismatch"}
                     )
+                refreshed = self._file_records(client_id, flow_id)
+                refreshed_selected = next(
+                    (
+                        record
+                        for record in refreshed.records
+                        if record.file_id == normalized_file_id
+                    ),
+                    None,
+                )
+                if refreshed_selected != selected:
+                    raise BackendError(
+                        details={
+                            "operation": "download_flow_file",
+                            "reason": "metadata_changed",
+                        }
+                    )
+                if temp_identity is None:
+                    raise BackendError(
+                        details={
+                            "operation": "download_flow_file",
+                            "reason": "path_escape",
+                        }
+                    )
+                _assert_safe_chain(root, flow_dir, file_dir, temp)
+                _assert_owned_file(temp, temp_identity)
                 try:
                     os.link(temp, final)
                     linked = True
@@ -714,11 +917,23 @@ class FixedToolService:
                             "object_id": normalized_file_id,
                         }
                     ) from exc
-                _assert_plain_path(final, operation="download_flow_file")
+                _assert_safe_chain(root, flow_dir, file_dir, final)
+                _assert_owned_file(final, temp_identity)
                 completed = _assert_contained(root, final, strict=True)
                 if completed.stat().st_size != size:
                     raise BackendError(
                         details={"operation": "download_flow_file", "reason": "size_mismatch"}
+                    )
+                cleanup_attempted = True
+                if temp_identity is None or not _cleanup_owned_temp(
+                    root, file_dir, temp, temp_identity
+                ):
+                    logger.warning("download_temp_cleanup_failed")
+                    raise DownloadPostPublishError(
+                        details={
+                            "operation": "download_flow_file",
+                            "reason": "download_post_publish_failed",
+                        }
                     )
                 return DownloadResult(
                     operation="download_flow_file",
@@ -728,15 +943,29 @@ class FixedToolService:
                     file_id=normalized_file_id,
                     local_path=str(completed),
                     size=size,
-                    sha256=digest.hexdigest(),
+                    sha256=digest,
                     original_path=selected.original_path,
                 )
             except Exception as exc:
                 if linked:
-                    try:
-                        final.unlink()
-                    except OSError:
-                        pass
+                    if not cleanup_attempted and temp_identity is not None:
+                        cleanup_attempted = True
+                        if not _cleanup_owned_temp(
+                            root, file_dir, temp, temp_identity
+                        ):
+                            logger.warning("download_temp_cleanup_failed")
+                    raise DownloadPostPublishError(
+                        details={
+                            "operation": "download_flow_file",
+                            "reason": "download_post_publish_failed",
+                        }
+                    ) from exc
+                if not cleanup_attempted and temp_identity is not None:
+                    cleanup_attempted = True
+                    if not _cleanup_owned_temp(
+                        root, file_dir, temp, temp_identity
+                    ):
+                        logger.warning("download_temp_cleanup_failed")
                 if isinstance(exc, (PublicError, grpc.RpcError)):
                     raise
                 raise BackendError(
@@ -745,11 +974,6 @@ class FixedToolService:
                         "reason": type(exc).__name__,
                     }
                 ) from exc
-            finally:
-                try:
-                    temp.unlink()
-                except FileNotFoundError:
-                    pass
 
         return self._target.run_with_client(operation)
 
