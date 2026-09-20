@@ -1,0 +1,48 @@
+{
+  "activation_evidence": {
+    "activated_at": "2026-09-15T04:15:44Z",
+    "evidence_path": "/home/adminn/projects/mcp-velociraptor/Logs/P05/wf-01a05d1d-p05/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/activation-evidence.json",
+    "evidence_sha256": "ee70b84284eb8cdb5722c5a441074356939015b5b8effba0a326782b999958e6",
+    "source": "snapshot188-activation"
+  },
+  "active_snapshot": {
+    "checkpoint_marker": "Win10MalBox-Velo-Snapshot4.vmsn",
+    "name": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
+    "purpose": "Velociraptor-MCP 可恢复验收基线：激活后 P06 全量正式验收的恢复起点"
+  },
+  "automatic_restore_allowlist": [
+    "Snapshot 188-Velociraptor-MCP可恢复验收基线"
+  ],
+  "baseline_evidence": {
+    "evidence_path": "/home/adminn/projects/mcp-velociraptor/Logs/P05/wf-01a05d1d-p05/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption.json",
+    "evidence_sha256": "bab5544742c77cad4d65b2861dc5074f7858426caa3570d0546c9fb4e2823cd6",
+    "recorded_at": "2026-09-14T01:26:02Z",
+    "source": "baseline-adoption"
+  },
+  "epoch": 6,
+  "phase": "NETWORK_ACTIVE",
+  "retired_snapshots": [
+    {
+      "name": "Snapshot 183-FakenetNG测试专用",
+      "status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
+    },
+    {
+      "name": "Snapshot 184-Velociraptor-MCP测试基线",
+      "status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
+    },
+    {
+      "name": "Snapshot 1-开启Windows-MCP",
+      "status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
+    },
+    {
+      "name": "Snapshot 186-Velociraptor-MCP网络部署基线",
+      "status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
+    },
+    {
+      "name": "Snapshot 187-固定IP+WindowsMCP开机自启",
+      "status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
+    }
+  ],
+  "schema_version": 5,
+  "workflow_id": "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2"
+}

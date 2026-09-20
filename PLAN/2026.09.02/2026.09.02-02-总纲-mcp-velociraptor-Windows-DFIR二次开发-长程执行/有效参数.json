@@ -1,0 +1,123 @@
+{
+  "workflow_id": "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2",
+  "normalized_at": "2026-09-04T22:25:32+08:00",
+  "parameters": {
+    "正文提示词路径": {
+      "value": "/mnt/d/vpb/话术/方案工作流/15-子方案逐个推进至总纲验收.md",
+      "source": "用户入口消息",
+      "git_blob": "ea472e06f1d9087f6cb111fbd70ea27a8b27d30c",
+      "sha256": "40a6ff1fab43be1b0a0d7c611e020f806bc4354553d00817320f6c0b9270cfb7"
+    },
+    "运行平台": {
+      "value": "GLM",
+      "source": "用户入口消息",
+      "change_history": [
+        {
+          "at": "2026-09-04T22:25:32+08:00",
+          "value": "Codex",
+          "source": "用户入口消息"
+        },
+        {
+          "at": "2026-09-05T21:08:20+08:00",
+          "value": "GLM",
+          "source": "用户在2026-09-05恢复入口消息中明确切换平台并解除实施暂停；属于用户明确修改参数，追加变更记录，不覆盖历史授权或对象身份"
+        }
+      ]
+    },
+    "Codex审核模型": {
+      "value": "gpt-5.6-sol",
+      "source": "历史入口消息（Codex平台时期）",
+      "availability": "非当前平台参数，只记录，不执行验证"
+    },
+    "Codex审核推理强度": {
+      "value": "high",
+      "source": "历史入口消息（Codex平台时期）",
+      "availability": "非当前平台参数，只记录，不执行验证"
+    },
+    "GLM审核子智能体名称": {
+      "value": "sub-plan-reviewer",
+      "source": "用户入口消息",
+      "availability": "本会话Agent工具列表中存在同名实施子方案专用审核者，可调用"
+    },
+    "GLM实施执行方": {
+      "value": "主会话",
+      "source": "用户入口消息"
+    },
+    "需求文档路径": {
+      "value": "/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "source": "用户入口消息",
+      "version": "v2",
+      "git_blob": "4906941e0698ffe7476838c4479ce344ce30ef27",
+      "sha256": "a05916e9e874699391191e213306df72a16a1fee8a3b08e9676a206e5134d081"
+    },
+    "总纲方案路径": {
+      "value": "/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "source": "用户入口消息",
+      "version": "v8",
+      "git_blob": "f23059dd23cf93db74089144cfe299490a249ded",
+      "sha256": "84a26a3e6ad59b91538aae5d644b1f856a6b4ffa8c05486471c051c82ffd0165"
+    },
+    "子方案执行顺序记录路径": {
+      "value": "/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md#7-七篇实施子方案的固定交接",
+      "source": "总纲唯一稳定章节定位",
+      "sequence": ["P01", "P02", "P03", "P04", "P05", "P06", "P07"]
+    },
+    "长程状态文件目录": {
+      "value": "/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行",
+      "source": "正文确定性规则"
+    },
+    "实施授权": {
+      "value": "已授权按照正文连续编写、审核、引入、实施和验收本总纲下的全部实施子方案, 直到正文定义的完成或停止条件成立",
+      "source": "用户入口消息",
+      "scope": "本总纲 P01-P07、必要回流、提交及最终总体验收"
+    },
+    "本地测试部署与凭据创建授权": {
+      "id": "AUTH-001",
+      "value": "已授权",
+      "source": "用户于2026-09-04明确回复‘允许’",
+      "scope": "仅限win10h2-MalBox-20241110内安装和配置本地测试用Velociraptor Server/Client、注册唯一Windows client、生成仅供本workflow使用的本地api_client.yaml，以及验证通过后创建新的安装后内存快照；不授权生产部署、外部系统凭据或把秘密写入仓库/日志"
+    },
+    "付费外发授权": {
+      "input": "待检查",
+      "value": "不涉及",
+      "source": "启动只读清查：当前工作流不要求额外付费外部服务；Codex审核子智能体属于指定运行平台能力，Win10VM MCP与本地VMware/Velociraptor属于用户提供基础设施"
+    },
+    "已授权服务": {
+      "value": [],
+      "source": "用户入口留空；不涉及付费外发"
+    },
+    "允许外发的数据范围": {
+      "value": [],
+      "source": "用户入口留空；不涉及付费外发"
+    },
+    "授权用途": {
+      "value": [],
+      "source": "用户入口留空；不涉及付费外发"
+    },
+    "自动恢复触发方式": {
+      "value": "GLM Goal continuation",
+      "source": "正文优先级与当前平台能力：当前GLM会话由ZCode Goal continuation自动驱动（system续跑提示已在恢复时生效）；历史上Codex平台曾以Goal continuation驱动同一workflow",
+      "goal_thread_id": "01a05d1d-9e2b-7f41-b936-536d20ce55a2"
+    },
+    "Win10验收VM": {
+      "value": "win10h2-MalBox-20241110",
+      "source": "用户在启动阶段补充"
+    },
+    "Win10验收快照": {
+      "value": "Snapshot 183-FakenetNG测试专用",
+      "source": "用户在启动阶段补充",
+      "lifecycle": "已退出自动恢复路径；仅保留为需要用户另行明确授权的人工回退点",
+      "automatic_restore": false
+    },
+    "Win10安装后验收快照": {
+      "value": "Snapshot 184-Velociraptor-MCP测试基线",
+      "source": "用户要求安装后拍摄并供后续恢复；名称由主会话依据现有Snapshot 183和唯一性规则确定",
+      "status": "已退役为MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION：P05完成依赖预置后，自动恢复基线已由快照恢复状态.json epoch3原子切换为Snapshot 185-Velociraptor-MCP依赖与情景基线（marker win10h2-MalBox-20241110-Snapshot101.vmsn）；本条目仅保留历史授权记录",
+      "checkpoint_marker": "win10h2-MalBox-20241110-Snapshot100.vmsn",
+      "automatic_restore": false,
+      "activation_gate": "历史记录：曾通过Velociraptor Server/Client/API与P01前置连通性验证并以该快照完成恢复验证",
+      "machine_state_path": "/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复状态.json",
+      "machine_state_note": "当前唯一自动恢复基线以快照恢复状态.json为准（epoch3, Snapshot 185）；P02子方案正文中的Snapshot184描述为历史文本，恢复操作一律以该机器状态文件核对"
+    }
+  }
+}
