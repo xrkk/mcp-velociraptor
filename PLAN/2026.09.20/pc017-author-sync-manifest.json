@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "run_id": "velo-codex-20260920-pc017-author-sync",
+  "task_id": "PC017-AUTHOR-SYNC",
+  "round": 1,
+  "head": "326d54a57b89a1e8623bb9486298402e2047fc57",
+  "synced_at": "2026-09-20T11:45:57+08:00",
+  "group_id": "PC017-AUTHOR-REVISION",
+  "state": "author revision pending main-session full self-review; implementation gate closed",
+  "source_identity": {
+    "candidate_group": "PC017-NORM-COMBINED-R02",
+    "base_manifest": {
+      "path": ".tmp/velo-codex-20260920-pc017-norm-combined/evidence-r02/base-manifest.json",
+      "sha256": "3a0a5881525c1ae6dabcba088563b0711caa84c544ad4a719e32e3edc0f7cee7"
+    },
+    "proposal": {
+      "path": ".tmp/velo-codex-20260920-pc017-norm-combined/proposal-r02.patch",
+      "sha256": "128aa65e162225f2df92f29ed984976372e89719a1085f09224560fcd0d81f68"
+    },
+    "main_decision_06": {
+      "path": "PLAN/2026.09.20/2026.09.20-06-PC017作者稿采纳与规范同步范围.md",
+      "sha256": "eee0becc161f7924b2d7263ae10f38d18cb065054236c7f567f84e0e90752feb",
+      "git_blob": "51586a77f50be31c91bebdbaf62f76f1c6b9ea33"
+    },
+    "r02_verdict": {
+      "path": ".tmp/velo-codex-20260920-pc017-norm-combined/codex-R02-verdict.md",
+      "sha256": "9934821ccf41aeb8650cbbe69795726796f8c870993b4ab8c0eaf532048ff5e6",
+      "git_blob": "ac50b07037dc30009160d10a603d1ca93b85a37e"
+    }
+  },
+  "versions": {
+    "requirement": "v4",
+    "master": "v17",
+    "P04": "v6",
+    "P05": "v13",
+    "P06": "v14",
+    "P07": "v11"
+  },
+  "files": [
+    {
+      "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "version": "v4",
+      "base": {"sha256": "a05916e9e874699391191e213306df72a16a1fee8a3b08e9676a206e5134d081", "git_blob": "4906941e0698ffe7476838c4479ce344ce30ef27"},
+      "candidate": {"sha256": "ea12df2b335ab6478e844c8501bb626194174c901365eae5a8b3546b597d9920", "git_blob": "2a0a7c4871d1824824df16622e03a6f214fdcce2"},
+      "author": {"sha256": "3bc182aa4d25adc3345acec4cd702abf9630673f0e4af668ffb65b373d6b5753", "git_blob": "75ba38e86bf1c8b01e988fd880e11fc19b4caf57"}
+    },
+    {
+      "path": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "version": "v17",
+      "base": {"sha256": "68c9b1d8472890960d69b9165ae648207bd10632373458232dddb1357b57e1b0", "git_blob": "ae899ca84e5a429a24091936e0dee1402fab7e65"},
+      "candidate": {"sha256": "3b56ce4a6a8717d7feb8a107acc3f5265075c400cfd3ba623229ad4bccaaaac0", "git_blob": "3b0310974ea394b7ab46f89e1101c53ea40e1d3b"},
+      "author": {"sha256": "f98a93e9d45a69de2c806f86c136be3be70a61a7d26af7369cf702cfcca67996", "git_blob": "fcec56f5a9fd2e4c60818c96fc6df3f8be1dc074"}
+    },
+    {
+      "path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "version": "v6",
+      "base": {"sha256": "b1d9470bc9481da3a5a46ccafce946435a54e2ca8cce8f13453ac4e7271589f1", "git_blob": "0ec0b4bcc15d78760768d3dc16cfe6822b17c5f2"},
+      "candidate": {"sha256": "1f36b4df643fe432ca07e9c4a1647fa29cfbd9ccf0981d776015710b95e07f45", "git_blob": "57d78c62f8c5a4538dce01ddd5cc177823a2722f"},
+      "author": {"sha256": "848a9ef757c9cdb5b2951f350fc67ac4e77c0c83f55200ecac899d9b4d73f248", "git_blob": "415d60588b8a112a7cdb00af4368d06c4cd4e1f6"}
+    },
+    {
+      "path": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "version": "v13",
+      "base": {"sha256": "ff7bd678de23fd2079061f6ccdef2c18539b78a97dd05f7b2d1249b0fcc25cc2", "git_blob": "15cc50879d707dce05c57988e025b5c9f4e2320a"},
+      "candidate": {"sha256": "c03976da3bb7ca5781f7b20da57495a037e674c2069199ae7808f83fbb1c7367", "git_blob": "6b10d3f6bbbb0d7582f567ae147db0cbf79ba882"},
+      "author": {"sha256": "f661437f80e4e3f37b7b880fa4069c1c08a9048e9e6699387cf4b658b27a86f1", "git_blob": "8ad84f6d9f748e4112de1b2174bb115824359f86"}
+    },
+    {
+      "path": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "version": "v14",
+      "base": {"sha256": "34649ca8d67f1abe157471e0bfd6577f5e88fd9e8a655cc633b277087cb928de", "git_blob": "d1eff2c872bbcc7a029ac06447a8f7a968fac1fe"},
+      "candidate": {"sha256": "46db98745d1b3ed37787bce32b7c71bfd97b03f2d9409946df2c5ddc7d18739b", "git_blob": "11590386efc38d8e093c233e50892441e8441629"},
+      "author": {"sha256": "f92e7295fdec14a9cb0cc96aa6abafacf70c41ca9789a949292a3415ade87524", "git_blob": "cf342167ea88913606cecdce27b6643d64f024fe"}
+    },
+    {
+      "path": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "version": "v11",
+      "base": {"sha256": "b5a7c60ddc77834768e85e0ac19cad5bc8526adc80c1d1cd5db829388c15b173", "git_blob": "f93e96b8fa4e3163bd990a63fba418e98f734f37"},
+      "candidate": {"sha256": "d2a665588c25386c59d94a530a3ee54d8c86e7ef32a6316db30dfbf91b2cc865", "git_blob": "2fd7ba6c94f0cabaf8706d8fc1c5e28d117ab682"},
+      "author": {"sha256": "d39707b01f3420da74a81985946d7abc1ae921629f248c74105e36a964759e6c", "git_blob": "bea91bf128d90413a4e0f6307fb59d292903023d"}
+    }
+  ]
+}

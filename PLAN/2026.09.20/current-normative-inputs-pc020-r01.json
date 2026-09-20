@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "run_id": "velo-codex-20260920-pc020-author-publish",
+  "task_id": "PC020-AUTHOR-PUBLISH",
+  "round": 1,
+  "head": "326d54a57b89a1e8623bb9486298402e2047fc57",
+  "group_id": "CURRENT-PC020-R01",
+  "state": "作者采纳已同步／待主方完整自评／实施门关闭",
+  "publication_rule": "本manifest不含自身hash或未来主方自评hash；CURRENT不表示实现、部署、canonical、VM、AUD或CHK获准。",
+  "parent_formal_manifest": {
+    "path": "PLAN/2026.09.20/current-normative-inputs-pc019-r02.json",
+    "size": 5506,
+    "sha256": "a5d8cb01ab7dfe70c0b6aad21eec128798cdc21c74589872ce2e89c28c694a71",
+    "git_blob": "dbacc88a13e7db724104eaf6ad49d70745d5a203",
+    "group_id": "CURRENT-PC017-018-019-R02"
+  },
+  "candidate_source": {
+    "path": ".tmp/velo-codex-20260920-pc020-activation-time/candidate-manifest.json",
+    "size": 11977,
+    "sha256": "ddc6df7a5b7aa4edb95032eb4df3d02ebd174963845066c376919a683db46b7b",
+    "git_blob": "9957d56d5b7e6ea327900909d1f8dd7022b3174b",
+    "group_id": "PC020-NORM-CANDIDATE-TIME-R01"
+  },
+  "candidate_acceptance": {
+    "path": ".tmp/velo-codex-20260920-pc020-activation-time/codex-R01-verdict.md",
+    "size": 1261,
+    "sha256": "63d1593c0a77f6950dead270bd3830d96e8d2467db295c24433269d78fd653ad",
+    "git_blob": "92da0b607e6c1c7bdfbbf9f3809397dbbee92ff3",
+    "status": "PASS（限定候选；非正式自评）"
+  },
+  "source_decisions": [
+    {
+      "path": "PLAN/2026.09.20/2026.09.20-15-PLAN-CHANGE-020登记与作者方向-恢复代次重建.md",
+      "size": 3798,
+      "sha256": "cce4be1e55a73f82296c98041c7810fd41bba4010fc2cb9e5e0e8a2fbba9b222",
+      "git_blob": "8c72de57703b5f4f577cc8a496e0027c54a48008",
+      "role": "PC020登记与作者方向"
+    },
+    {
+      "path": "PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺序裁决.md",
+      "size": 4129,
+      "sha256": "dce41b89f393bdcda880447dac9d075a8a2f5658317dd8a07f7ea81d321d8e37",
+      "git_blob": "74e90008863de3dfd988a2c0e1f03e541c661b63",
+      "role": "schema6/epoch7-8/189/因果与原子性裁决"
+    },
+    {
+      "path": "PLAN/2026.09.20/2026.09.20-17-PC020集合与证据复用边界勘误.md",
+      "size": 1799,
+      "sha256": "53e576e4044891648d34b2639b25b30c5a71c90787526af71e97be1749a5f85a",
+      "git_blob": "48bb58ae21ada1712483160bae712c203df3fce1",
+      "role": "集合、manifest与证据复用勘误；覆盖16号冲突措辞"
+    },
+    {
+      "path": "PLAN/2026.09.20/2026.09.20-18-PC020作者自评发现与裁决-激活签发时间.md",
+      "size": 2996,
+      "sha256": "9068694cbbf6ceda264739edb2762eb5a24fcfd6782353094f19df39b6ac2ed1",
+      "git_blob": "c0cde23eb6145a0d8e7bfc2e4ae063a50bb59b2c",
+      "role": "PC020激活签发时间唯一作者裁决"
+    },
+    {
+      "path": "PLAN/2026.09.20/2026.09.20-19-PC020作者采纳决定与正式同步范围.md",
+      "size": 2537,
+      "sha256": "fea9ea3c99cccf6e860c27bf888b72c003cad3e10d5198261044066ffc1d5cb2",
+      "git_blob": "1cbd624112382455c2c7ac48553a1c1539bd7c48",
+      "role": "作者发布治理与正式同步授权；不改变实质契约"
+    }
+  ],
+  "retained_counts": {
+    "formal_items": 80,
+    "cumulative_items": 67,
+    "status": "数量保留；未据此宣称保真自评通过"
+  },
+  "versions": {
+    "requirement": "v8",
+    "master": "v21",
+    "P01": "v4",
+    "P02": "v7",
+    "P03": "v3",
+    "P04": "v10",
+    "P05": "v17",
+    "P06": "v18",
+    "P07": "v15"
+  },
+  "normative_inputs": [
+    {
+      "id": "requirement",
+      "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "version": "v8",
+      "modified": true,
+      "before_copy_path": ".tmp/velo-codex-20260920-pc020-author-publish/before/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "before": {
+        "size": 399074,
+        "sha256": "8b980914af22f81f244bfa25540af4158476096fe7e38e8d24b22903ceeeae23",
+        "git_blob": "55adf26a4d791953a65f44e64eff23f3d2398c47"
+      },
+      "current": {
+        "size": 406406,
+        "sha256": "683974a49ce248de8188037b53a18dd71a16cc1ee78faf0c22b5015664962772",
+        "git_blob": "859f37dd506872ad8781c2564ea70b034156fd63"
+      }
+    },
+    {
+      "id": "master",
+      "path": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "version": "v21",
+      "modified": true,
+      "before_copy_path": ".tmp/velo-codex-20260920-pc020-author-publish/before/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "before": {
+        "size": 123631,
+        "sha256": "957933147e9649fdb897c0d008f3e29325993949ad7fb4fc3970bd9d1a0fed9a",
+        "git_blob": "e2631cc2bade78a32c44bbbcf007f4a63b55db6e"
+      },
+      "current": {
+        "size": 130551,
+        "sha256": "1c3ff6296b488c1ad944c377ab673f18fba00cbeec793cd914bd5c6f7f89748b",
+        "git_blob": "61110f6065e297075810fc2432ec1ff7b535e508"
+      }
+    },
+    {
+      "id": "P01",
+      "path": "PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "version": "v4",
+      "modified": false,
+      "before_copy_path": null,
+      "before": {
+        "size": 47122,
+        "sha256": "ce15a3c9e14da7c5caaafad8ea4718b3d650ee24b3d4b13ff1561f362301a9ea",
+        "git_blob": "778de584144e1c69239ffa33f4d94143f5cc2819"
+      },
+      "current": {
+        "size": 47122,
+        "sha256": "ce15a3c9e14da7c5caaafad8ea4718b3d650ee24b3d4b13ff1561f362301a9ea",
+        "git_blob": "778de584144e1c69239ffa33f4d94143f5cc2819"
+      }
+    },
+    {
+      "id": "P02",
+      "path": "PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "version": "v7",
+      "modified": false,
+      "before_copy_path": null,
+      "before": {
+        "size": 47059,
+        "sha256": "d6eb076e74194a43cf47a8a04e82bb44604caac7bd343bbe3537736a337a419d",
+        "git_blob": "1d7ffefa88e773a955159d989fcebdac266e43aa"
+      },
+      "current": {
+        "size": 47059,
+        "sha256": "d6eb076e74194a43cf47a8a04e82bb44604caac7bd343bbe3537736a337a419d",
+        "git_blob": "1d7ffefa88e773a955159d989fcebdac266e43aa"
+      }
+    },
+    {
+      "id": "P03",
+      "path": "PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "version": "v3",
+      "modified": false,
+      "before_copy_path": null,
+      "before": {
+        "size": 36132,
+        "sha256": "b53d274902c5240805134b5dec14105ecd91a9613044980510dd11a9c841f065",
+        "git_blob": "fc44d59b604fa6d1b105575195925565a10a353a"
+      },
+      "current": {
+        "size": 36132,
+        "sha256": "b53d274902c5240805134b5dec14105ecd91a9613044980510dd11a9c841f065",
+        "git_blob": "fc44d59b604fa6d1b105575195925565a10a353a"
+      }
+    },
+    {
+      "id": "P04",
+      "path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "version": "v10",
+      "modified": false,
+      "before_copy_path": null,
+      "before": {
+        "size": 43554,
+        "sha256": "cbe85c320c9c39191809c1809fc0ac29c76dd793f506725b97ad4c9c8e36ddb7",
+        "git_blob": "3157222e4a675f2631672efd280bf5739197c608"
+      },
+      "current": {
+        "size": 43554,
+        "sha256": "cbe85c320c9c39191809c1809fc0ac29c76dd793f506725b97ad4c9c8e36ddb7",
+        "git_blob": "3157222e4a675f2631672efd280bf5739197c608"
+      }
+    },
+    {
+      "id": "P05",
+      "path": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "version": "v17",
+      "modified": true,
+      "before_copy_path": ".tmp/velo-codex-20260920-pc020-author-publish/before/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "before": {
+        "size": 109895,
+        "sha256": "05981ef6cd1879ee36bad5844ff910deb2359adfd0ae11e54f9178ff31540240",
+        "git_blob": "2c784d66f7df7e38e856028295b3188098e66e67"
+      },
+      "current": {
+        "size": 143678,
+        "sha256": "7147174077c5e0afaeb35d449e53cf494bcc30e24c99c249acd50421b4772f28",
+        "git_blob": "8e59aec41e5b579881e18cd333b8d101ef82d02e"
+      }
+    },
+    {
+      "id": "P06",
+      "path": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "version": "v18",
+      "modified": true,
+      "before_copy_path": ".tmp/velo-codex-20260920-pc020-author-publish/before/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "before": {
+        "size": 68533,
+        "sha256": "636e298f7d679dd3e8b63c57d0e142ef2f8ff3edaefdc6caae0b08a5aa40555e",
+        "git_blob": "4a5416a9e3bae9161472d119ab0f8ca3685cf240"
+      },
+      "current": {
+        "size": 74355,
+        "sha256": "e84d0a00d6721bfc61ac931fa0c863c0d508bbacaa82a41874f3b1bf794e7b13",
+        "git_blob": "6237d692296e33287cea87b73769f856ddfe2230"
+      }
+    },
+    {
+      "id": "P07",
+      "path": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "version": "v15",
+      "modified": true,
+      "before_copy_path": ".tmp/velo-codex-20260920-pc020-author-publish/before/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "before": {
+        "size": 31579,
+        "sha256": "d3367791dd74152b50c03ea065b7aaf7c38a84245827794c362e058fb9f66bd5",
+        "git_blob": "453c4c287854d53f62f3592dd4ce9f2c08b379b6"
+      },
+      "current": {
+        "size": 35107,
+        "sha256": "70eefe81fe1d9ca33d57b1624297440b4fd7c8fbb59dcfc40a26a94ec83ca5ba",
+        "git_blob": "3e67d433b5abb5a085be3505f9d5e1bb97397f94"
+      }
+    }
+  ]
+}
