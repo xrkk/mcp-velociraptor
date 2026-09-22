@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from tests import p05_pc020_evidence as evidence
+from tests import pc022_windows_refresh
 
 
 INTENT_KEYS = {
@@ -100,15 +101,26 @@ def _close_file(handle: BinaryIO, path: Path) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    if os.name == "nt":
+        pc022_windows_refresh.windows_refresh_directory(path)
+        return
+    # PC022: the audited Windows path rejected os.open(directory, O_RDONLY)
+    # (errno 13); no POSIX directory sync may be presented as a production
+    # fallback, so the writer fails closed off Windows.
+    raise pc022_windows_refresh.Pc022WindowsRefreshError(
+        "platform",
+        "directory refresh is only implemented for the Windows production path",
+    )
 
 
 def _replace(source: Path, target: Path) -> None:
-    os.replace(source, target)
+    if os.name == "nt":
+        pc022_windows_refresh.windows_replace_file(source, target)
+        return
+    raise pc022_windows_refresh.Pc022WindowsRefreshError(
+        "platform",
+        "atomic replace is only implemented for the Windows production path",
+    )
 
 
 def _lexists(path: Path) -> bool:
