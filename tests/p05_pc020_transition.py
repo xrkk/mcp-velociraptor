@@ -327,8 +327,8 @@ def _receipt(
     error: str | None,
 ) -> dict[str, Any]:
     value = {
-        "schema_version": 1,
-        "kind": "pc020-canonical-transition-receipt-v1",
+        "schema_version": 2,
+        "kind": "pc020-epoch7-migration-transition-receipt-v2",
         "workflow_id": evidence.WORKFLOW_ID,
         "transition_id": transition_id,
         "from_sha256": evidence.PREDECESSOR_SHA256,
@@ -443,6 +443,18 @@ def transition_to_epoch7(
     except Exception as exc:
         status = TRANSITION_INDETERMINATE if replace_attempted else FAILED_BEFORE_REPLACE
         error = f"{type(exc).__name__}: {exc}"
+        if status == FAILED_BEFORE_REPLACE:
+            # PC022 W4: this invocation made no change to canonical; the
+            # read-only observation is recorded independently and an external
+            # drift is preserved, never rolled back.
+            try:
+                observed = _read_bytes(canonical_path)
+                if observed == predecessor_bytes:
+                    error += "; canonical_observation=predecessor"
+                else:
+                    error += f"; canonical_observation=external_drift:{_sha(observed)}"
+            except Exception as observe_exc:
+                error += f"; canonical_observation=unreadable:{type(observe_exc).__name__}"
         receipt_document = _receipt(
             transition_id,
             to_sha256=target_sha,
