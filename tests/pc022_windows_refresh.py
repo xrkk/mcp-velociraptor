@@ -119,6 +119,10 @@ if os.name == "nt":
     CreateDirectoryW = kernel32.CreateDirectoryW
     CreateDirectoryW.argtypes = (wintypes.LPCWSTR, wintypes.LPVOID)
     CreateDirectoryW.restype = wintypes.BOOL
+
+    CreateHardLinkW = kernel32.CreateHardLinkW
+    CreateHardLinkW.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPVOID)
+    CreateHardLinkW.restype = wintypes.BOOL
 else:  # static-analysis-only host import; every call fails closed below
     kernel32 = None
 
@@ -270,6 +274,33 @@ def handle_directory_identity(path: Path, *, desired_access: int = FILE_READ_ATT
             )
 
 
+def handle_file_identity(path: Path) -> tuple[int, int]:
+    """Open, verify, and return (volume_serial_number, file_id) for a plain file."""
+    _require_nt()
+    handle = _open_directory_handle(path, FILE_READ_ATTRIBUTES)
+    aggregated: list[dict[str, Any]] = []
+    try:
+        info = _query_attribute_tag(handle)
+        if not info.file_attributes & FILE_ATTRIBUTE_DIRECTORY:
+            pass  # plain file as required
+        else:
+            raise Pc022WindowsRefreshError(
+                "type", "object opened via the file path is a directory"
+            )
+        if info.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT:
+            raise Pc022WindowsRefreshError(
+                "reparse", "object opened via the file path is a reparse point"
+            )
+        return _query_file_id(handle)
+    finally:
+        _close_once(handle, "identity_probe_close", aggregated)
+        if aggregated:
+            raise Pc022WindowsRefreshError(
+                "identity_probe_close", "CloseHandle failed during identity probe",
+                aggregated=aggregated,
+            )
+
+
 def windows_refresh_directory(directory: Path) -> dict[str, Any]:
     """One PC022 directory refresh over the fixed three-handle algorithm.
 
@@ -396,3 +427,30 @@ def create_hierarchy_and_refresh(base: Path, parts: tuple[str, ...]) -> Path:
             )
         current = child
     return current
+
+
+def windows_publish_hard_link(source: Path, target: Path) -> dict[str, Any]:
+    """Create-if-absent publication via CreateHardLinkW with identity proof.
+
+    PC022 section 2: after a nonzero return, immediately verify through
+    no-follow handles that ``source`` and ``target`` share volume/file
+    identity; a collision or identity difference fails.  No overwrite, no
+    copy fallback, no rename fallback, and no acceptance of an existing
+    same-bytes target.
+    """
+    _require_nt()
+    ctypes.set_last_error(0)
+    created = bool(CreateHardLinkW(str(target), str(source), None))
+    if not created:
+        raise Pc022WindowsRefreshError(
+            "hard_link",
+            "CreateHardLinkW returned zero",
+            winerror=ctypes.get_last_error(),
+        )
+    source_identity = handle_file_identity(source)
+    target_identity = handle_file_identity(target)
+    if source_identity != target_identity:
+        raise Pc022WindowsRefreshError(
+            "hard_link_identity", "published target identity differs from source part"
+        )
+    return {"source": str(source), "target": str(target), "same_identity": True}
