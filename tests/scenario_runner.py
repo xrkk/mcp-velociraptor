@@ -37,16 +37,16 @@ FIXTURE_INSTANCE_PATH = Path(r"C:\VelociraptorMCP\fixtures-p05\fixture-instance-
 P05_REPORT_ROOT = REPO_ROOT / "Logs" / "P05" / "wf-01a05d1d-p05"
 P06_REPORT_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r3"
 SNAPSHOT_187 = "Snapshot 187-固定IP+WindowsMCP开机自启"
-SNAPSHOT_188 = "Snapshot 188-Velociraptor-MCP可恢复验收基线"
+SNAPSHOT_189 = "Snapshot 189-Velociraptor-MCP可恢复验收基线"
 SNAPSHOT_STAGES = {
     ("P05_REPAIR_INITIAL", SNAPSHOT_187),
-    ("P05_REPAIR_CANDIDATE", SNAPSHOT_188),
-    ("P06_ACTIVE", SNAPSHOT_188),
+    ("P05_REPAIR_CANDIDATE", SNAPSHOT_189),
+    ("P06_ACTIVE", SNAPSHOT_189),
 }
 RESTORE_STAGE_CANONICAL = {
-    "P05_REPAIR_INITIAL": (5, 5, "PREPARATION_BASELINE", SNAPSHOT_187),
-    "P05_REPAIR_CANDIDATE": (5, 5, "PREPARATION_BASELINE", SNAPSHOT_187),
-    "P06_ACTIVE": (5, 6, "NETWORK_ACTIVE", SNAPSHOT_188),
+    "P05_REPAIR_INITIAL": (6, 7, "PREPARATION_BASELINE", SNAPSHOT_187),
+    "P05_REPAIR_CANDIDATE": (6, 7, "PREPARATION_BASELINE", SNAPSHOT_187),
+    "P06_ACTIVE": (6, 8, "NETWORK_ACTIVE", SNAPSHOT_189),
 }
 REPORT_SCHEMA_VERSION = 2
 CURRENT_RESTORE_NAME = "current-restore.json"
@@ -686,7 +686,8 @@ RESTORE_RECORD_KINDS = {
     "pre_start_marker",
     "post_restore_hostname",
     "canonical_readback",
-    "baseline_adoption",
+    "pc020_migration",
+    "pc020_preparation",
     "activation_evidence",
 }
 RESTORE_STAGE_RECORD_KINDS = {

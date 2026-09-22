@@ -11,9 +11,9 @@
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "representative/p05-flow-triage-repair-candidate.json",
-      "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p05-flow-triage-repair-candidate",
-      "sha256": "843551b8b6b4fb6dc48fb4f1fc2808d4105a052a63fd7dddc0a53f7a95a24358",
+      "sha256": "fc4b14d409a8f763ec26f40b5dd8db66d3681ae584bfbd197e54c708d80ceb3d",
       "snapshot_stage": "P05_REPAIR_CANDIDATE"
     }
   ],
