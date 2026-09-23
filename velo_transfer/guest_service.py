@@ -26,7 +26,7 @@ from .manifest import (Budget, _no_link, canonical_json, capture_sources, check_
                        digest_json, directory_identity, file_identity, safe_chain, validate_sources)
 from .policy import load_policy
 from .protocol import (PROTOCOL_VERSION, GuestTerminal, prepare_receipt, publish_intent,
-                       recover_publication, validate_destination)
+                       recover_publication, receipt_digest, validate_destination)
 from .storage import TaskStore, _validate_json
 from .windows_platform import WindowsAclVerifier, observe_windows
 
@@ -315,7 +315,7 @@ class GuestTransferService:
                          "partial_identity": None, "cleanup_targets": None,
                          "terminal": None, "stage_intent": None, "staging": None,
                          "publish_intent": None, "owner": None, "cancelled": False,
-                         "error": None, "cleanup": None}
+                         "error": None, "cleanup": None, "destination_verification": None}
                 envelope = store.create(transfer_id, self._binding(request), state)
                 if envelope["state"] != state:
                     raise Error("task_binding_conflict")
@@ -332,6 +332,7 @@ class GuestTransferService:
                 "request_digest": state["request"]["request_digest"],
                 "package": state["package"], "verified_offset": state["offset"],
                 "terminal": copy.deepcopy(terminal), "cleanup": state["cleanup"],
+                "destination_verification": copy.deepcopy(state.get("destination_verification")),
                 "error": state["error"], "worker": copy.deepcopy(state["owner"])}
 
     def transfer_status(self, transfer_id: str, request_digest: str):
@@ -476,6 +477,9 @@ class GuestTransferService:
                          "stopped": False}
                 state["owner"] = owner
                 state["error"] = None
+                if job == "release" and state["request"]["direction"] == "push":
+                    # A new attempt must never inherit a prior worker's proof.
+                    state["destination_verification"] = None
                 self._save(store, envelope, state)
                 lease_state = {"active": owner}
                 store.save(_LEASE_ID, lease["binding"], lease["revision"], lease_state)
@@ -559,27 +563,35 @@ class GuestTransferService:
                 lease.release()
         except Exception as exc:
             code = exc.code if isinstance(exc, Error) else "worker_failed"
-            try:
-                store = self._store()
-                with store.writer():
-                    envelope = self._load(transfer_id, digest, store)
-                    state = envelope["state"]
-                    if state["owner"] and state["owner"]["nonce"] == nonce:
-                        state["error"] = code
-                        if state["terminal"] is not None and job in ("prepare", "commit", "release"):
-                            terminal = GuestTerminal.restore(state["terminal"],
-                                self._protocol_binding(state["request"], state["package"]),
-                                state["request"]["expected_destination"])
-                            operation = terminal.operations.get(job)
-                            recoverable = ((job == "commit" and state["publish_intent"] is not None) or
-                                           (job == "prepare" and state["staging"] is not None))
-                            if operation and operation["status"] == "IN_PROGRESS" and terminal.release_authorization is None and not recoverable:
-                                terminal.fail_action(job, operation["operation_id"], code)
-                                state["terminal"] = terminal.snapshot()
-                                state["phase"] = terminal.local_phase
-                        self._save(store, envelope, state)
-            except Exception:
-                pass
+            # A status poll can momentarily own the writer lock as this worker
+            # exits. Preserve a post-authorization failure instead of losing it.
+            for attempt in range(100 if job == "release" else 1):
+                try:
+                    store = self._store()
+                    with store.writer():
+                        envelope = self._load(transfer_id, digest, store)
+                        state = envelope["state"]
+                        if state["owner"] and state["owner"]["nonce"] == nonce:
+                            state["error"] = code
+                            if state["terminal"] is not None and job in ("prepare", "commit", "release"):
+                                terminal = GuestTerminal.restore(state["terminal"],
+                                    self._protocol_binding(state["request"], state["package"]),
+                                    state["request"]["expected_destination"])
+                                operation = terminal.operations.get(job)
+                                recoverable = ((job == "commit" and state["publish_intent"] is not None) or
+                                               (job == "prepare" and state["staging"] is not None))
+                                if operation and operation["status"] == "IN_PROGRESS" and terminal.release_authorization is None and not recoverable:
+                                    terminal.fail_action(job, operation["operation_id"], code)
+                                    state["terminal"] = terminal.snapshot()
+                                    state["phase"] = terminal.local_phase
+                            self._save(store, envelope, state)
+                    break
+                except Error as write_exc:
+                    if job != "release" or write_exc.code != "writer_busy" or attempt == 99:
+                        break
+                    time.sleep(0.005)
+                except Exception:
+                    break
 
     def _execute(self, transfer_id, digest, job):
         envelope = self._load(transfer_id, digest)
@@ -907,7 +919,9 @@ class GuestTransferService:
                    state["owner"]["stopped"] or
                    not same_process(state["owner"]["pid"], state["owner"]["birth"])) and
                   not (action == "prepare" and state["request"]["direction"] == "push" and
-                       state["stage_intent"] is not None and state["staging"] is None)):
+                       state["stage_intent"] is not None and state["staging"] is None) and
+                  not (action == "release" and state["request"]["direction"] == "push" and
+                       state.get("destination_verification") is not None and state["error"] is None)):
                 launch = True
         if launch:
             self._launch(transfer_id, request_digest, action)
@@ -1142,12 +1156,112 @@ class GuestTransferService:
             raise Error("cleanup_ownership_unknown")
         for name in state["cleanup_targets"]:
             self._remove_owned_temporary(state, name)
+        # The source package is gone. Keep the manifest and the published tree;
+        # this verification is the last business action of this release worker.
+        proof = (self._verify_push_destination(state, terminal, budget)
+                 if request["direction"] == "push" else None)
         store = self._store()
-        with store.writer():
-            fresh = self._load(request["transfer_id"], request["request_digest"], store)
-            current = fresh["state"]
-            current["cleanup"] = {"temporary_files_removed": True, "workers_stopped": False}
-            self._save(store, fresh, current)
+        # Status may briefly hold the short writer lock while it observes the
+        # worker. Do not lose the post-cleanup proof to transient contention.
+        while True:
+            budget.check()
+            try:
+                with store.writer():
+                    fresh = self._load(request["transfer_id"], request["request_digest"], store)
+                    current = fresh["state"]
+                    if (current["owner"] != state["owner"] or current["error"] is not None or
+                            current["terminal"] != state["terminal"] or
+                            current["cleanup_targets"] != state["cleanup_targets"]):
+                        raise Error("release_state_changed")
+                    for name in current["cleanup_targets"]:
+                        if self._owned_temporary_exists(current, name):
+                            raise Error("cleanup_incomplete")
+                    budget.check()
+                    if proof is not None:
+                        self._validate_destination_verification(current, terminal, proof)
+                        current["destination_verification"] = proof
+                    current["cleanup"] = {"temporary_files_removed": True, "workers_stopped": False}
+                    self._save(store, fresh, current)
+                break
+            except Error as exc:
+                if exc.code != "writer_busy":
+                    raise
+                budget.check()
+                time.sleep(0.005)
+
+    def _verify_push_destination(self, state, terminal, budget):
+        """Observe the published push tree after owned temporary deletion."""
+        owner = state["owner"]
+        if owner is None or owner["stopped"]:
+            # Private in-process callers can complete registered cleanup without
+            # a worker, but cannot mint a worker-bound finalization fact.
+            return None
+        operation = terminal.operations["release"]
+        intent = state["publish_intent"]
+        staging = state["staging"]
+        publication = terminal.publication
+        if (owner is None or owner["job"] != "release" or owner["stopped"] or
+                owner["pid"] != os.getpid() or owner["birth"] != process_birth(os.getpid()) or
+                operation["status"] != "IN_PROGRESS" or
+                terminal.release_authorization is None or
+                not isinstance(intent, dict) or not isinstance(staging, dict) or
+                intent.get("publication") != publication or
+                intent.get("parent_identity") != staging.get("parent_identity")):
+            raise Error("destination_verification_conflict")
+        destination = Path(state["request"]["expected_destination"]["canonical_path"])
+        self.policy.resolve_local(destination, "write")
+        self.policy.resolve_local(destination.parent, "write")
+        if os.name == "nt":
+            callback = self._content_acl(Path(staging["staging_directory"]), destination)
+            if callback(destination.parent) is not True or callback(destination) is not True:
+                raise Error("windows_acl_not_verified")
+        if directory_identity(destination.parent) != intent["parent_identity"]:
+            raise Error("destination_parent_changed")
+        manifest = self._manifest(state)
+        verified = verify_tree(destination, manifest, budget,
+                               publication["directory_identity"])
+        if (verified["manifest_sha256"] != terminal.binding["manifest_sha256"] or
+                directory_identity(destination.parent) != intent["parent_identity"]):
+            raise Error("destination_verification_conflict")
+        return {"schema": "velo.transfer.destination-verification.v1",
+                "binding": copy.deepcopy(terminal.binding),
+                "release_operation_id": operation["operation_id"],
+                "publication_receipt_sha256": receipt_digest(publication),
+                "directory_identity": copy.deepcopy(verified["identity"]),
+                "parent_identity": copy.deepcopy(intent["parent_identity"]),
+                "manifest_sha256": verified["manifest_sha256"],
+                "release_worker_nonce": owner["nonce"],
+                "verification_phase": "post_cleanup"}
+
+    def _validate_destination_verification(self, state, terminal, proof):
+        """Match a durable proof to this exact release and published directory."""
+        owner = state["owner"]
+        intent = state["publish_intent"]
+        publication = terminal.publication
+        operation = terminal.operations["release"]
+        fields = {"schema", "binding", "release_operation_id",
+                  "publication_receipt_sha256", "directory_identity",
+                  "parent_identity", "manifest_sha256", "release_worker_nonce",
+                  "verification_phase"}
+        if (not isinstance(proof, dict) or set(proof) != fields or
+                owner is None or owner["job"] != "release" or
+                not isinstance(intent, dict) or not isinstance(publication, dict) or
+                intent.get("publication") != publication or
+                terminal.release_authorization is None or
+                terminal.release_authorization["operation_id"] != operation["operation_id"] or
+                terminal.release_authorization["publication_receipt_sha256"] != receipt_digest(publication)):
+            raise Error("destination_verification_invalid")
+        expected = {"schema": "velo.transfer.destination-verification.v1",
+                    "binding": terminal.binding,
+                    "release_operation_id": operation["operation_id"],
+                    "publication_receipt_sha256": receipt_digest(publication),
+                    "directory_identity": publication["directory_identity"],
+                    "parent_identity": intent.get("parent_identity"),
+                    "manifest_sha256": terminal.binding["manifest_sha256"],
+                    "release_worker_nonce": owner["nonce"],
+                    "verification_phase": "post_cleanup"}
+        if canonical_json(proof) != canonical_json(expected):
+            raise Error("destination_verification_invalid")
 
     def _cleanup_path(self, state, name):
         permitted = ("bundle.zip",) if state["request"]["direction"] == "pull" else (
@@ -1231,6 +1345,19 @@ class GuestTransferService:
                     raise Error("cleanup_ownership_unknown")
                 for name in targets:
                     if self._owned_temporary_exists(state, name):
+                        return
+                if state["request"]["direction"] == "push":
+                    if (state["error"] is not None or state["cleanup"] !=
+                            {"temporary_files_removed": True, "workers_stopped": False}):
+                        return
+                    proof = state.get("destination_verification")
+                    if proof is None:
+                        return
+                    try:
+                        self._validate_destination_verification(state, terminal, proof)
+                    except Error as exc:
+                        state["error"] = exc.code
+                        self._save(store, envelope, state)
                         return
                 operation_id = terminal.operations["release"]["operation_id"]
                 terminal.complete_release(operation_id,
