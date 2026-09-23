@@ -384,3 +384,13 @@ Please let me know how you go and feel free to add PR!
 
 `can you tell me which artifacts target the USN journal`
 <img alt="image" src="https://github.com/user-attachments/assets/b9f93b1c-4a08-437d-b25a-ff82bdd2ab8c" />
+
+Unpaired uploads whose enumerated `file_size` differs from `uploaded_size`
+remain visible with `collection_size_mismatch:<count>` and bounded per-file
+`possible_file_modified_during_collection:<file_id>:file_size=<n>:uploaded_size=<n>`
+warnings. Both original sizes are preserved. This may reflect a file changing
+during collection; the metadata alone cannot rule out an incomplete upload or
+missing sparse index. It does not prove a consistent source snapshot. Downloading
+that uncertain entry fails with `BACKEND_ERROR/size_mismatch` before content I/O
+or output creation; other valid files in the same Flow remain usable. Paired sparse
+metadata, identity/selector conflicts, and invalid numeric sizes remain strict.

@@ -184,6 +184,7 @@ class _UploadRecord:
 class _FileInventory:
     records: tuple[_FileRecord, ...]
     sparse_count: int
+    size_mismatch_count: int = 0
 
 
 def _metadata_error(reason: str) -> BackendError:
@@ -252,7 +253,6 @@ def _upload_record(
         or isinstance(raw_uploaded_size, bool)
         or raw_file_size < 0
         or raw_uploaded_size < 0
-        or raw_uploaded_size > raw_file_size
     ):
         raise _metadata_error("invalid_file_size")
     file = _FileRecord(
@@ -303,15 +303,21 @@ def _deduplicated_uploads(
             raise _metadata_error("file_identity_conflict")
 
     sparse_count = 0
+    size_mismatch_count = 0
     paired: list[_FileRecord] = []
     for record in records:
         index = indexes.pop(record.file_id, None)
         if index is None:
             if record.file_size != record.uploaded_size:
-                raise _metadata_error("invalid_sparse_pair")
+                # Size was observed before collection; it is not an invariant of
+                # an unpaired upload. Preserve both values and disclose doubt.
+                size_mismatch_count += 1
             paired.append(record)
             continue
         index_record = index.file
+        if (record.uploaded_size > record.file_size or
+                index_record.uploaded_size > index_record.file_size):
+            raise _metadata_error("invalid_file_size")
         if (
             index_record.original_path != record.original_path + ".idx"
             or index_record.file_size != record.file_size
@@ -330,7 +336,8 @@ def _deduplicated_uploads(
         )
     if indexes:
         raise _metadata_error("invalid_sparse_pair")
-    return _FileInventory(records=tuple(paired), sparse_count=sparse_count)
+    return _FileInventory(records=tuple(paired), sparse_count=sparse_count,
+                          size_mismatch_count=size_mismatch_count)
 
 
 def _is_reparse(path: Path) -> bool:
@@ -807,6 +814,16 @@ class FixedToolService:
                 if inventory.sparse_count
                 else []
             )
+            if inventory.size_mismatch_count:
+                warnings.append(f"collection_size_mismatch:{inventory.size_mismatch_count}")
+                # The summary covers the complete enumeration; per-file details
+                # are bounded to rows that can actually be returned to the caller.
+                warnings.extend(
+                    f"possible_file_modified_during_collection:{record.file_id}:"
+                    f"file_size={record.file_size}:uploaded_size={record.uploaded_size}"
+                    for record in inventory.records[:RESULT_ROW_LIMIT]
+                    if record.index_selector is None and record.file_size != record.uploaded_size
+                )
             return limit_unpaged_result(
                 {
                     "operation": "list_flow_files",
@@ -843,6 +860,12 @@ class FixedToolService:
             if selected is None:
                 raise NotFoundError(
                     details={"object_type": "flow_file", "object_id": normalized_file_id}
+                )
+            if selected.index_selector is None and selected.file_size != selected.uploaded_size:
+                # Listing uncertain metadata is useful; exporting it as a complete
+                # logical file is not justified (a missing sparse index is possible).
+                raise BackendError(
+                    details={"operation": "download_flow_file", "reason": "size_mismatch"}
                 )
             flow_key = hashlib.sha256(flow_id.encode("utf-8")).hexdigest()
             flow_dir = _backend_call(

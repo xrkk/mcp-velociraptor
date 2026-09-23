@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "identity": "P04-UPLOAD-SIZE-R01",
+  "scope": "P04-only user-authorized delta; not a replacement nine-document group or global acceptance",
+  "created_at": "2026-09-23T20:18:33.019195+08:00",
+  "base_head": "10eb6e6f823972d254acf5e3e6f73e6b433b1874",
+  "parent_group": {
+    "path": "PLAN/2026.09.22/current-normative-inputs-pc022-r01.json",
+    "sha256": "2ef040a9cb7a55b730cf25bc247c0a3ea0cf75855def798cb8f4d52e607f1274"
+  },
+  "previous_p04": {
+    "path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "version": "v11",
+    "sha256": "a26bc8894525f373a18e983d632e92600f4e4a00f2c131b488f5b4e3d3a47cf1"
+  },
+  "current_p04": {
+    "path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "version": "v12",
+    "sha256": "cbef668684c22f76e0e969bf83746ba99234179300482dc2744d6bc17313414e"
+  },
+  "decision": {
+    "path": "PLAN/2026.09.23/2026.09.23-02-上传尺寸差异裁决与变更范围.md",
+    "sha256": "8b738746ca98f7f7648a61f8a851424d2489bbd9aa882cac75fbde8c6b2eb6f0"
+  },
+  "tests": "42 total / 40 passed / 2 native Windows skips; local only",
+  "deployment": "not performed"
+}

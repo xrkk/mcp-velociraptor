@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 from velociraptor_api import get_flow_result_count
@@ -24,6 +24,7 @@ from velociraptor_mcp_core import (
     NotCancellableError,
     TargetContext,
     canonical_json_bytes,
+    error_model,
     success_result,
 )
 
@@ -338,6 +339,37 @@ class FixedToolServiceTests(unittest.TestCase):
         with self.assertRaises(BackendError):
             self.service.list_flow_files("F.file")
 
+    def test_unpaired_collection_size_mismatch_warns_and_keeps_other_files_usable(self):
+        from tests.test_pc017_file_delivery import upload_row
+        import copy
+        for stored in (29, 18):
+            with self.subTest(stored=stored), tempfile.TemporaryDirectory() as root:
+                backend = FakeBackend()
+                stable = upload_row("stable.bin")
+                changed = upload_row("prefetch.pf", size=7, stored=stored, upload_id=2)
+                # Second case exercises shrinkage, first growth.
+                changed["Upload"]["Size"] = 29 if stored == 18 else 7
+                backend.uploads = [stable, changed, copy.deepcopy(changed)]
+                service = FixedToolService([SPEC], TargetContext(backend), backend, download_root=root)
+                listed = service.list_flow_files("F.file")
+                self.assertEqual(len(listed.data), 2)
+                item = listed.data[1]
+                self.assertEqual((item.file_size, item.uploaded_size),
+                                 (changed["Upload"]["Size"], stored))
+                self.assertEqual(listed.warnings, ["collection_size_mismatch:1",
+                    f"possible_file_modified_during_collection:{item.file_id}:"
+                    f"file_size={item.file_size}:uploaded_size={stored}"])
+                self.assertFalse(any(c[0] == "read_vfs_buffer" for c in backend.calls))
+                self.assertEqual(list(Path(root).iterdir()), [])
+                downloaded = service.download_flow_file("F.file", listed.data[0].file_id)
+                self.assertEqual(Path(downloaded.local_path).read_bytes(), b"payload")
+                before = sum(c[0] == "read_vfs_buffer" for c in backend.calls)
+                with self.assertRaises(BackendError) as error:
+                    service.download_flow_file("F.file", item.file_id)
+                self.assertEqual(error_model(error.exception).details["reason"], "size_mismatch")
+                self.assertEqual(before, sum(c[0] == "read_vfs_buffer" for c in backend.calls))
+                self.assertEqual(len(list(Path(root).rglob("content.bin"))), 1)
+
     def test_same_name_in_different_directories_has_two_stable_ids(self):
         second = {"Upload": dict(self.backend.uploads[0]["Upload"])}
         second["Upload"]["Path"] = r"C:\other\same.txt"
@@ -347,7 +379,7 @@ class FixedToolServiceTests(unittest.TestCase):
         self.backend.uploads.append(second)
         rows = self.service.list_flow_files("F.file").data
         self.assertEqual(len(rows), 2)
-        self.assertEqual({Path(row.original_path).name for row in rows}, {"same.txt"})
+        self.assertEqual({PureWindowsPath(row.original_path).name for row in rows}, {"same.txt"})
         self.assertEqual(len({row.file_id for row in rows}), 2)
 
     def test_concurrent_download_is_create_if_absent(self):

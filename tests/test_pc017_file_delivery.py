@@ -207,7 +207,10 @@ class FileDeliveryContractTests(unittest.TestCase):
         fractional["Upload"]["Size"] = 1.0
         cases["fractional_size"] = ([fractional], "invalid_file_size")
         reversed_size = upload_row("a.bin", size=1, stored=2)
-        cases["reversed_size"] = ([reversed_size], "invalid_file_size")
+        reversed_index = copy.deepcopy(reversed_size)
+        reversed_index["Type"] = "idx"
+        reversed_index["Upload"]["Path"] += ".idx"
+        cases["reversed_sparse_size"] = ([reversed_size, reversed_index], "invalid_file_size")
         missing_size = upload_row("a.bin")
         del missing_size["Upload"]["Size"]
         cases["missing_size"] = ([missing_size], "invalid_file_size")
