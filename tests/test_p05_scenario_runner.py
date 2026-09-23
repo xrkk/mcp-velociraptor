@@ -104,7 +104,7 @@ class PointerAndAssertionTests(unittest.TestCase):
         candidate, candidate_row, _, _ = runner.load_indexed_scenario(
             "p05-flow-triage-repair-candidate"
         )
-        self.assertEqual(candidate["required_snapshot"], runner.SNAPSHOT_188)
+        self.assertEqual(candidate["required_snapshot"], runner.SNAPSHOT_189)
         self.assertEqual(candidate_row["snapshot_stage"], "P05_REPAIR_CANDIDATE")
 
     def test_forward_reference_and_command_cleanup_are_rejected(self):

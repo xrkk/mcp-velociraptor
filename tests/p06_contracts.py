@@ -19,7 +19,7 @@ FIXTURE_SPEC = DATA / "p05_fixture_spec.json"
 INDEX = DATA / "p06_scenario_index.json"
 MANIFEST = DATA / "p06_coverage_manifest.json"
 SCHEMA = SCENARIOS / "schema-v1.json"
-SNAPSHOT = "Snapshot 188-Velociraptor-MCP可恢复验收基线"
+SNAPSHOT = "Snapshot 189-Velociraptor-MCP可恢复验收基线"
 NO_MATCH = "__mcp_p03_no_match__"
 
 # Each scenario uses a distinct investigation-scoped regex pattern so that the

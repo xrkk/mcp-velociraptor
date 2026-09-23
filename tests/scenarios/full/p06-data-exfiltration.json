@@ -2,7 +2,7 @@
   "business_purpose": "Bound data discovery, staging, access, and possible exfiltration using browser, file, command, process, network, and timeline evidence.",
   "cleanup": [],
   "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
-  "required_snapshot": "Snapshot 188-Velociraptor-MCP可恢复验收基线",
+  "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
   "scenario_id": "p06-data-exfiltration",
   "schema_version": 1,
   "steps": [

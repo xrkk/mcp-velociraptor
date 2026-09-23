@@ -183,7 +183,7 @@
     "required_snapshot": {
       "enum": [
         "Snapshot 187-固定IP+WindowsMCP开机自启",
-        "Snapshot 188-Velociraptor-MCP可恢复验收基线"
+        "Snapshot 189-Velociraptor-MCP可恢复验收基线"
       ]
     },
     "scenario_id": {

@@ -24,6 +24,7 @@ SNAPSHOT_1 = 'Snapshot 1-开启Windows-MCP'
 SNAPSHOT_186 = 'Snapshot 186-Velociraptor-MCP网络部署基线'
 SNAPSHOT_187 = 'Snapshot 187-固定IP+WindowsMCP开机自启'
 SNAPSHOT_188 = 'Snapshot 188-Velociraptor-MCP可恢复验收基线'
+SNAPSHOT_189 = 'Snapshot 189-Velociraptor-MCP可恢复验收基线'
 MANUAL_ONLY = 'MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION'
 # The one origin the deployed service explicitly allows; the collected
 # entry-gate originals used exactly this value, and verify_entry_gate_raw
@@ -226,9 +227,9 @@ REPORT_KEYS = {
 P05_INDEX_SOURCE = 'tests/data/p05_scenario_index.json'
 P05_FIXTURE_SOURCE = 'tests/data/p05_fixture_spec.json'
 P05_SCHEMA_SOURCE = 'tests/scenarios/schema-v1.json'
-P05_INDEX_SHA256 = 'c9c3e5146e0f5bb238926e5b2d1c681926ccd21693231e6862193b28e3956c4c'
+P05_INDEX_SHA256 = '3216af5c11b1f6ebef56e38685b8c6d77ef004afac10084e6ea454d9f50e689f'
 P05_FIXTURE_SPEC_SHA256 = 'bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c'
-P05_SCHEMA_SHA256 = 'a4841c62141be1806d304667cc442ff31a4969b1063af8fe2abaea895f250821'
+P05_SCHEMA_SHA256 = 'e4136f81d84adb104d87c906a9f2cb963bc7ab6f92f4c6b7474c62a7352affbc'
 P05_SCENARIOS = {
     'p05-flow-triage-repair-initial': {
         'path': 'tests/scenarios/representative/p05-flow-triage-repair-initial.json',
@@ -239,8 +240,8 @@ P05_SCENARIOS = {
     'p05-flow-triage-repair-candidate': {
         'path': 'tests/scenarios/representative/p05-flow-triage-repair-candidate.json',
         'stage': 'P05_REPAIR_CANDIDATE',
-        'snapshot': SNAPSHOT_188,
-        'sha256': '843551b8b6b4fb6dc48fb4f1fc2808d4105a052a63fd7dddc0a53f7a95a24358',
+        'snapshot': SNAPSHOT_189,
+        'sha256': 'fc4b14d409a8f763ec26f40b5dd8db66d3681ae584bfbd197e54c708d80ceb3d',
     },
 }
 
