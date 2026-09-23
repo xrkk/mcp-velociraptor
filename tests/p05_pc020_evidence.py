@@ -67,28 +67,38 @@ DECISION_16 = "PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺
 RECEIVER_URL_PREFIX = "http://192.168.204.1:28786/"
 RECEIVER_OBSERVER = {
     "scope": "receiver_host",
-    "operating_system": "windows",
+    "operating_system": "linux",
     "ipv4": "192.168.204.1",
     "endpoint": "http://192.168.204.1:28786/",
 }
 
 
 def receiver_observation_script() -> str:
-    """Build the fixed receiver-host identity and listener collector."""
+    """Build the fixed Linux receiver-host identity and listener collector.
+
+    PC023 erratum: the receiver host (192.168.204.1) runs Linux; the
+    collector reads /proc/net/fib_trie for local IPv4 addresses and
+    /proc/net/tcp{,6} for a listening 28786 socket, and emits the same
+    JSON shape the verifier has always required.
+    """
     return (
-        "$ErrorActionPreference='Stop';"
-        "$OutputEncoding=[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false);"
-        "$ips=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Select-Object -ExpandProperty IPAddress);"
-        "if(-not ($ips -contains '192.168.204.1')){throw 'collector is not running on the fixed receiver identity'};"
-        "$rows=@(Get-NetTCPConnection -State Listen -ErrorAction Stop|Where-Object {$_.LocalPort -eq 28786}|Select-Object LocalAddress,LocalPort,State,OwningProcess);"
-        "[ordered]@{schema_version=1;observer_ipv4='192.168.204.1';"
-        "endpoint='http://192.168.204.1:28786/';interface_ipv4=@($ips);rows=@($rows)} | "
-        "ConvertTo-Json -Depth 5 -Compress"
+        "import json,re;"
+        "ips=sorted(set(re.findall(r'\\|--\\s*([0-9.]+)\\s*\\n\\s*/32 host LOCAL',"
+        "open('/proc/net/fib_trie').read())));"
+        "ips=[x for x in ips if not x.startswith('127.')];"
+        "assert '192.168.204.1' in ips,'collector is not running on the fixed receiver identity';"
+        "rows=[];port=format(28786,'04X');"
+        "[rows.append(line.split()[1]) for proc in ('/proc/net/tcp','/proc/net/tcp6')"
+        " for line in open(proc).read().splitlines()[1:]"
+        " if line.split()[1].split(':')[1]==port and line.split()[3]=='0A'];"
+        "print(json.dumps({'schema_version':1,'observer_ipv4':'192.168.204.1',"
+        "'endpoint':'http://192.168.204.1:28786/','interface_ipv4':ips,"
+        "'rows':rows},separators=(',',':')))"
     )
 
 
 RECEIVER_STOPPED_SCRIPT = receiver_observation_script()
-RECEIVER_STOPPED_ARGV = ["powershell.exe", "-NoProfile", "-Command", RECEIVER_STOPPED_SCRIPT]
+RECEIVER_STOPPED_ARGV = ["/usr/bin/python3", "-c", RECEIVER_STOPPED_SCRIPT]
 PC020_REQUIRED_SOURCE_PATHS = frozenset({
     "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
     "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",

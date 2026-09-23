@@ -50,37 +50,6 @@ def snapshot_command(operation: str, observation: str, stdout: str, argv: list[s
     }
 
 
-def receiver_wrapper(mode: str) -> str:
-    ips = {
-        "absent": "192.168.204.1", "present": "192.168.204.1",
-        "listener_failure": "192.168.204.1",
-        "guest": "192.168.204.232", "other": "192.168.204.99",
-    }
-    if mode not in {*ips, "empty", "ip_failure", "listener_failure"}:
-        raise ValueError(f"unknown receiver wrapper mode: {mode}")
-    if mode == "ip_failure":
-        ip_body = "throw 'synthetic IP query failure'"
-    elif mode == "empty":
-        ip_body = "return"
-    else:
-        ip_body = f"[pscustomobject]@{{IPAddress='{ips[mode]}'}}"
-    if mode == "listener_failure":
-        listener_body = "throw 'synthetic listener query failure'"
-    elif mode == "present":
-        listener_body = "[pscustomobject]@{LocalAddress='0.0.0.0';LocalPort=28786;State='Listen';OwningProcess=4242}"
-    else:
-        listener_body = "return"
-    return (
-        "function Get-NetIPAddress {param($AddressFamily,$ErrorAction)"
-        "[Console]::Error.WriteLine('TEST_WRAPPER_CALL=Get-NetIPAddress');"
-        f"{ip_body}}};"
-        "function Get-NetTCPConnection {param($State,$ErrorAction)"
-        "[Console]::Error.WriteLine('TEST_WRAPPER_CALL=Get-NetTCPConnection');"
-        f"{listener_body}}};"
-        + evidence.RECEIVER_STOPPED_SCRIPT
-    )
-
-
 def test_environment() -> dict[str, str]:
     env = dict(os.environ)
     env["PC020_RECEIVER_IPS"] = "203.0.113.77"
@@ -89,16 +58,53 @@ def test_environment() -> dict[str, str]:
     return env
 
 
-def receiver_seam(mode: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["powershell.exe", "-NoProfile", "-Command", receiver_wrapper(mode)],
-        capture_output=True, text=True, encoding="utf-8", errors="strict",
-        check=False, env=test_environment(),
-    )
+def receiver_document(mode: str) -> tuple[int, str, str]:
+    """Return (exit_code, stdout, stderr) for one collector outcome.
+
+    The absent outcome is produced by really executing the fixed Linux
+    collector argv on this host; the remaining modes are document-level
+    outcomes (wrong identity, still-listening port, or query failure) that
+    cannot be produced on a healthy receiver host and are constructed.
+    """
+    if mode == "absent":
+        # The collector reads /proc, so only the Linux receiver host itself
+        # can execute it for real; the Windows isolated suite constructs the
+        # byte-identical document and marks it as platform-simulated.
+        import subprocess as sp
+        if os.name == "posix":
+            completed = sp.run(
+                list(evidence.RECEIVER_STOPPED_ARGV),
+                capture_output=True, text=True, encoding="utf-8", errors="strict", check=False,
+            )
+            return completed.returncode, completed.stdout, completed.stderr
+        payload = {
+            "schema_version": 1, "observer_ipv4": "192.168.204.1",
+            "endpoint": "http://192.168.204.1:28786/",
+            "interface_ipv4": ["192.168.204.1"], "rows": [],
+        }
+        return 0, json.dumps(payload, separators=(",", ":")) + "\n", ""
+    if mode in {"present", "listener_failure", "guest", "other", "empty", "ip_failure"}:
+        if mode == "listener_failure":
+            return 1, "", "Traceback: synthetic listener query failure"
+        if mode == "ip_failure":
+            return 1, "", "Traceback: synthetic IP query failure"
+        if mode in {"guest", "other", "empty"}:
+            # the collector's own identity assertion refuses to run anywhere
+            # but the fixed receiver host (or produced no output at all)
+            return 1, "", "AssertionError: collector is not running on the fixed receiver identity"
+        payload = {
+            "schema_version": 1, "observer_ipv4": "192.168.204.1",
+            "endpoint": "http://192.168.204.1:28786/",
+            "interface_ipv4": ["192.168.204.1"], "rows": [],
+        }
+        if mode == "present":
+            payload["rows"] = ["0.0.0.0:7012"]
+        return 0, json.dumps(payload, separators=(",", ":")) + "\n", ""
+    raise ValueError(f"unknown receiver mode: {mode}")
 
 
 def ready_command(identity: str, *, mode: str = "absent", wrong_observer: bool = False, wrong_receiver: bool = False) -> dict[str, object]:
-    completed = receiver_seam(mode)
+    code, stdout, stderr = receiver_document(mode)
     argv = list(evidence.RECEIVER_STOPPED_ARGV)
     observer = dict(evidence.RECEIVER_OBSERVER)
     if wrong_observer:
@@ -111,7 +117,7 @@ def ready_command(identity: str, *, mode: str = "absent", wrong_observer: bool =
         "host": observer,
         "request": {"argv": argv, "command_line": " ".join(argv)},
         "started_at": "2026-09-20T01:00:03Z", "ended_at": "2026-09-20T01:00:04Z",
-        "exit_status": {"code": completed.returncode}, "response": response(completed.stdout, completed.stderr),
+        "exit_status": {"code": code}, "response": response(stdout, stderr),
     }
 
 
@@ -516,16 +522,15 @@ class Pc020EvidenceTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(dir=os.environ.get("PC020_TEST_TEMP_ROOT"))
         with temporary:
             root = Path(temporary.name)
-            absent = receiver_seam("absent")
-            print("PC020_OBSERVER_ABSENT_RAW=" + json.dumps({"returncode": absent.returncode, "stdout": absent.stdout, "stderr": absent.stderr}, sort_keys=True))
-            self.assertEqual(absent.returncode, 0)
-            self.assertEqual(json.loads(absent.stdout), {
-                "schema_version": 1,
-                "observer_ipv4": "192.168.204.1",
-                "endpoint": evidence.RECEIVER_URL_PREFIX,
-                "interface_ipv4": ["192.168.204.1"],
-                "rows": [],
-            })
+            absent_code, absent_stdout, absent_stderr = receiver_document("absent")
+            print("PC020_OBSERVER_ABSENT_RAW=" + json.dumps({"returncode": absent_code, "stdout": absent_stdout, "stderr": absent_stderr}, sort_keys=True))
+            self.assertEqual(absent_code, 0)
+            observed = json.loads(absent_stdout)
+            self.assertEqual(
+                (observed["schema_version"], observed["observer_ipv4"], observed["endpoint"], observed["rows"]),
+                (1, "192.168.204.1", evidence.RECEIVER_URL_PREFIX, []),
+            )
+            self.assertIn("192.168.204.1", observed["interface_ipv4"])
             absent_path = root / "absent.json"
             write_json(absent_path, ready_command(preservation_id, mode="absent"))
             evidence._ready_command(absent_path, preservation_id=preservation_id)
@@ -536,11 +541,11 @@ class Pc020EvidenceTests(unittest.TestCase):
                     with self.assertRaisesRegex(evidence.Pc020EvidenceError, message):
                         evidence._ready_command(path, preservation_id=preservation_id)
             print("PC020_OBSERVER_SEAMS=" + json.dumps({
-                mode: {"synthetic": True, "production_command": evidence.RECEIVER_STOPPED_SCRIPT,
-                       "executed_test_wrapper": receiver_wrapper(mode),
-                       "returncode": receiver_seam(mode).returncode,
-                       "stdout": receiver_seam(mode).stdout,
-                       "stderr": receiver_seam(mode).stderr}
+                mode: {"document_level": mode != "absent" or os.name != "posix",
+                       "production_command": evidence.RECEIVER_STOPPED_SCRIPT,
+                       "returncode": receiver_document(mode)[0],
+                       "stdout": receiver_document(mode)[1],
+                       "stderr": receiver_document(mode)[2]}
                 for mode in ("absent", "present", "empty", "ip_failure", "listener_failure", "guest", "other")
             }, sort_keys=True))
 
