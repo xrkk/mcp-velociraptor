@@ -9,7 +9,7 @@ import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -175,7 +175,7 @@ class FileDeliveryContractTests(unittest.TestCase):
         backend.uploads = [natural, dict(natural), other]
         result = self.service(backend).list_flow_files("F.file")
         self.assertEqual(
-            [Path(item.original_path).name for item in result.data],
+            [PureWindowsPath(item.original_path).name for item in result.data],
             ["natural.idx", "other.bin"],
         )
         self.assertEqual(result.warnings, [])
