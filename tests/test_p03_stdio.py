@@ -186,8 +186,10 @@ class RealBridgeDynamicTests(unittest.TestCase):
         )
         self.assertEqual(initialized.server_info.name, "velociraptor-mcp")
         names = {tool.name for tool in first}
-        self.assertEqual(names, set(APPROVED_WINDOWS_ARTIFACTS) | FIXED_TOOLS)
-        self.assertEqual(len(names), 130)
+        self.assertEqual(names, set(APPROVED_WINDOWS_ARTIFACTS) | FIXED_TOOLS | {
+            "transfer_capabilities", "transfer_begin", "transfer_status",
+            "transfer_chunk", "transfer_finish", "transfer_abort"})
+        self.assertEqual(len(names), 136)
         self.assertTrue(names.isdisjoint(REMOVED_TOOLS))
         self.assertFalse(any(name.startswith(("linux_", "macos_", "windows_")) for name in names))
         self.assertEqual(tool_list_digest(first), tool_list_digest(second))

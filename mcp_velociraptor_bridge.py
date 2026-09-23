@@ -1,8 +1,8 @@
-"""Velociraptor MCP bridge: single server, dual transport, 130 tools.
+"""Velociraptor MCP bridge: single server, dual transport, 136 tools.
 
 The bridge constructs exactly one MCPServer instance and registers the
-complete 130-tool face (118 dynamic Windows artifacts + 12 fixed lifecycle
-tools) through it.  Both the formal Streamable HTTP entry and the internal
+complete 136-tool face (118 dynamic Windows artifacts + 12 fixed lifecycle
+tools + 6 local transfer tools) through it. Both the formal Streamable HTTP entry and the internal
 testing stdio adapter share this one registration and business implementation.
 """
 
@@ -27,6 +27,7 @@ from velociraptor_transport import (
     resolve_transport_config,
     run_formal_http,
 )
+from velo_transfer.mcp_tools import TRANSFER_TOOL_NAMES, register_transfer_tools
 
 
 # Keep stdio responses clean by suppressing chatty MCP library info logs.
@@ -59,7 +60,9 @@ def create_server() -> MCPServer:
         velociraptor_backend,
         download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
     )
-    validate_combined_registry(server, specs)
+    transfer_service = register_transfer_tools(server)
+    validate_combined_registry(server, specs, transfer_names=TRANSFER_TOOL_NAMES)
+    server._guest_transfer_tools = transfer_service
     return server
 
 
@@ -99,13 +102,27 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
         )
         return 2
 
-    if config.mode == FORMAL_TRANSPORT:
-        if on_ready is None and stop_requested is None:
-            run_formal_http(server, config)
+    shutdown_failed = False
+    try:
+        if config.mode == FORMAL_TRANSPORT:
+            if on_ready is None and stop_requested is None:
+                run_formal_http(server, config)
+            else:
+                run_formal_http(server, config, on_ready=on_ready, stop_requested=stop_requested)
         else:
-            run_formal_http(server, config, on_ready=on_ready, stop_requested=stop_requested)
-    else:
-        server.run("stdio")
+            server.run("stdio")
+    finally:
+        transfer_service = getattr(server, "_guest_transfer_tools", None)
+        if transfer_service is not None:
+            try:
+                transfer_service.shutdown()
+            except Exception:
+                shutdown_failed = True
+                if on_failure is not None:
+                    on_failure("TRANSFER_SHUTDOWN_FAILED")
+                print("Velociraptor MCP transfer shutdown failed", file=sys.stderr)
+    if shutdown_failed:
+        return 2
     return 0
 
 

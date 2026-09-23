@@ -111,7 +111,7 @@ class RealBridgeStdioTests(unittest.TestCase):
         self.assertNotIn("list_windows_artifacts", names)
         self.assertNotIn("client_info", names)
         self.assertIn("get_flow_status", names)
-        self.assertEqual(len(names), 130)
+        self.assertEqual(len(names), 136)
         dynamic, lifecycle = results
         self.assertFalse(dynamic.is_error)
         self.assertEqual(dynamic.content, [])

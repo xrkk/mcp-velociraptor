@@ -1290,13 +1290,16 @@ def register_fixed_tools(
 
 
 def validate_combined_registry(
-    server: MCPServer, specs: Sequence[ArtifactSpec]
+    server: MCPServer, specs: Sequence[ArtifactSpec], *, transfer_names: Sequence[str] = ()
 ) -> None:
-    expected = {spec.name for spec in specs}.union(FIXED_TOOL_NAMES)
+    expected = {spec.name for spec in specs}.union(FIXED_TOOL_NAMES, transfer_names)
+    if len(expected) != len(specs) + len(FIXED_TOOL_NAMES) + len(transfer_names):
+        raise ArtifactRegistryError("combined tool name conflict")
+    total = FINAL_TOOL_COUNT + len(transfer_names)
     tools = server._tool_manager._tools
-    if len(tools) != FINAL_TOOL_COUNT or set(tools) != expected:
+    if len(tools) != total or set(tools) != expected:
         raise ArtifactRegistryError(
-            f"combined tool registry mismatch: expected {FINAL_TOOL_COUNT}, actual {len(tools)}"
+            f"combined tool registry mismatch: expected {total}, actual {len(tools)}"
         )
     for name in sorted(expected):
         tool = server._tool_manager.get_tool(name)

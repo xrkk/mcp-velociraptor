@@ -1,7 +1,7 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
-The local guest file transfer engine is documented in [docs/transfer-guest-engine.md](docs/transfer-guest-engine.md). A protected `VELOCIRAPTOR_TRANSFER_POLICY` enables its fixed `python -m velo_transfer.guest_cli --request-file <absolute-file>` helper. Its six Python operations are not yet registered as MCP tools; Windows VM and host coordinator acceptance follow separately.
+The current local bridge registers 136 tools: the original 118 dynamic and 12 fixed tools, plus six guest transfer tools (`transfer_capabilities`, `transfer_begin`, `transfer_status`, `transfer_chunk`, `transfer_finish`, `transfer_abort`). See [transfer MCP contract](docs/transfer-mcp.md) and [guest engine](docs/transfer-guest-engine.md). A protected `VELOCIRAPTOR_TRANSFER_POLICY` enables local transfer operations; without it the six tools remain listed, capabilities reports disabled, and the original 130 tools remain available. Windows VM and host coordinator acceptance follow separately.
 
 > Development status: P05/P06/P07 acceptance reopened; remediation is not yet accepted.
 > The previous acceptance snapshots have been removed by the operator. The
@@ -12,7 +12,7 @@ The local guest file transfer engine is documented in [docs/transfer-guest-engin
 > definition hashes are checked against the connected root organization before
 > stdio starts. Twelve fixed tools provide bounded VQL, single-endpoint Hunt,
 > Flow lifecycle, one-file collection/download, basic triage, and process
-> termination. All 130 schemas are validated together before stdio starts.
+> termination. The current 136-schema combination is validated before stdio starts.
 > The project also supplies locked test-only dependencies, deterministic Windows
 > fixture, and an indexed official-SDK scenario runner used for repeatable
 > acceptance on the post-install VM snapshot.
@@ -129,7 +129,7 @@ including verbose collection progress output with artifact names and row counts.
 
 ### 4. Tool Response Format
 
-All 130 tools return MCP-native `structuredContent`, an empty
+The original 130 tools return MCP-native `structuredContent`, an empty
 `content` list, and the protocol `isError` flag. Success models contain only
 the documented operation fields, real backend identifiers/states, and public
 warnings. Errors use stable

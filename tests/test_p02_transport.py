@@ -456,7 +456,7 @@ class SharedRegistrationTransportTests(unittest.TestCase):
             bridge.MCPServer = original
             dynamic.MCPServer = original
         self.assertEqual(constructed.count("velociraptor-mcp"), 1)
-        self.assertEqual(len(server._tool_manager._tools), 130)
+        self.assertEqual(len(server._tool_manager._tools), 136)
 
     def test_stdio_and_http_share_identical_toolset(self):
         _, stdio_tools, stdio_results, stderr = _stdio_session(
@@ -469,7 +469,7 @@ class SharedRegistrationTransportTests(unittest.TestCase):
             http_map = _tool_schema_map(http_tools)
             self.assertEqual(set(stdio_map) - set(http_map), set())
             self.assertEqual(set(http_map) - set(stdio_map), set())
-            self.assertEqual(len(stdio_map), 130)
+            self.assertEqual(len(stdio_map), 136)
             self.assertEqual(stdio_map, http_map)
             for stdio_result, http_result in zip(stdio_results, http_results):
                 self.assertFalse(stdio_result.is_error)
