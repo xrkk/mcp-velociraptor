@@ -1,5 +1,7 @@
 # Velociraptor Agent POC
 
+The separate local guest transfer helper is described in [guest engine documentation](../docs/transfer-guest-engine.md). It uses a protected policy and a fixed request-file entry point; the historical agent prototype here does not register the six transfer operations as MCP tools.
+
 > Historical prototype only. `agent_poc` is not supported by the new
 > Windows-only MCP bridge contract and is excluded from the current acceptance
 > scope. The commands and architecture below document the existing prototype;

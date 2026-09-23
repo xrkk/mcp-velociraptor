@@ -168,11 +168,25 @@ def _check_collisions(names: list[str], directories: set[str] | None = None) -> 
             raise Error("path_collision")
 
 
-def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
-          evidence_refs: list[str]) -> dict:
-    if not root.is_absolute() or not root.is_dir():
+def source_root_for(path: Path, roots: str | Path | list[str | Path]) -> Path:
+    choices = [Path(roots)] if isinstance(roots, (str, Path)) else [Path(x) for x in roots]
+    if not choices or any(not root.is_absolute() or not root.is_dir() for root in choices):
         raise Error("invalid_source_root")
-    _no_link(root)
+    matches = [root for root in choices if path.is_relative_to(root)]
+    if not matches:
+        raise Error("path_outside_root")
+    root = max(matches, key=lambda item: len(item.parts))
+    safe_chain(path, root)
+    return root
+
+
+def _scan(root: str | Path | list[str | Path], sources: list[dict[str, str]], budget: Budget,
+          evidence_refs: list[str]) -> dict:
+    roots = [Path(root)] if isinstance(root, (str, Path)) else [Path(x) for x in root]
+    if not roots or any(not item.is_absolute() or not item.is_dir() for item in roots):
+        raise Error("invalid_source_root")
+    for item in roots:
+        _no_link(item)
     if not isinstance(sources, list) or not sources:
         raise Error("sources_required")
     if len(sources) > budget.max_files:
@@ -189,13 +203,13 @@ def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
     logical = 0
     metadata = len(canonical_json({"schema": SCHEMA, "evidence_refs": evidence_refs}))
 
-    def add(path: Path, relative: str) -> None:
+    def add(path: Path, relative: str, source_root: Path) -> None:
         nonlocal logical, metadata
         budget.check()
         if len(entries) + 1 > budget.max_files:
             raise Error("file_count_exceeded")
         relative = check_relative(relative)
-        safe_chain(path, root)
+        safe_chain(path, source_root)
         info = _no_link(path)
         if stat.S_ISDIR(info.st_mode):
             entry = {"path": relative, "type": "directory",
@@ -203,7 +217,7 @@ def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
         elif stat.S_ISREG(info.st_mode):
             if logical + info.st_size > budget.max_logical_bytes:
                 raise Error("logical_budget_exceeded")
-            identity, digest = _hash_file(path, root, budget)
+            identity, digest = _hash_file(path, source_root, budget)
             logical += identity["size"]
             entry = {"path": relative, "type": "file", "size": identity["size"],
                      "sha256": digest, "identity": identity}
@@ -224,7 +238,7 @@ def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
                             child = next(children)
                         except StopIteration:
                             break
-                        add(Path(child.path), relative + "/" + child.name)
+                        add(Path(child.path), relative + "/" + child.name, source_root)
             except OSError as exc:
                 raise Error("source_unavailable") from exc
             if file_identity(_no_link(path)) != before:
@@ -239,7 +253,7 @@ def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
         relative = check_relative(spec["relative_path"])
         if not path.is_absolute():
             raise Error("invalid_source_path")
-        add(path, relative)
+        add(path, relative, source_root_for(path, roots))
     # Parents of explicit relative paths are represented as virtual directories.
     known = set(names)
     for name in list(names):
@@ -264,16 +278,16 @@ def _scan(root: Path, sources: list[dict[str, str]], budget: Budget,
     return result
 
 
-def capture_sources(source_root: str | Path, sources: list[dict[str, str]],
+def capture_sources(source_root: str | Path | list[str | Path], sources: list[dict[str, str]],
                     budget: Budget, evidence_refs: list[str] | None = None) -> dict:
     """Capture fixed ordinary-byte source inventory; caller proves production stopped."""
-    return _scan(Path(source_root), sources, budget, evidence_refs or [])
+    return _scan(source_root, sources, budget, evidence_refs or [])
 
 
-def validate_sources(source_root: str | Path, sources: list[dict[str, str]],
+def validate_sources(source_root: str | Path | list[str | Path], sources: list[dict[str, str]],
                      manifest: dict, budget: Budget) -> str:
     """Repeat full enumeration and hashing, including newly added directory members."""
-    current = _scan(Path(source_root), sources, budget, manifest["evidence_refs"])
+    current = _scan(source_root, sources, budget, manifest["evidence_refs"])
     if current != manifest:
         raise Error("source_changed")
     return digest_json(current)

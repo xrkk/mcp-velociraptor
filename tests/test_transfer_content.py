@@ -80,6 +80,19 @@ class ContentTests(unittest.TestCase):
             member = archive.getinfo("payload/目录/子/数据.bin")
             self.assertEqual(member.extract_version, 45)  # force_zip64 writes ZIP64 local header
 
+    def test_multiple_explicit_source_roots_without_common_ancestor(self):
+        second = self.root / "second"
+        second.mkdir()
+        (self.source / "first.txt").write_bytes(b"first")
+        (second / "second.txt").write_bytes(b"second")
+        specs = [{"absolute_path": str(self.source / "first.txt"), "relative_path": "one/first.txt"},
+                 {"absolute_path": str(second / "second.txt"), "relative_path": "two/second.txt"}]
+        roots = [self.source, second]
+        manifest = capture_sources(roots, specs, self.budget)
+        package = create_bundle(roots, specs, manifest, self.work / "multi.zip", self.work, self.budget)
+        self.assertEqual(validate_sources(roots, specs, manifest, self.budget), package["manifest_sha256"])
+        self.assert_code("path_outside_root", lambda: capture_sources([self.source], specs, self.budget))
+
     def test_source_mutation_replace_and_new_directory_member(self):
         folder = self.source / "dir"
         folder.mkdir()

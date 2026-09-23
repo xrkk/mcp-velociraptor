@@ -14,7 +14,7 @@ from typing import Callable
 from .errors import TransferContentError as Error
 from .manifest import (BLOCK_SIZE, Budget, SCHEMA, _check_collisions, _hash_file,
                        _no_link, canonical_json, check_relative, directory_identity,
-                       file_identity, safe_chain, validate_sources)
+                       file_identity, safe_chain, source_root_for, validate_sources)
 
 MANIFEST_MEMBER = "manifest.json"
 PAYLOAD_PREFIX = "payload/"
@@ -72,10 +72,10 @@ def _hash_path(path: Path, budget: Budget) -> tuple[int, str]:
     return size, hasher.hexdigest()
 
 
-def create_bundle(source_root: str | Path, sources: list[dict[str, str]], manifest: dict,
+def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict[str, str]], manifest: dict,
                   bundle_path: str | Path, work_root: str | Path, budget: Budget) -> dict:
     """Build a fresh ZIP64 package with one manifest and exact payload members."""
-    source_root, bundle_path, work_root = map(Path, (source_root, bundle_path, work_root))
+    bundle_path, work_root = map(Path, (bundle_path, work_root))
     safe_chain(bundle_path.parent, work_root)
     safe_chain(bundle_path, work_root, allow_missing_leaf=True)
     if bundle_path.exists() or bundle_path.is_symlink():
@@ -103,7 +103,7 @@ def create_bundle(source_root: str | Path, sources: list[dict[str, str]], manife
                         archive.writestr(name + "/", b"")
                         continue
                     source = _source_path(entry, sources)
-                    safe_chain(source, source_root)
+                    safe_chain(source, source_root_for(source, source_root))
                     before = _no_link(source)
                     if file_identity(before) != entry["identity"] or not stat.S_ISREG(before.st_mode):
                         raise Error("source_changed")

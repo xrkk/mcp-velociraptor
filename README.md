@@ -1,6 +1,8 @@
 # Velociraptor MCP
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
+The local guest file transfer engine is documented in [docs/transfer-guest-engine.md](docs/transfer-guest-engine.md). A protected `VELOCIRAPTOR_TRANSFER_POLICY` enables its fixed `python -m velo_transfer.guest_cli --request-file <absolute-file>` helper. Its six Python operations are not yet registered as MCP tools; Windows VM and host coordinator acceptance follow separately.
+
 > Development status: P05/P06/P07 acceptance reopened; remediation is not yet accepted.
 > The previous acceptance snapshots have been removed by the operator. The
 > retained fixed-IP baseline is being requalified; do not run historical
