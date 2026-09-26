@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "status": "formal-signed-normative-self-review-passed-product-unverified",
+  "change_id": "PLAN-CHANGE-024",
+  "group_id": "CURRENT-TRANSFER-001-R02",
+  "cumulative": {
+    "id": 68,
+    "source": "2026.09.14-08 transfer authorization plus 2026-09-26 T002 product direction",
+    "formal_ids": [
+      "REQ-027",
+      "REQ-028",
+      "CON-016",
+      "NON-014",
+      "RACC-027",
+      "RACC-028",
+      "RACC-029"
+    ],
+    "requirement_anchor": "## 累计有效结论/68"
+  },
+  "formal_mapping": [
+    {
+      "formal_id": "REQ-027",
+      "out_ids": [
+        "OUT-055"
+      ],
+      "acc_ids": [
+        "ACC-027"
+      ],
+      "owner_pxx": [
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "REQ-028",
+      "out_ids": [
+        "OUT-056"
+      ],
+      "acc_ids": [
+        "ACC-028"
+      ],
+      "owner_pxx": [
+        "P05",
+        "P06",
+        "P07"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "CON-016",
+      "out_ids": [
+        "OUT-057"
+      ],
+      "acc_ids": [
+        "ACC-029"
+      ],
+      "owner_pxx": [
+        "P02",
+        "P05",
+        "P06",
+        "P07"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "NON-014",
+      "out_ids": [
+        "OUT-055"
+      ],
+      "acc_ids": [
+        "ACC-027"
+      ],
+      "owner_pxx": [
+        "P02",
+        "P03",
+        "P05",
+        "P06"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "RACC-027",
+      "out_ids": [
+        "OUT-055"
+      ],
+      "acc_ids": [
+        "ACC-027"
+      ],
+      "owner_pxx": [
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "RACC-028",
+      "out_ids": [
+        "OUT-056"
+      ],
+      "acc_ids": [
+        "ACC-028"
+      ],
+      "owner_pxx": [
+        "P05",
+        "P06",
+        "P07"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    },
+    {
+      "formal_id": "RACC-029",
+      "out_ids": [
+        "OUT-057"
+      ],
+      "acc_ids": [
+        "ACC-029"
+      ],
+      "owner_pxx": [
+        "P02",
+        "P05",
+        "P06",
+        "P07"
+      ],
+      "cumulative_ids": [
+        68
+      ]
+    }
+  ],
+  "output_mapping": [
+    {
+      "out_id": "OUT-055",
+      "acc_id": "ACC-027",
+      "formal_ids": [
+        "REQ-027",
+        "NON-014",
+        "RACC-027"
+      ]
+    },
+    {
+      "out_id": "OUT-056",
+      "acc_id": "ACC-028",
+      "formal_ids": [
+        "REQ-028",
+        "RACC-028"
+      ]
+    },
+    {
+      "out_id": "OUT-057",
+      "acc_id": "ACC-029",
+      "formal_ids": [
+        "CON-016",
+        "RACC-029"
+      ]
+    }
+  ]
+}

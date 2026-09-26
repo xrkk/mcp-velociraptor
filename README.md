@@ -5,6 +5,10 @@ The current local bridge registers 136 tools: the original 118 dynamic and 12 fi
 
 The host foreground entry is `python -m velo_transfer --spec /absolute/path/to/request.json`; use the original spec path, transfer ID and intent with `resume:true` to resume or add `--abort` to cancel. A locally proven transfer now reports `complete` with exit code 0; a host cleanup fault reports `cleanup_pending` with exit code 5 and retains evidence for recovery. See [host coordinator](docs/transfer-host-coordinator.md) and [host cleanup](docs/transfer-host-cleanup.md) for the result path, ownership and phase limits. Local tests use a guest substitute; they are not VM acceptance.
 
+The acceptance plan keeps two denominators: the original DFIR slice is 118 dynamic plus 12 fixed registrations, with PacketCapture recorded as one exclusion, 129 real individual successes, and 645 valid relations across five real scenarios. The six local transfer tools require their own PC024 push/pull, failure, recovery and global-result matrix; they are not multiplied by five. A 136-name/schema listing or a local `complete` result does not establish Windows VM or full product acceptance. Formal global COMPLETE additionally requires a physically verified destination, both owned cleanups, bound receipts and a durable journal/result. The original 130-tool startup conditions remain available without transfer policy; transfer actions enforce protected policy, VM identity and ACL, while HTTP keeps Bearer/Host/Origin checks. Program code verifies chunk, package, source, destination and receipt hashes internally; AI callers do not need extra before/after SHA commands or full hash lists.
+
+The Snapshot 186/188 passages below describe earlier acceptance generations; current P05/P06 qualification must use the actual activated canonical source and its verified restore evidence. No historical recovery command or local substitute test opens that gate.
+
 > Development status: P05/P06/P07 acceptance reopened; remediation is not yet accepted.
 > The previous acceptance snapshots have been removed by the operator. The
 > retained fixed-IP baseline is being requalified; do not run historical

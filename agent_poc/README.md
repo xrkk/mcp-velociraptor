@@ -4,6 +4,10 @@ The current bridge now registers six local guest transfer MCP tools alongside it
 
 Host transfer uses `python -m velo_transfer --spec /absolute/path/to/request.json`, with the original spec and `resume:true` for recovery or `--abort` for cancellation. Locally proven completion returns `complete` (exit 0); a host cleanup fault retains evidence as `cleanup_pending` (exit 5). See [host coordinator](../docs/transfer-host-coordinator.md) and [host cleanup](../docs/transfer-host-cleanup.md). This historical agent is not the caller for that command.
 
+PC024 keeps the original DFIR 118 dynamic plus 12 fixed registrations separate from the six transfer tools: PacketCapture is one recorded exclusion, 129 original tools require real individual success and 645 five-scenario relations, while transfer uses its own real push/pull, failure and global-result matrix. The locally proven host `complete` path preserves its existing CLI/cleanup description above; formal COMPLETE also requires destination proof, both owned cleanups, bound receipts and durable result evidence on the Windows path. The historical agent remains outside both acceptances. Missing transfer policy must not tighten the original 130-tool startup gate; transfer policy/ACL/VM identity and HTTP Bearer/Host/Origin checks remain required for the added path, with internal integrity hashes retained.
+
+Snapshot 186/188 references below describe historical generations. Current P05/P06 use only the canonical activated source and verified restore evidence; no local guest substitute or old snapshot record qualifies this agent or transfer path.
+
 > Historical prototype only. `agent_poc` is not supported by the new
 > Windows-only MCP bridge contract and is excluded from the current acceptance
 > scope. The commands and architecture below document the existing prototype;

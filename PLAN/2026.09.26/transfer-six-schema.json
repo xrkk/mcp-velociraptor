@@ -1,0 +1,1133 @@
+{
+  "transfer_abort": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "transfer_id": {
+          "minLength": 1,
+          "title": "Transfer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "request_digest"
+      ],
+      "title": "transfer_abortArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  },
+  "transfer_begin": {
+    "inputSchema": {
+      "$defs": {
+        "Budget": {
+          "additionalProperties": false,
+          "properties": {
+            "max_chunk_bytes": {
+              "exclusiveMinimum": 0,
+              "title": "Max Chunk Bytes",
+              "type": "integer"
+            },
+            "max_duration_seconds": {
+              "exclusiveMinimum": 0,
+              "title": "Max Duration Seconds",
+              "type": "integer"
+            },
+            "max_files": {
+              "exclusiveMinimum": 0,
+              "title": "Max Files",
+              "type": "integer"
+            },
+            "max_logical_bytes": {
+              "minimum": 0,
+              "title": "Max Logical Bytes",
+              "type": "integer"
+            },
+            "max_metadata_bytes": {
+              "exclusiveMinimum": 0,
+              "title": "Max Metadata Bytes",
+              "type": "integer"
+            },
+            "max_package_bytes": {
+              "exclusiveMinimum": 0,
+              "title": "Max Package Bytes",
+              "type": "integer"
+            },
+            "min_free_bytes": {
+              "minimum": 0,
+              "title": "Min Free Bytes",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "max_files",
+            "max_metadata_bytes",
+            "max_logical_bytes",
+            "max_package_bytes",
+            "min_free_bytes",
+            "max_chunk_bytes",
+            "max_duration_seconds"
+          ],
+          "title": "Budget",
+          "type": "object"
+        },
+        "Destination": {
+          "additionalProperties": false,
+          "properties": {
+            "canonical_path": {
+              "minLength": 1,
+              "title": "Canonical Path",
+              "type": "string"
+            },
+            "endpoint": {
+              "enum": [
+                "host",
+                "guest"
+              ],
+              "title": "Endpoint",
+              "type": "string"
+            },
+            "identity": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "maxProperties": 16,
+              "minProperties": 1,
+              "title": "Identity",
+              "type": "object"
+            }
+          },
+          "required": [
+            "endpoint",
+            "identity",
+            "canonical_path"
+          ],
+          "title": "Destination",
+          "type": "object"
+        },
+        "Evidence": {
+          "additionalProperties": false,
+          "properties": {
+            "producer_complete": {
+              "title": "Producer Complete",
+              "type": "boolean"
+            },
+            "producer_quiescent": {
+              "title": "Producer Quiescent",
+              "type": "boolean"
+            },
+            "references": {
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "title": "References",
+              "type": "array"
+            }
+          },
+          "required": [
+            "producer_complete",
+            "producer_quiescent",
+            "references"
+          ],
+          "title": "Evidence",
+          "type": "object"
+        },
+        "Package": {
+          "additionalProperties": false,
+          "properties": {
+            "manifest_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Manifest Sha256",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            },
+            "size": {
+              "minimum": 0,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "size",
+            "sha256",
+            "manifest_sha256"
+          ],
+          "title": "Package",
+          "type": "object"
+        },
+        "Source": {
+          "additionalProperties": false,
+          "properties": {
+            "absolute_path": {
+              "minLength": 1,
+              "title": "Absolute Path",
+              "type": "string"
+            },
+            "relative_path": {
+              "minLength": 1,
+              "title": "Relative Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "absolute_path",
+            "relative_path"
+          ],
+          "title": "Source",
+          "type": "object"
+        },
+        "TransferRequest": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "package"
+                  ]
+                },
+                "properties": {
+                  "expected_destination": {
+                    "properties": {
+                      "endpoint": {
+                        "const": "host"
+                      }
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "direction": {
+                    "const": "push"
+                  }
+                },
+                "required": [
+                  "direction"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "expected_destination": {
+                    "properties": {
+                      "endpoint": {
+                        "const": "guest"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "package"
+                ]
+              }
+            }
+          ],
+          "properties": {
+            "budget": {
+              "$ref": "#/$defs/Budget"
+            },
+            "direction": {
+              "enum": [
+                "pull",
+                "push"
+              ],
+              "title": "Direction",
+              "type": "string"
+            },
+            "evidence_context": {
+              "$ref": "#/$defs/Evidence"
+            },
+            "expected_destination": {
+              "$ref": "#/$defs/Destination"
+            },
+            "expected_vm_identity": {
+              "$ref": "#/$defs/VmIdentity"
+            },
+            "package": {
+              "$ref": "#/$defs/Package"
+            },
+            "protocol_version": {
+              "const": "velo.transfer.v1",
+              "title": "Protocol Version",
+              "type": "string"
+            },
+            "request_digest": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Request Digest",
+              "type": "string"
+            },
+            "sources": {
+              "items": {
+                "$ref": "#/$defs/Source"
+              },
+              "minItems": 1,
+              "title": "Sources",
+              "type": "array"
+            },
+            "transfer_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol_version",
+            "transfer_id",
+            "request_digest",
+            "direction",
+            "sources",
+            "expected_destination",
+            "expected_vm_identity",
+            "evidence_context",
+            "budget"
+          ],
+          "title": "TransferRequest",
+          "type": "object"
+        },
+        "VmIdentity": {
+          "additionalProperties": false,
+          "properties": {
+            "boot_identity": {
+              "minLength": 1,
+              "title": "Boot Identity",
+              "type": "string"
+            },
+            "vm_epoch": {
+              "maxLength": 256,
+              "minLength": 1,
+              "title": "Vm Epoch",
+              "type": "string"
+            },
+            "vm_uuid": {
+              "minLength": 1,
+              "title": "Vm Uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "vm_uuid",
+            "boot_identity",
+            "vm_epoch"
+          ],
+          "title": "VmIdentity",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/TransferRequest"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "transfer_beginArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  },
+  "transfer_capabilities": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "transfer_capabilitiesArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  },
+  "transfer_chunk": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "data_base64",
+            "chunk_sha256"
+          ]
+        },
+        {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "data_base64"
+                ]
+              },
+              {
+                "required": [
+                  "chunk_sha256"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "chunk_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "count": {
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "data_base64": {
+          "type": "string"
+        },
+        "offset": {
+          "minimum": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "transfer_id": {
+          "minLength": 1,
+          "title": "Transfer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "request_digest",
+        "offset",
+        "count"
+      ],
+      "title": "transfer_chunkArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  },
+  "transfer_finish": {
+    "inputSchema": {
+      "$defs": {
+        "Destination": {
+          "additionalProperties": false,
+          "properties": {
+            "canonical_path": {
+              "minLength": 1,
+              "title": "Canonical Path",
+              "type": "string"
+            },
+            "endpoint": {
+              "enum": [
+                "host",
+                "guest"
+              ],
+              "title": "Endpoint",
+              "type": "string"
+            },
+            "identity": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "maxProperties": 16,
+              "minProperties": 1,
+              "title": "Identity",
+              "type": "object"
+            }
+          },
+          "required": [
+            "endpoint",
+            "identity",
+            "canonical_path"
+          ],
+          "title": "Destination",
+          "type": "object"
+        },
+        "DirectoryIdentity": {
+          "additionalProperties": false,
+          "properties": {
+            "device": {
+              "minimum": 0,
+              "title": "Device",
+              "type": "integer"
+            },
+            "inode": {
+              "minimum": 0,
+              "title": "Inode",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "device",
+            "inode"
+          ],
+          "title": "DirectoryIdentity",
+          "type": "object"
+        },
+        "PrepareReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/ProtocolBinding"
+            },
+            "identity_digest": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Identity Digest",
+              "type": "string"
+            },
+            "prepare_id": {
+              "minLength": 1,
+              "title": "Prepare Id",
+              "type": "string"
+            },
+            "prepared": {
+              "const": true,
+              "title": "Prepared",
+              "type": "boolean"
+            },
+            "type": {
+              "const": "prepare",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "binding",
+            "prepare_id",
+            "identity_digest",
+            "prepared"
+          ],
+          "title": "PrepareReceipt",
+          "type": "object"
+        },
+        "ProtocolBinding": {
+          "additionalProperties": false,
+          "properties": {
+            "boot_identity": {
+              "title": "Boot Identity",
+              "type": "string"
+            },
+            "direction": {
+              "enum": [
+                "pull",
+                "push"
+              ],
+              "title": "Direction",
+              "type": "string"
+            },
+            "manifest_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Manifest Sha256",
+              "type": "string"
+            },
+            "package_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Package Sha256",
+              "type": "string"
+            },
+            "package_size": {
+              "minimum": 0,
+              "title": "Package Size",
+              "type": "integer"
+            },
+            "policy_id": {
+              "title": "Policy Id",
+              "type": "string"
+            },
+            "protocol_version": {
+              "const": "velo.transfer.v1",
+              "title": "Protocol Version",
+              "type": "string"
+            },
+            "request_digest": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Request Digest",
+              "type": "string"
+            },
+            "transfer_id": {
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "vm_epoch": {
+              "title": "Vm Epoch",
+              "type": "string"
+            },
+            "vm_uuid": {
+              "title": "Vm Uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "protocol_version",
+            "transfer_id",
+            "request_digest",
+            "direction",
+            "vm_uuid",
+            "boot_identity",
+            "vm_epoch",
+            "policy_id",
+            "package_size",
+            "package_sha256",
+            "manifest_sha256"
+          ],
+          "title": "ProtocolBinding",
+          "type": "object"
+        },
+        "PublicationReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/ProtocolBinding"
+            },
+            "destination": {
+              "$ref": "#/$defs/Destination"
+            },
+            "directory_identity": {
+              "$ref": "#/$defs/DirectoryIdentity"
+            },
+            "manifest_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Manifest Sha256",
+              "type": "string"
+            },
+            "prepare_receipt_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Prepare Receipt Sha256",
+              "type": "string"
+            },
+            "publication_id": {
+              "minLength": 1,
+              "title": "Publication Id",
+              "type": "string"
+            },
+            "type": {
+              "const": "publication",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "binding",
+            "prepare_receipt_sha256",
+            "destination",
+            "manifest_sha256",
+            "directory_identity",
+            "publication_id"
+          ],
+          "title": "PublicationReceipt",
+          "type": "object"
+        },
+        "SourceValidationReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/ProtocolBinding"
+            },
+            "identity_digest": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Identity Digest",
+              "type": "string"
+            },
+            "prepare_receipt_sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Prepare Receipt Sha256",
+              "type": "string"
+            },
+            "type": {
+              "const": "source_validation",
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "binding",
+            "prepare_receipt_sha256",
+            "identity_digest"
+          ],
+          "title": "SourceValidationReceipt",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "prepare"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "prepare_receipt"
+                  ]
+                },
+                {
+                  "required": [
+                    "source_validation_receipt"
+                  ]
+                },
+                {
+                  "required": [
+                    "publication_receipt"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "commit"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "publication_receipt"
+              ]
+            },
+            "required": [
+              "prepare_receipt",
+              "source_validation_receipt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "release"
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "source_validation_receipt"
+              ]
+            },
+            "required": [
+              "prepare_receipt",
+              "publication_receipt"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "prepare",
+            "commit",
+            "release"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "prepare_receipt": {
+          "$ref": "#/$defs/PrepareReceipt"
+        },
+        "publication_receipt": {
+          "$ref": "#/$defs/PublicationReceipt"
+        },
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "source_validation_receipt": {
+          "$ref": "#/$defs/SourceValidationReceipt"
+        },
+        "transfer_id": {
+          "minLength": 1,
+          "title": "Transfer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "request_digest",
+        "action"
+      ],
+      "title": "transfer_finishArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  },
+  "transfer_status": {
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "request_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "transfer_id": {
+          "minLength": 1,
+          "title": "Transfer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transfer_id",
+        "request_digest"
+      ],
+      "title": "transfer_statusArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "result": {
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "success"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "pattern": "^[a-z][a-z0-9_]{0,79}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "type": "object"
+            },
+            "schema": {
+              "const": "velo.transfer.mcp.response.v1"
+            },
+            "status": {
+              "const": "error"
+            }
+          },
+          "required": [
+            "schema",
+            "status",
+            "error"
+          ],
+          "type": "object"
+        }
+      ],
+      "type": "object"
+    }
+  }
+}
