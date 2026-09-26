@@ -3,6 +3,8 @@ Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP
 
 The current local bridge registers 136 tools: the original 118 dynamic and 12 fixed tools, plus six guest transfer tools (`transfer_capabilities`, `transfer_begin`, `transfer_status`, `transfer_chunk`, `transfer_finish`, `transfer_abort`). See [transfer MCP contract](docs/transfer-mcp.md) and [guest engine](docs/transfer-guest-engine.md). A protected `VELOCIRAPTOR_TRANSFER_POLICY` enables local transfer operations; without it the six tools remain listed, capabilities reports disabled, and the original 130 tools remain available. Windows VM and host coordinator acceptance follow separately.
 
+The host foreground entry is `python -m velo_transfer --spec /absolute/path/to/request.json`; use the original spec path, transfer ID and intent with `resume:true` to resume or add `--abort` to cancel. A successful transfer prefix currently reports `cleanup_pending` with exit code 5 until host cleanup and global completion are implemented. See [host coordinator](docs/transfer-host-coordinator.md) for the result path, evidence and phase limits. Local coordinator tests use a guest substitute; they are not VM acceptance.
+
 > Development status: P05/P06/P07 acceptance reopened; remediation is not yet accepted.
 > The previous acceptance snapshots have been removed by the operator. The
 > retained fixed-IP baseline is being requalified; do not run historical
