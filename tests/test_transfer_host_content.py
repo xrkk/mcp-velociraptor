@@ -31,6 +31,7 @@ class HostContentTests(unittest.TestCase):
         (self.source / "子").mkdir(mode=0o700)
         (self.source / "子" / "文件.txt").write_bytes(b"benign bytes")
         (self.source / "empty").mkdir(mode=0o700)
+        (self.source / "empty.txt").write_bytes(b"")
         self.second = self.root / "second.txt"
         self.second.write_bytes(b"other benign bytes")
         self.sibling = self.root / "unlisted.txt"
@@ -133,7 +134,10 @@ class HostContentTests(unittest.TestCase):
             manifest = journal.read_evidence(first["manifest_ref"])
             self.assertEqual(manifest["evidence_refs"], ["producer-ref"])
             self.assertEqual({e["path"] for e in manifest["entries"]},
-                {"payload", "payload/子", "payload/子/文件.txt", "payload/empty", "more.txt"})
+                {"payload", "payload/子", "payload/子/文件.txt", "payload/empty",
+                 "payload/empty.txt", "more.txt"})
+            self.assertEqual(next(e for e in manifest["entries"]
+                                  if e["path"] == "payload/empty.txt")["size"], 0)
             first["package"]["size"] = -1
             self.assertGreater(content.prepare_push()["package"]["size"], 0)
             self.assertEqual(journal.load()["data"]["unrelated"], {"keep": "original"})
@@ -205,6 +209,7 @@ class HostContentTests(unittest.TestCase):
             stage = Path(first["staging"]["staging_directory"])
             self.assertEqual((stage / "payload" / "子" / "文件.txt").read_bytes(), b"benign bytes")
             self.assertTrue((stage / "payload" / "empty").is_dir())
+            self.assertEqual((stage / "payload" / "empty.txt").read_bytes(), b"")
             self.assertEqual(first["package"]["sha256"], package["sha256"])
             self.assertEqual(first, content.prepare_pull())
             first["staging"]["staging_identity"]["inode"] = -1
@@ -238,6 +243,27 @@ class HostContentTests(unittest.TestCase):
             data["publish_intent"] = {"fixture": True}
             resumed.save(resumed.load()["revision"], data)
             self.assert_code("publication_already_started", content2.prepare_pull)
+
+    def test_c4_stage_registration_save_failure_precedes_content(self):
+        journal, content, _ = self.make_pull()
+        original_save = journal.save
+
+        def fail_registration(revision, data):
+            if data.get("staging") is not None:
+                raise Error("storage_write_failed")
+            return original_save(revision, data)
+
+        with journal.writer(), mock.patch.object(journal, "save", side_effect=fail_registration):
+            self.assert_code("storage_write_failed", content.prepare_pull)
+            state = journal.load()["data"]
+            stage = self.delivery / state["host_pull"]["stage_name"]
+            self.assertTrue(stage.is_dir())
+            self.assertEqual(list(stage.iterdir()), [])
+            self.assertIsNone(state.get("staging"))
+            self.assertFalse(self.destination.exists())
+        with journal.writer():
+            self.assert_code("stage_reconcile_required", content.prepare_pull)
+            self.assertTrue(stage.is_dir())
 
     def test_c4_nested_partial_stage_resumes_with_same_identity_and_deadline(self):
         journal, content, package = self.make_pull()
