@@ -2,7 +2,7 @@
 
 The current bridge now registers six local guest transfer MCP tools alongside its original 130 tools. They require a protected guest policy for transfer work and do not use this historical agent prototype. See [transfer MCP contract](../docs/transfer-mcp.md) and [guest engine documentation](../docs/transfer-guest-engine.md). Windows VM and host coordination remain unaccepted.
 
-Host transfer uses `python -m velo_transfer --spec /absolute/path/to/request.json`, with the original spec and `resume:true` for recovery or `--abort` for cancellation. The current successful prefix is `cleanup_pending` (exit 5); host cleanup and global completion are pending. See [host coordinator](../docs/transfer-host-coordinator.md). This historical agent is not the caller for that command.
+Host transfer uses `python -m velo_transfer --spec /absolute/path/to/request.json`, with the original spec and `resume:true` for recovery or `--abort` for cancellation. Locally proven completion returns `complete` (exit 0); a host cleanup fault retains evidence as `cleanup_pending` (exit 5). See [host coordinator](../docs/transfer-host-coordinator.md) and [host cleanup](../docs/transfer-host-cleanup.md). This historical agent is not the caller for that command.
 
 > Historical prototype only. `agent_poc` is not supported by the new
 > Windows-only MCP bridge contract and is excluded from the current acceptance

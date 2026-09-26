@@ -261,9 +261,9 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                     self.peer = None
                 summary = await self.run_transfer(direction)
                 result = self.result(summary)
-                self.assertEqual((summary["outcome"], summary["exit_code"]), ("cleanup_pending", 5))
+                self.assertEqual((summary["outcome"], summary["exit_code"]), ("complete", 0))
                 self.assertTrue(summary["published_ever"])
-                self.assertEqual(result["cleanup"], {"host": False, "guest": True})
+                self.assertEqual(result["cleanup"], {"host": True, "guest": True})
                 self.assertGreater(self.peer.counts.get(("transfer_chunk", None), 0), 1)
                 self.assertEqual(result["package_sha256"], self.peer.package["sha256"])
                 if direction == "push":
@@ -297,7 +297,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.setup_request()
         self.peer.fail("transfer_begin", when="after")
         summary = await self.run_transfer()
-        self.assertEqual(summary["outcome"], "cleanup_pending")
+        self.assertEqual(summary["outcome"], "complete")
         names = [name for name, _ in self.peer.trace]
         self.assertEqual(names[:2], ["transfer_begin", "transfer_status"])
         self.assertEqual(names.count("transfer_begin"), 1)
@@ -311,7 +311,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.setup_request()
         self.peer.fail("transfer_chunk", when="after")
         summary = await self.run_transfer()
-        self.assertEqual(summary["outcome"], "cleanup_pending")
+        self.assertEqual(summary["outcome"], "complete")
         names = [name for name, _ in self.peer.trace]
         first_chunk = names.index("transfer_chunk")
         self.assertEqual(names[first_chunk + 1], "transfer_status")
@@ -332,7 +332,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                 self.setup_request()
                 self.peer.fail("transfer_finish", action=action, when="after")
                 summary = await self.run_transfer()
-                self.assertEqual(summary["outcome"], "cleanup_pending")
+                self.assertEqual(summary["outcome"], "complete")
                 actions = [args for name, args in self.peer.trace
                            if name == "transfer_finish" and args["action"] == action]
                 self.assertEqual(len(actions), 1)
@@ -374,7 +374,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         first_calls = len(self.peer.trace)
         self.peer.faults.clear()
         resumed = await self.run_transfer("pull", resume=True)
-        self.assertEqual((resumed["outcome"], resumed["exit_code"]), ("cleanup_pending", 5))
+        self.assertEqual((resumed["outcome"], resumed["exit_code"]), ("complete", 0))
         chunks = [args for op, args in self.peer.trace[first_calls:] if op == "transfer_chunk"]
         self.assertEqual(chunks[0]["offset"], boundary)
         self.assertEqual((self.destination / "payload" / "子" / "文件.txt").read_bytes(),
@@ -400,7 +400,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.peer.on_finish = finishing
         self.peer.on_status = status_hook
         summary = await self.run_transfer()
-        self.assertEqual(summary["outcome"], "cleanup_pending")
+        self.assertEqual(summary["outcome"], "complete")
         actions = [args["action"] for op, args in self.peer.trace if op == "transfer_finish"]
         self.assertEqual(actions.count("prepare"), 1)
         index = next(i for i, (op, args) in enumerate(self.peer.trace)
@@ -462,12 +462,12 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
         with mock.patch("velo_transfer.adapters.open_adapter", fake_open):
             first = await connected(False)
-            self.assertEqual((first["outcome"], first["exit_code"]), ("cleanup_pending", 5))
+            self.assertEqual((first["outcome"], first["exit_code"]), ("complete", 0))
             self.assertEqual(opened, ["velo", "windows"])
             self.assertEqual(self.result(first)["fallback_reason"], "tools_missing")
             before = len(self.peer.trace)
             second = await connected(True)
-        self.assertEqual(second["outcome"], "cleanup_pending")
+        self.assertEqual(second["outcome"], "complete")
         self.assertEqual(opened, ["velo", "windows", "windows"])
         self.assertEqual([op for op, _ in self.peer.trace[before:]],
                          ["transfer_status", "transfer_status"])
@@ -478,7 +478,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.peer.on_finish = lambda action: (self.source / "子" / "文件.txt").write_bytes(
             b"changed after prepare") if action == "prepare" else None
         summary = await self.run_transfer()
-        self.assertNotEqual(summary["outcome"], "cleanup_pending")
+        self.assertNotEqual(summary["outcome"], "complete")
         self.assertNotIn("commit", [args["action"] for op, args in self.peer.trace
                                     if op == "transfer_finish"])
         self.assertFalse(self.result(summary)["published_ever"])
@@ -566,7 +566,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_c4_changed_operation_id_on_resume_rejected(self):
         first = await self.run_transfer()
-        self.assertEqual(first["outcome"], "cleanup_pending")
+        self.assertEqual(first["outcome"], "complete")
 
         def changed(response):
             response["terminal"]["operations"]["release"]["operation_id"] = "different-id"
@@ -583,7 +583,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_c4_changed_publication_receipt_on_resume_rejected(self):
         first = await self.run_transfer()
-        self.assertEqual(first["outcome"], "cleanup_pending")
+        self.assertEqual(first["outcome"], "complete")
         original_receipt = self.journal_data()["publication_receipt"]
 
         replacement = publication_receipt(self.peer.binding, self.peer.terminal.prepare,
@@ -655,14 +655,14 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         destination_id = self.destination.stat().st_ino
         calls = len(self.peer.trace)
         resumed = await self.run_transfer("pull", resume=True)
-        self.assertEqual(resumed["outcome"], "cleanup_pending")
+        self.assertEqual(resumed["outcome"], "complete")
         self.assertEqual(self.destination.stat().st_ino, destination_id)
         self.assertFalse(any(op == "transfer_chunk" for op, _ in self.peer.trace[calls:]))
         self.assertTrue(self.journal_data()["publication_receipt"])
 
     async def test_c5_pull_published_tree_damage_conflicts_without_republish(self):
         first = await self.run_transfer("pull")
-        self.assertEqual(first["outcome"], "cleanup_pending")
+        self.assertEqual(first["outcome"], "complete")
         payload = self.destination / "payload" / "子" / "文件.txt"
         payload.write_bytes(b"damaged after publication")
         calls = len(self.peer.trace)
@@ -694,7 +694,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.peer.faults.clear()
         self.peer.on_finish = None
         resumed = await self.run_transfer("pull", resume=True)
-        self.assertEqual(resumed["outcome"], "cleanup_pending")
+        self.assertEqual(resumed["outcome"], "complete")
         self.assertEqual((self.destination / "payload" / "子" / "文件.txt").read_bytes(),
                          b"benign bytes")
         self.assertFalse(any(op in ("transfer_chunk", "transfer_finish")
@@ -737,7 +737,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.peer.on_finish = finishing
         self.peer.on_status = status_hook
         summary = await self.run_transfer()
-        self.assertEqual(summary["outcome"], "cleanup_pending")
+        self.assertEqual(summary["outcome"], "complete")
         self.assertEqual(self.peer.counts[("transfer_finish", "release")], 1)
         self.assertGreaterEqual(seen["release_status"], 3)
         self.assertTrue(self.result(summary)["destination_verified"])
@@ -827,7 +827,7 @@ class CliTests(unittest.TestCase):
         async def successful(_request, *, abort):
             self.assertFalse(abort)
             return {"schema": "velo.transfer.result.v1", "transfer_id": "fixture",
-                    "phase": "CLEANING", "outcome": "cleanup_pending", "exit_code": 5,
+                    "phase": "COMPLETE", "outcome": "complete", "exit_code": 0,
                     "published_ever": True, "result_path": "/tmp/fixture-result.json",
                     "file_count": 2}
 
@@ -835,7 +835,7 @@ class CliTests(unittest.TestCase):
         with mock.patch("velo_transfer.__main__.load_request", return_value=Request()), \
              mock.patch("velo_transfer.__main__.transfer", successful), redirect_stdout(output):
             code = cli_main(["--spec", "/tmp/fixture-spec.json"])
-        self.assertEqual(code, 5)
+        self.assertEqual(code, 0)
         self.assertEqual(len(output.getvalue().splitlines()), 1)
         self.assertEqual(json.loads(output.getvalue())["result_path"], "/tmp/fixture-result.json")
 

@@ -1,4 +1,4 @@
-"""Foreground host orchestration; global completion awaits owned host cleanup.
+"""Foreground host orchestration with receipt-gated owned host cleanup.
 
 All remote calls use one journal writer and the original host deadline. Transport
 selection owns pre-begin fallback; a persisted begin attempt makes it sticky.
@@ -19,6 +19,7 @@ from .adapters import AdapterError, select_adapter
 from .connection import load_connection_profile
 from .errors import TransferContentError as Error
 from .host_content import HostContent, _package_identity
+from .host_cleanup import HostCleanup
 from .host_journal import HostJournal, observe_host_identity
 from .host_partial import HostPartial
 from .host_publication import HostPublication
@@ -73,7 +74,7 @@ class TransferCoordinator:
         name = role[:22] + "-" + digest_json(value)[:32]
         ref = self.journal.write_evidence(name, value)
         refs = self._data().get("evidence", {})
-        if role in ("adapter_error", "failure") and role in refs and refs[role] != ref:
+        if role in ("adapter_error", "failure", "host_cleanup_failure") and role in refs and refs[role] != ref:
             # Keep the first error addressable and index every later distinct
             # failure. An overwritten pointer must not hide cleanup ownership.
             role = role + "_" + ref["sha256"][:24]
@@ -513,8 +514,26 @@ class TransferCoordinator:
         status = await self._finish("release", {"prepare_receipt": data["prepare_receipt"],
                                                 "publication_receipt": data["publication_receipt"]})
         self._verify_released(status)
-        # T019 owns host deletion/final COMPLETE. Keep every host object here.
-        return "cleanup_pending", "host_cleanup_pending"
+        self._save(host_cleanup_complete=False)
+        try:
+            HostCleanup(self.journal).clean()
+        except (Error, OSError) as exc:
+            code = exc.code if isinstance(exc, Error) else "host_cleanup_io_failed"
+            if code.startswith(("storage_", "state_", "journal_")) or code == "stale_revision":
+                raise
+            current = self._data()
+            self._evidence("host_cleanup_failure", {"code": code,
+                "intent": current.get("host_cleanup_intent"),
+                "registered_push": current.get("host_push"),
+                "registered_pull": current.get("receive_partial"),
+                "registered_stage": current.get("staging")})
+            return "cleanup_pending", code
+        if self.request.document["direction"] == "pull":
+            final_proof = HostPublication(self.journal).verify_published()
+            self._evidence("destination_verification", final_proof)
+            self._save(destination_verified=True)
+        self._check()
+        return "complete", None
 
     def _result(self, outcome, code):
         data = self._data()
@@ -552,8 +571,9 @@ class TransferCoordinator:
                     "package_sha256": package["sha256"] if package else None, "package_size": package["size"] if package else None,
                     "manifest_sha256": package["manifest_sha256"] if package else None,
                     "resumed_bytes": data.get("resumed_bytes", 0), "files": files,
-                    "source_stability": data.get("source_stability", "unknown"), "phase": data["phase"],
-                    "last_phase": data.get("last_phase"), "published_ever": published,
+                    "source_stability": data.get("source_stability", "unknown"),
+                    "phase": "COMPLETE" if outcome == "complete" else data["phase"],
+                    "last_phase": "CLEANING" if outcome == "complete" else data.get("last_phase"), "published_ever": published,
                     "destination_verified": data.get("destination_verified"),
                     "cleanup": {"host": data.get("host_cleanup_complete", False), "guest": data.get("guest_cleanup_complete")},
                     "publication_receipt_sha256": receipt_digest(receipt) if receipt else None,
@@ -562,7 +582,16 @@ class TransferCoordinator:
         limits = {k: self.request.guest_budget[k] for k in ("max_files", "max_metadata_bytes")}
         validate_result(document, **limits)
         ref = self.journal.write_evidence("result-" + digest_json(document)[:32], document)
-        self._save(result_ref=ref)
+        updates = {"result_ref": ref}
+        if outcome == "complete":
+            # Durable, validated result and all four evidence roles precede the
+            # only global COMPLETE publication in the journal.
+            if (data.get("destination_verified") is not True or data.get("guest_cleanup_complete") is not True or
+                    data.get("host_cleanup_complete") is not True or data.get("adapter_cleanup_pending")):
+                raise Error("completion_unproven")
+            updates.update(phase="COMPLETE", last_phase="CLEANING", completion={
+                "destination_verified": True, "guest_cleanup_complete": True, "host_cleanup_complete": True})
+        self._save(**updates)
         return result_summary(document, str(self.journal.task_dir / "evidence" / (ref["name"] + ".json")), **limits)
 
     async def run(self, *, abort=False):
@@ -577,8 +606,9 @@ class TransferCoordinator:
                      "coordinator_schema": _SCHEMA, "io_sequence": 0})
             self.deadline = envelope["deadline_monotonic"]
             try:
-                self._check()
                 self._phase("PREPARING")
+                self._save(destination_verified=None)
+                self._check()
                 profile = self.profile_loader(self.request.document["connection_profile"])
                 self._save(connection_attempted=True)  # before adapter's read-only probe
                 data = self._data()
@@ -610,8 +640,12 @@ class TransferCoordinator:
                     outcome = "conflict"
                     self._phase("CONFLICT")
                 elif data.get("publication_receipt") is not None:
-                    outcome = "cleanup_pending"
-                    self._phase("CLEANING")
+                    if data.get("host_cleanup_complete") is True and data.get("guest_cleanup_complete") is True:
+                        outcome = "incomplete"
+                        self._phase("FAILED")
+                    else:
+                        outcome = "cleanup_pending"
+                        self._phase("CLEANING")
                 elif not data["begin_attempted"]:
                     outcome = "rejected"
                     self._phase("FAILED")
