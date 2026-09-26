@@ -6,6 +6,9 @@ import copy
 import hashlib
 import json
 import io
+import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -818,6 +821,75 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_c6_cli_subprocess_summary_matches_durable_result(self):
+        script = """
+import json
+import runpy
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+from types import SimpleNamespace
+import velo_transfer.host_coordinator as module
+from test_transfer_host_coordinator import LocalPeer
+
+spec = Path(sys.argv[1])
+document = json.loads(spec.read_text())
+fixture = SimpleNamespace(root=spec.parent,
+    source=Path(sys.argv[3]),
+    vm=document["expected_vm_identity"])
+peer = LocalPeer(fixture, document["direction"])
+host_identity = json.loads(sys.argv[2])
+original = module.TransferCoordinator
+@asynccontextmanager
+async def selector(_profile, **_kwargs):
+    yield peer
+module.TransferCoordinator = lambda request: original(request,
+    host_identity=host_identity, _adapter_selector=selector,
+    _profile_loader=lambda _path: None)
+sys.argv = ["velo_transfer", "--spec", str(spec)]
+runpy.run_module("velo_transfer", run_name="__main__")
+"""
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(
+            [str(Path(__file__).parent), str(Path(__file__).parent.parent)])}
+        for direction in ("push", "pull"):
+            with self.subTest(direction=direction):
+                fixture = CoordinatorTests("test_c1_push_pull_one_call_real_host_files_and_resume")
+                fixture.setUp()
+                for cleanup, args, kwargs in fixture._cleanups:
+                    self.addCleanup(cleanup, *args, **kwargs)
+                fixture._cleanups.clear()
+                fixture.setup_request(direction)
+                if direction == "pull":
+                    fixture.peer.package_path.unlink()
+                completed = subprocess.run([sys.executable, "-c", script, str(fixture.spec),
+                    json.dumps(fixture.host), str(fixture.source)], env=env,
+                    capture_output=True, text=True, check=False)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(len(completed.stdout.splitlines()), 1)
+                summary = json.loads(completed.stdout)
+                result_path = Path(summary["result_path"])
+                result = json.loads(result_path.read_text())
+                state = fixture.journal_envelope()["data"]
+                self.assertEqual((summary["outcome"], summary["exit_code"], summary["phase"]),
+                                 ("complete", 0, "COMPLETE"))
+                self.assertEqual((result["outcome"], result["phase"], state["phase"]),
+                                 ("complete", "COMPLETE", "COMPLETE"))
+                self.assertEqual(result_path.name, state["result_ref"]["name"] + ".json")
+                self.assertEqual(result["transfer_id"], summary["transfer_id"])
+                self.assertEqual(result["published_ever"], summary["published_ever"])
+                self.assertEqual(result["cleanup"], {"host": True, "guest": True})
+                if direction == "pull":
+                    self.assertEqual((fixture.destination / "payload" / "子" / "文件.txt").read_bytes(),
+                                     b"benign bytes")
+
+        missing = subprocess.run([sys.executable, "-m", "velo_transfer", "--spec",
+            str(fixture.root / "missing.json")], env=env, capture_output=True, text=True,
+            check=False)
+        self.assertEqual(missing.returncode, 3, missing.stderr)
+        self.assertEqual(len(missing.stdout.splitlines()), 1)
+        self.assertEqual(json.loads(missing.stdout)["schema"], "velo.transfer.command-error.v1")
+        self.assertNotIn("result_path", json.loads(missing.stdout))
+
     def test_c6_cli_one_line_success_and_missing_result_error(self):
         from velo_transfer.errors import TransferContentError
 
