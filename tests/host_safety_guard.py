@@ -64,7 +64,7 @@ def identity(pid:int):
 
 def approval_binding(manifest):
     fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_sha256','canonical_path',
-            'canonical_sha256','state_dir','deadline_utc','min_free_bytes',
+            'canonical_sha256','epoch7_active_snapshot_name','state_dir','deadline_utc','min_free_bytes',
             'vmrun_timeout_seconds','max_actions','approved_guest_collector_sha256',
             'code_sha256','installer_sha256','interpreter_path','interpreter_sha256',
             'controller_install_path','unit_service_path','unit_timer_path')
@@ -79,7 +79,7 @@ class Guard:
         if digest(raw)!=approval_sha or not HEX.fullmatch(approval_sha):raise GuardError('manifest approval SHA differs')
         self.m=strict_json(raw);m=self.m
         required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmrun_path','canonical_path',
-                  'canonical_sha256','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
+                  'canonical_sha256','epoch7_active_snapshot_name','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
                   'vmrun_timeout_seconds','approved_guest_collector_sha256','code_sha256','retention','max_actions',
                   'approval_decision_sha256','approval_decision_path','authorized_actions',
                   'interpreter_path','interpreter_sha256','vmrun_sha256',
@@ -94,6 +94,8 @@ class Guard:
             raise GuardError('independent approval identity/action scope absent')
         if m['checkpoint_name']!='Snapshot G14-SAFETY-'+m['attempt_id']:
             raise GuardError('checkpoint name differs')
+        if type(m['epoch7_active_snapshot_name']) is not str or not m['epoch7_active_snapshot_name']:
+            raise GuardError('epoch7 active snapshot identity missing')
         if m['test_mode'] is True:
             if (not Path(m['state_dir']).resolve().is_relative_to(Path(__file__).resolve().parent)
                     or m['vmrun_path']!=str(Path(__file__).with_name('fake_vmrun_guard.py').resolve())
@@ -368,10 +370,55 @@ class Guard:
         if not state or state['status']!='QUALIFIED':raise GuardError('checkpoint not qualified')
         self.check_fixed();state['status']='ARMED';self.save(state);self.append('ARMED',deadline=self.m['deadline_utc'])
         return state['status']
+    def finish_rehearsal(self,decision_path=None,decision_sha=None):
+        state=self.load();finish_path=self.root/'safety-finish-receipt.json'
+        if state and state['status']=='SAFETY_REHEARSAL_COMPLETE':
+            if not finish_path.exists() or digest(finish_path.read_bytes())!=state.get('finish_receipt_sha256'):
+                raise GuardError('safety finish receipt lost or changed')
+            return state['status']
+        if not state or state['status']!='ARMED' or state.get('pending_operation') is not None or state.get('child_identity') is not None:
+            raise GuardError('safety rehearsal is not ready to finish')
+        health_path=self.root/'safety-finish-health.json'
+        health=read(health_path)
+        self.verify_external(decision_path,decision_sha,kind='velo-g14-safety-finish-approval-v1',
+                             scope='SAFETY_REHEARSAL_FINISH_ONLY',receipt_path=health_path)
+        expected={'kind':'velo-g14-safety-finish-health-v1','attempt_id':self.m['attempt_id'],
+                  'checkpoint_name':self.m['checkpoint_name'],'vmx':self.m['vmx'],
+                  'collector_sha256':self.m['approved_guest_collector_sha256'],
+                  'service_and_frontend_healthy':True,'secrets_file_readback':True}
+        original_keys=('management_reentry_original_sha256','health_original_sha256','secrets_readback_original_sha256')
+        if (set(health)!=set(expected)|set(original_keys)
+                or {key:health[key] for key in expected}!=expected
+                or any(type(health[key]) is not str or not HEX.fullmatch(health[key]) or health[key]=='0'*64 for key in original_keys)):
+            raise GuardError('safety finish health receipt differs')
+        self.check_fixed()
+        canonical=strict_json(Path(self.m['canonical_path']).read_bytes())
+        active=canonical.get('active_snapshot')
+        if type(canonical.get('epoch')) is not int or canonical['epoch']!=7 or canonical.get('phase')!='NETWORK_ACTIVE' or type(active) is not dict or active.get('name')!=self.m['epoch7_active_snapshot_name']:
+            raise GuardError('epoch7 canonical readback differs')
+        finish={'kind':'velo-g14-safety-finish-receipt-v1','attempt_id':self.m['attempt_id'],
+                'checkpoint_name':self.m['checkpoint_name'],'manifest_sha256':self.manifest_sha,
+                'health_receipt_sha256':digest(health_path.read_bytes()),
+                'external_decision_sha256':decision_sha,'epoch7_canonical_sha256':self.m['canonical_sha256'],
+                'timer_disarm_eligible':True}
+        if finish_path.exists():
+            if read(finish_path)!=finish:raise GuardError('pending safety finish receipt differs')
+        else:write_new(finish_path,finish)
+        if self.m['test_mode'] and os.environ.get('FAKE_GUARD_CRASH_AFTER_FINISH_RECEIPT')=='1':os._exit(97)
+        state['status']='SAFETY_REHEARSAL_COMPLETE';state['timer_disarm_eligible']=True
+        state['finish_receipt_sha256']=digest(finish_path.read_bytes());self.save(state)
+        self.append('SAFETY_REHEARSAL_COMPLETE',receipt_sha256=state['finish_receipt_sha256'])
+        return state['status']
     def deadline(self):
         state=self.load()
         if not state:raise GuardError('no attempt')
+        if state['status']=='SAFETY_REHEARSAL_COMPLETE':
+            finish_path=self.root/'safety-finish-receipt.json'
+            if not finish_path.exists() or digest(finish_path.read_bytes())!=state.get('finish_receipt_sha256'):
+                raise GuardError('safety finish receipt lost or changed')
+            return state['status']
         if state['status'] in ('COMMITTED','HOST_RESTORED_PENDING_GUEST','INDETERMINATE'):return state['status']
+        if (self.root/'safety-finish-receipt.json').exists():return 'FINISH_PENDING_RECONCILIATION'
         if state['status']!='ARMED':raise GuardError('UNQUALIFIED_SAFETY_IMAGE')
         due=datetime.datetime.fromisoformat(self.m['deadline_utc'].replace('Z','+00:00'))
         if datetime.datetime.now(datetime.UTC)<due:return 'NOT_EXPIRED'
@@ -381,6 +428,7 @@ class Guard:
         except GuardError as exc:
             state=self.load();state['status']='INDETERMINATE';self.save(state);self.append('INDETERMINATE_RECOVERY',reason=str(exc));return state['status']
     def commit(self,decision_path=None,decision_sha=None):
+        if (self.root/'safety-finish-receipt.json').exists():raise GuardError('safety finish precludes business commit')
         state=self.load();receipt=read(self.root/'commit-qualification.json')
         if not state or state['status']!='ARMED' or state['pending_operation'] is not None:
             raise GuardError('not eligible to commit')
@@ -403,7 +451,7 @@ class Guard:
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--manifest',type=Path,required=True);ap.add_argument('--approval-sha',required=True)
-    ap.add_argument('command',choices=['check','bootstrap','qualify','confirm-guest','arm','deadline','commit','hold'])
+    ap.add_argument('command',choices=['check','bootstrap','qualify','confirm-guest','arm','finish-rehearsal','deadline','commit','hold'])
     ap.add_argument('--hold-seconds',type=int,default=0)
     ap.add_argument('--external-decision',type=Path);ap.add_argument('--external-sha')
     args=ap.parse_args()
@@ -422,6 +470,7 @@ def main():
             if not guard.m['test_mode'] or not 0<args.hold_seconds<=10:raise GuardError('hold only bounded fake test')
             time.sleep(args.hold_seconds);result='HELD'
         elif args.command=='confirm-guest':result=guard.confirm_guest(args.external_decision,args.external_sha)
+        elif args.command=='finish-rehearsal':result=guard.finish_rehearsal(args.external_decision,args.external_sha)
         elif args.command=='commit':result=guard.commit(args.external_decision,args.external_sha)
         else:result=getattr(guard,args.command.replace('-','_'))()
         print(json.dumps({'result':result}));return 0

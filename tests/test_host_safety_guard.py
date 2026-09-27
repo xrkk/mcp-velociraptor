@@ -11,7 +11,9 @@ class HostGuardTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(dir=HERE,prefix='fake-guard-')
         self.dir=Path(self.tmp.name);self.state=self.dir/'state';self.state.mkdir(mode=0o700)
         self.vmx=self.dir/'fake.vmx';self.vmx.write_bytes(b'fake-vmx')
-        self.canonical=self.dir/'canonical.json';self.canonical.write_bytes(b'epoch7-fake')
+        self.canonical=self.dir/'canonical.json'
+        self.canonical.write_bytes(guard.encoded({'epoch':7,'phase':'NETWORK_ACTIVE',
+            'active_snapshot':{'name':'Approved-Current-Snapshot'}}))
         self.fake_state=self.dir/'vmrun-state.json';self.log=self.dir/'vmrun-log.jsonl'
         self.id=str(uuid.uuid4());self.name='Snapshot G14-SAFETY-'+self.id
         self.fake_state.write_text(json.dumps({'vmx':str(self.vmx),'running':True,'snapshots':[],
@@ -23,7 +25,8 @@ class HostGuardTests(unittest.TestCase):
             'vmx':str(self.vmx),'vmx_sha256':guard.digest(self.vmx.read_bytes()),
             'vmx_device':self.vmx.stat().st_dev,'vmx_inode':self.vmx.stat().st_ino,
             'vmrun_path':str(HERE/'fake_vmrun_guard.py'),'canonical_path':str(self.canonical),
-            'canonical_sha256':guard.digest(self.canonical.read_bytes()),'state_dir':str(self.state),
+            'canonical_sha256':guard.digest(self.canonical.read_bytes()),
+            'epoch7_active_snapshot_name':'Approved-Current-Snapshot','state_dir':str(self.state),
             'checkpoint_name':self.name,'deadline_utc':'2000-01-01T00:00:00Z','min_free_bytes':0,
             'vmrun_timeout_seconds':1,'approved_guest_collector_sha256':'a'*64,
             'interpreter_path':sys.executable,'interpreter_sha256':guard.digest(Path(sys.executable).read_bytes()),
@@ -49,7 +52,7 @@ class HostGuardTests(unittest.TestCase):
         self.manifest.write_bytes(guard.encoded(self.m));self.approval=guard.digest(self.manifest.read_bytes())
     def run_guard(self,command,*,env=None,expect=0):
         cmd=[sys.executable,str(HERE/'host_safety_guard.py'),'--manifest',str(self.manifest),'--approval-sha',self.approval,command]
-        if command in ('confirm-guest','commit') and self.external.exists():
+        if command in ('confirm-guest','commit','finish-rehearsal') and self.external.exists():
             cmd+=['--external-decision',str(self.external),'--external-sha',guard.digest(self.external.read_bytes())]
         proc=subprocess.run(cmd,env=env or self.env,capture_output=True,text=True,timeout=12)
         self.assertEqual(proc.returncode,expect,(command,proc.stdout,proc.stderr));return proc
@@ -69,6 +72,43 @@ class HostGuardTests(unittest.TestCase):
         path=self.state/'guest-reentry.json';path.write_bytes(guard.encoded(receipt));path.chmod(0o600)
         self.external_approval('velo-g14-guest-qualification-approval-v1','GUEST_REENTRY_ONLY',path)
         self.run_guard('confirm-guest');self.run_guard('arm')
+    def finish_health(self):
+        receipt={'kind':'velo-g14-safety-finish-health-v1','attempt_id':self.id,
+                 'checkpoint_name':self.name,'vmx':str(self.vmx),'collector_sha256':'a'*64,
+                 'service_and_frontend_healthy':True,'secrets_file_readback':True,
+                 'management_reentry_original_sha256':'c'*64,'health_original_sha256':'d'*64,
+                 'secrets_readback_original_sha256':'e'*64}
+        path=self.state/'safety-finish-health.json';path.write_bytes(guard.encoded(receipt));path.chmod(0o600)
+        self.external_approval('velo-g14-safety-finish-approval-v1','SAFETY_REHEARSAL_FINISH_ONLY',path)
+        return path
+    def test_safety_rehearsal_finish_is_independent_terminal_state(self):
+        self.prepared();self.finish_health()
+        canonical_before=self.canonical.read_bytes();before=self.calls().count('revertToSnapshot')
+        self.run_guard('finish-rehearsal')
+        state=guard.read(self.state/'state.json')
+        self.assertEqual(state['status'],'SAFETY_REHEARSAL_COMPLETE')
+        self.assertTrue(state['timer_disarm_eligible'])
+        self.assertEqual(guard.read(self.state/'safety-finish-receipt.json')['epoch7_canonical_sha256'],
+                         self.m['canonical_sha256'])
+        self.assertEqual(self.canonical.read_bytes(),canonical_before)
+        self.run_guard('deadline');self.run_guard('deadline');self.run_guard('finish-rehearsal')
+        self.run_guard('commit',expect=3)
+        self.assertEqual(self.calls().count('revertToSnapshot'),before)
+    def test_safety_finish_needs_independent_health_approval_and_epoch7(self):
+        self.prepared();self.finish_health();self.external.unlink()
+        self.run_guard('finish-rehearsal',expect=3)
+        self.assertFalse((self.state/'safety-finish-receipt.json').exists())
+        self.finish_health();self.canonical.write_bytes(b'{"epoch":8}')
+        self.run_guard('finish-rehearsal',expect=3)
+        self.assertFalse((self.state/'safety-finish-receipt.json').exists())
+    def test_finish_receipt_crash_gap_blocks_deadline_revert(self):
+        self.prepared();self.finish_health();before=self.calls().count('revertToSnapshot')
+        self.run_guard('finish-rehearsal',env=dict(self.env,FAKE_GUARD_CRASH_AFTER_FINISH_RECEIPT='1'),expect=97)
+        self.assertEqual(guard.read(self.state/'state.json')['status'],'ARMED')
+        self.run_guard('deadline')
+        self.assertEqual(self.calls().count('revertToSnapshot'),before)
+        self.run_guard('finish-rehearsal')
+        self.assertEqual(guard.read(self.state/'state.json')['status'],'SAFETY_REHEARSAL_COMPLETE')
     def test_bootstrap_separate_from_qualification(self):
         self.run_guard('bootstrap')
         self.assertEqual(guard.read(self.state/'state.json')['status'],'CREATED_UNQUALIFIED')
