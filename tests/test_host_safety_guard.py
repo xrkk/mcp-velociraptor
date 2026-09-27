@@ -22,6 +22,7 @@ class HostGuardTests(unittest.TestCase):
         self.decision=self.dir/'approval.json'
         self.external=self.dir/'external-qualification.json'
         self.m={'schema_version':1,'kind':'velo-g14-safety-guard-v1','attempt_id':self.id,'test_mode':True,
+            'window_scope':'SAFETY_REHEARSAL',
             'vmx':str(self.vmx),'vmx_sha256':guard.digest(self.vmx.read_bytes()),
             'vmx_device':self.vmx.stat().st_dev,'vmx_inode':self.vmx.stat().st_ino,
             'vmx_identity':{'uuid.bios':'fake-uuid','displayName':'Fake VM'},'vmx_transitions':[],
@@ -39,14 +40,15 @@ class HostGuardTests(unittest.TestCase):
             'unit_timer_path':str(self.dir/'review.timer'),
             'retention':'KEEP_UNTIL_SEPARATE_DELETE_APPROVAL','max_actions':8,
             'approval_decision_sha256':'b'*64,'approval_decision_path':str(self.decision),
-            'authorized_actions':['bootstrap','qualify','confirm-guest','arm','deadline','commit']}
+            'authorized_actions':guard.WINDOW_ACTIONS['SAFETY_REHEARSAL']}
         self.seal()
         self.env=dict(os.environ,FAKE_VMRUN_STATE=str(self.fake_state),FAKE_VMRUN_LOG=str(self.log))
     def tearDown(self):self.tmp.cleanup()
     def seal(self):
         decision={'kind':'velo-g14-safety-approval-v1','status':'APPROVED','attempt_id':self.id,
                   'vmx':str(self.vmx),'vmx_sha256':self.m['vmx_sha256'],
-                  'checkpoint_name':self.name,'actions':self.m['authorized_actions'],
+                  'checkpoint_name':self.name,'window_scope':self.m['window_scope'],
+                  'actions':self.m['authorized_actions'],
                   'manifest_binding':guard.approval_binding(self.m)}
         self.decision.write_bytes(guard.encoded(decision))
         self.m['approval_decision_sha256']=guard.digest(self.decision.read_bytes())
@@ -95,6 +97,48 @@ class HostGuardTests(unittest.TestCase):
         self.run_guard('deadline');self.run_guard('deadline');self.run_guard('finish-rehearsal')
         self.run_guard('commit',expect=3)
         self.assertEqual(self.calls().count('revertToSnapshot'),before)
+    def test_window_scope_rejects_commit_even_with_external_receipt(self):
+        self.prepared()
+        path=self.state/'commit-qualification.json'
+        path.write_bytes(guard.encoded({'kind':'velo-g14-commit-qualification-v1'}));path.chmod(0o600)
+        self.external_approval('velo-g14-commit-approval-v1','EPOCH8_COMMIT_ONLY',path)
+        before=self.calls()
+        result=self.run_guard('commit',expect=3)
+        self.assertIn('action outside approved window scope',result.stderr)
+        self.assertEqual(self.calls(),before)
+        self.assertEqual(guard.read(self.state/'state.json')['status'],'ARMED')
+        with self.assertRaises(guard.GuardError):
+            guard.Guard(self.manifest,self.approval).commit(self.external,guard.digest(self.external.read_bytes()))
+    def test_missing_finish_mixed_actions_and_decision_scope_refuse_before_vmrun(self):
+        for actions in (
+            ['bootstrap','qualify','confirm-guest','arm','deadline'],
+            ['bootstrap','qualify','confirm-guest','arm','finish-rehearsal','deadline','commit'],
+        ):
+            with self.subTest(actions=actions):
+                self.m['authorized_actions']=actions;self.seal()
+                self.run_guard('bootstrap',expect=3)
+                self.assertFalse(self.log.exists())
+        self.m['authorized_actions']=guard.WINDOW_ACTIONS['SAFETY_REHEARSAL'];self.seal()
+        decision=guard.strict_json(self.decision.read_bytes())
+        decision['actions']=guard.WINDOW_ACTIONS['EPOCH8_BUSINESS']
+        self.decision.write_bytes(guard.encoded(decision))
+        self.m['approval_decision_sha256']=guard.digest(self.decision.read_bytes())
+        self.manifest.write_bytes(guard.encoded(self.m));self.approval=guard.digest(self.manifest.read_bytes())
+        self.run_guard('bootstrap',expect=3)
+        self.assertFalse(self.log.exists())
+    def test_unknown_command_and_review_installer_scope_refuse(self):
+        cmd=[sys.executable,str(HERE/'host_safety_guard.py'),'--manifest',str(self.manifest),
+             '--approval-sha',self.approval,'unknown-action']
+        result=subprocess.run(cmd,env=self.env,capture_output=True,text=True,timeout=12)
+        self.assertNotEqual(result.returncode,0)
+        self.assertFalse(self.log.exists())
+        m=dict(self.m);m['test_mode']=False;m['vmrun_path']='/usr/bin/vmrun';m['vmx']='/opt/example/safety.vmx'
+        m['state_dir']=f'/var/lib/velo-g14-guard/{self.id}'
+        m['controller_install_path']=f'/usr/local/libexec/velo-g14-guard-{self.id}.py'
+        m['unit_service_path']=f'/etc/systemd/system/velo-g14-guard@{self.id}.service'
+        m['unit_timer_path']=f'/etc/systemd/system/velo-g14-guard@{self.id}.timer'
+        m['authorized_actions']=guard.WINDOW_ACTIONS['EPOCH8_BUSINESS']
+        with self.assertRaises(guard.GuardError):units.render(m,'a'*64,review=True)
     def test_safety_finish_needs_independent_health_approval_and_epoch7(self):
         self.prepared();self.finish_health();self.external.unlink()
         self.run_guard('finish-rehearsal',expect=3)
@@ -255,7 +299,12 @@ class HostGuardTests(unittest.TestCase):
         finally:
             if proc.poll() is None:proc.kill();proc.wait()
     def test_commit_preempts_deadline(self):
+        self.m['window_scope']='EPOCH8_BUSINESS'
+        self.m['authorized_actions']=guard.WINDOW_ACTIONS['EPOCH8_BUSINESS']
+        self.seal()
         self.prepared()
+        result=self.run_guard('finish-rehearsal',expect=3)
+        self.assertIn('action outside approved window scope',result.stderr)
         receipt={'kind':'velo-g14-commit-qualification-v1','attempt_id':self.id,'collector_sha256':'a'*64,
                  'epoch8_committed':True,'guest_and_host_healthy':True,
                  'epoch8_canonical_sha256':'0'*64,'transition_receipt_sha256':'1'*64,

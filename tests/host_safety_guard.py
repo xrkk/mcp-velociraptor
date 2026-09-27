@@ -9,6 +9,10 @@ from pathlib import Path
 
 VMRUN='/usr/bin/vmrun'
 HEX=re.compile('[0-9a-f]{64}\\Z')
+WINDOW_ACTIONS={
+    'SAFETY_REHEARSAL':['bootstrap','qualify','confirm-guest','arm','finish-rehearsal','deadline'],
+    'EPOCH8_BUSINESS':['bootstrap','qualify','confirm-guest','arm','deadline','commit'],
+}
 
 class GuardError(RuntimeError):pass
 
@@ -92,12 +96,18 @@ def running_count(output:str,vmx:str):
     return lines[1:].count(vmx)
 
 def approval_binding(manifest):
-    fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
+    fields=('test_mode','window_scope','authorized_actions','vmx_sha256','vmx_device','vmx_inode','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
             'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','deadline_utc','min_free_bytes',
             'vmrun_timeout_seconds','max_actions','approved_guest_collector_sha256',
             'code_sha256','installer_sha256','interpreter_path','interpreter_sha256',
             'controller_install_path','unit_service_path','unit_timer_path')
     return {name:manifest[name] for name in fields}
+
+def validate_action_scope(manifest):
+    scope=manifest.get('window_scope')
+    if type(scope) is not str or scope not in WINDOW_ACTIONS or manifest.get('authorized_actions')!=WINDOW_ACTIONS[scope]:
+        raise GuardError('window/action scope differs')
+    return scope
 
 class Guard:
     def __init__(self,manifest_path:Path,approval_sha:str):
@@ -107,7 +117,7 @@ class Guard:
         raw=self.manifest_path.read_bytes()
         if digest(raw)!=approval_sha or not HEX.fullmatch(approval_sha):raise GuardError('manifest approval SHA differs')
         self.m=strict_json(raw);m=self.m
-        required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','canonical_path',
+        required={'schema_version','kind','attempt_id','test_mode','window_scope','vmx','vmx_sha256','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','canonical_path',
                   'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
                   'vmrun_timeout_seconds','approved_guest_collector_sha256','code_sha256','retention','max_actions',
                   'approval_decision_sha256','approval_decision_path','authorized_actions',
@@ -119,8 +129,9 @@ class Guard:
         try:canonical_attempt=str(uuid.UUID(m['attempt_id']))
         except (ValueError,TypeError,AttributeError) as exc:raise GuardError('attempt ID differs') from exc
         if canonical_attempt!=m['attempt_id']:raise GuardError('attempt UUID must be canonical')
-        if not HEX.fullmatch(m['approval_decision_sha256']) or m['approval_decision_sha256']=='0'*64 or m['authorized_actions']!=['bootstrap','qualify','confirm-guest','arm','deadline','commit']:
+        if not HEX.fullmatch(m['approval_decision_sha256']) or m['approval_decision_sha256']=='0'*64:
             raise GuardError('independent approval identity/action scope absent')
+        validate_action_scope(m)
         if m['checkpoint_name']!='Snapshot G14-SAFETY-'+m['attempt_id']:
             raise GuardError('checkpoint name differs')
         if type(m['epoch7_active_snapshot_name']) is not str or not m['epoch7_active_snapshot_name']:
@@ -179,6 +190,9 @@ class Guard:
             raise GuardError('vmrun code identity differs')
         self.root=Path(m['state_dir'])
         self.state_path=self.root/'state.json';self.owner_path=self.root/'owner.json';self.lock_path=self.root/'controller.lock'
+    def require_action(self,action):
+        if action not in self.m['authorized_actions']:
+            raise GuardError('action outside approved window scope')
     def _approved_file(self,path,raw,expected,label):
         no_symlink_chain(path)
         info=path.lstat()
@@ -194,7 +208,7 @@ class Guard:
         expected={'kind':'velo-g14-safety-approval-v1','status':'APPROVED','attempt_id':self.m['attempt_id'],
                   'vmx':self.m['vmx'],'vmx_sha256':self.m['vmx_sha256'],
                   'checkpoint_name':self.m['checkpoint_name'],
-                  'actions':['bootstrap','qualify','confirm-guest','arm','deadline','commit'],
+                  'window_scope':self.m['window_scope'],'actions':self.m['authorized_actions'],
                   'manifest_binding':approval_binding(self.m)}
         if decision!=expected:raise GuardError('approval scope differs')
     def verify_external(self,path,expected_sha,*,kind,scope,receipt_path):
@@ -334,6 +348,13 @@ class Guard:
         state=self.load()
         self.verify_approval();self.check_vmx()
         if action not in ('list','listSnapshots'):
+            if action=='snapshot':
+                self.require_action('bootstrap')
+                if not state or state['status']!='BOOTSTRAP_PENDING':raise GuardError('snapshot outside bootstrap')
+            elif action in ('stop','revertToSnapshot','start'):
+                scope_action={'CREATED_UNQUALIFIED':'qualify','ARMED':'deadline'}.get(state.get('status') if state else None)
+                if scope_action is None:raise GuardError('restore outside approved state')
+                self.require_action(scope_action)
             if not state or state.get('pending_operation') is not None:raise GuardError('pending/unknown operation')
             if state['action_count']>=self.m['max_actions']:raise GuardError('action budget exhausted')
             state['pending_operation']=action;state['action_count']+=1;self.save(state);self.append('VMRUN_INTENT',action=action,argv=argv)
@@ -384,6 +405,7 @@ class Guard:
                 'disk0':values[f'snapshot{n}.disk0.fileName'],
                 'marker_sha256':digest(marker_path.read_bytes()),'memory_bytes':memory.stat().st_size}
     def bootstrap(self):
+        self.require_action('bootstrap')
         if self.load() is not None:raise GuardError('attempt already exists')
         self.check_fixed()
         self.save({'status':'BOOTSTRAP_PENDING','pending_operation':None,'child_identity':None,'action_count':0,
@@ -440,10 +462,12 @@ class Guard:
         self.append('HOST_RESTORE_VERIFIED',tree_sha256=digest(tree.encode()))
         return state['status']
     def qualify(self):
+        self.require_action('qualify')
         state=self.load()
         if not state or state['status']!='CREATED_UNQUALIFIED':raise GuardError('checkpoint not newly created')
         return self.revert_once()
     def confirm_guest(self,decision_path=None,decision_sha=None):
+        self.require_action('confirm-guest')
         state=self.load();path=self.root/'guest-reentry.json'
         if not state or state['status']!='HOST_RESTORED_PENDING_GUEST':raise GuardError('host restore not verified')
         receipt=read(path)
@@ -462,11 +486,13 @@ class Guard:
         state['status']='QUALIFIED';self.save(state);self.append('QUALIFIED_GUEST_READBACK',receipt_sha256=digest(path.read_bytes()))
         return state['status']
     def arm(self):
+        self.require_action('arm')
         state=self.load()
         if not state or state['status']!='QUALIFIED':raise GuardError('checkpoint not qualified')
         self.check_fixed();state['status']='ARMED';self.save(state);self.append('ARMED',deadline=self.m['deadline_utc'])
         return state['status']
     def finish_rehearsal(self,decision_path=None,decision_sha=None):
+        self.require_action('finish-rehearsal')
         state=self.load();finish_path=self.root/'safety-finish-receipt.json'
         if state and state['status']=='SAFETY_REHEARSAL_COMPLETE':
             if not finish_path.exists() or digest(finish_path.read_bytes())!=state.get('finish_receipt_sha256'):
@@ -506,6 +532,7 @@ class Guard:
         self.append('SAFETY_REHEARSAL_COMPLETE',receipt_sha256=state['finish_receipt_sha256'])
         return state['status']
     def deadline(self):
+        self.require_action('deadline')
         state=self.load()
         if not state:raise GuardError('no attempt')
         if self._restore_open(state):
@@ -528,6 +555,7 @@ class Guard:
         except GuardError as exc:
             state=self.load();state['status']='INDETERMINATE';self.save(state);self.append('INDETERMINATE_RECOVERY',reason=str(exc));return state['status']
     def commit(self,decision_path=None,decision_sha=None):
+        self.require_action('commit')
         if (self.root/'safety-finish-receipt.json').exists():raise GuardError('safety finish precludes business commit')
         state=self.load();receipt=read(self.root/'commit-qualification.json')
         if not state or state['status']!='ARMED' or self._restore_open(state) or state['pending_operation'] is not None:
@@ -560,6 +588,7 @@ def main():
         guard.check_fixed()
         if guard.root.exists():guard.require_root();guard.verify_journal()
         print(json.dumps({'state':guard.load(),'check':'PASS'}));return 0
+    if args.command!='hold':guard.require_action(args.command)
     if args.command=='deadline':
         due=datetime.datetime.fromisoformat(guard.m['deadline_utc'].replace('Z','+00:00'))
         if datetime.datetime.now(datetime.UTC)<due:

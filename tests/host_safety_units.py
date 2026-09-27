@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.host_safety_guard import GuardError, approval_binding, no_symlink_chain, strict_json, vmrun_bytes
+from tests.host_safety_guard import GuardError, approval_binding, no_symlink_chain, strict_json, validate_action_scope, vmrun_bytes
 
 
 def sha(data: bytes) -> str:
@@ -41,6 +41,7 @@ def _parent(path: Path) -> None:
 
 def render(manifest: dict, manifest_sha: str, *, review: bool) -> tuple[bytes, bytes]:
     import uuid
+    validate_action_scope(manifest)
     attempt = manifest['attempt_id']
     if str(uuid.UUID(attempt)) != attempt or len(manifest_sha) != 64:
         raise ValueError('attempt/manifest SHA differs')
@@ -117,11 +118,12 @@ def _approved_decision(manifest: dict, decision_path: Path) -> None:
     if sha(raw) != manifest['approval_decision_sha256']:
         raise ValueError('decision byte identity differs')
     decision = strict_json(raw)
+    validate_action_scope(manifest)
     expected = {'kind': 'velo-g14-safety-approval-v1', 'status': 'APPROVED',
                 'attempt_id': manifest['attempt_id'], 'vmx': manifest['vmx'],
                 'vmx_sha256': manifest['vmx_sha256'],
                 'checkpoint_name': manifest['checkpoint_name'],
-                'actions': ['bootstrap', 'qualify', 'confirm-guest', 'arm', 'deadline', 'commit'],
+                'window_scope':manifest['window_scope'],'actions':manifest['authorized_actions'],
                 'manifest_binding': approval_binding(manifest)}
     if decision != expected or decision_path != Path(manifest['approval_decision_path']):
         raise ValueError('decision scope/path differs')
