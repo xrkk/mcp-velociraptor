@@ -461,9 +461,18 @@ class GuestTransferService:
                 configured = os.environ.get("VELOCIRAPTOR_TRANSFER_POLICY")
                 if not configured or (self.policy_path is not None and str(self.policy_path) != configured):
                     raise Error("worker_policy_configuration_mismatch")
-                args = [sys.executable, "-m", "velo_transfer.guest_cli", "--internal-worker",
+                # A Windows venv python.exe can be a redirector: Popen then
+                # reports the redirector PID, while the worker runs in its
+                # child. Launch the actual interpreter so the persisted PID
+                # and creation time identify the worker itself.
+                executable = getattr(sys, "_base_executable", sys.executable)
+                if not executable or not os.path.isfile(executable):
+                    raise Error("worker_interpreter_unavailable")
+                worker_env = os.environ.copy()
+                worker_env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
+                args = [executable, "-m", "velo_transfer.guest_cli", "--internal-worker",
                         transfer_id, digest, job, nonce]
-                child = subprocess.Popen(args, stdin=subprocess.PIPE,
+                child = subprocess.Popen(args, env=worker_env, stdin=subprocess.PIPE,
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                          close_fds=True)
                 pid = child.pid
