@@ -19,6 +19,7 @@ SNAPSHOT_1 = "Snapshot 1-开启Windows-MCP"
 SNAPSHOT_186 = "Snapshot 186-Velociraptor-MCP网络部署基线"
 SNAPSHOT_187 = "Snapshot 187-固定IP+WindowsMCP开机自启"
 SNAPSHOT_188 = "Snapshot 188-Velociraptor-MCP可恢复验收基线"
+SNAPSHOT_189 = "Snapshot 189-Velociraptor-MCP可恢复验收基线"
 MANUAL = "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION"
 
 
@@ -200,7 +201,7 @@ class RepairScenarioContractTests(unittest.TestCase):
             ),
             "p05-flow-triage-repair-candidate": (
                 "P05_REPAIR_CANDIDATE",
-                SNAPSHOT_188,
+                SNAPSHOT_189,
                 "representative/p05-flow-triage-repair-candidate.json",
             ),
         }
@@ -230,7 +231,8 @@ class RepairScenarioContractTests(unittest.TestCase):
         snapshots = schema["properties"]["required_snapshot"]["enum"]
         self.assertNotIn(SNAPSHOT_186, snapshots)
         self.assertIn(SNAPSHOT_187, snapshots)
-        self.assertIn(SNAPSHOT_188, snapshots)
+        self.assertIn(SNAPSHOT_189, snapshots)
+        self.assertNotIn(SNAPSHOT_188, snapshots)
 
 
 if __name__ == "__main__":
