@@ -69,6 +69,7 @@ advapi32.StartServiceCtrlDispatcherW.restype = wintypes.BOOL
 
 _status_handle = None
 _stop_requested = threading.Event()
+_status_report_failed = threading.Event()
 _exit_code = 0
 
 _FAILURE_MESSAGES = {
@@ -81,6 +82,7 @@ _FAILURE_MESSAGES = {
     "SERVICE_OBSERVATION_INVALID": "The read-only SDK dispatch observation could not be installed or retained.",
     "HTTP_RUNTIME_FAILED": "The HTTP server failed during startup or service execution.",
     "BRIDGE_EXIT_FAILED": "The bridge exited unsuccessfully without a classified startup failure.",
+    "SERVICE_STATUS_FAILED": "The Windows service status update failed.",
 }
 
 
@@ -108,14 +110,19 @@ def _report(state: int, exit_code: int = 0) -> None:
     status.dwWin32ExitCode = exit_code
     status.dwCheckPoint = 0
     status.dwWaitHint = 0
-    advapi32.SetServiceStatus(_status_handle, ctypes.byref(status))
+    if not advapi32.SetServiceStatus(_status_handle, ctypes.byref(status)):
+        error = ctypes.get_last_error()
+        _status_report_failed.set()
+        raise OSError(error, "SetServiceStatus failed")
 
 
 @_HANDLER
 def _service_handler(control: int) -> None:
     if control == 0x00000001:  # SERVICE_CONTROL_STOP
-        _report(SERVICE_STATUS["STOP_PENDING"])
-        _stop_requested.set()
+        try:
+            _report(SERVICE_STATUS["STOP_PENDING"])
+        finally:
+            _stop_requested.set()
 
 
 def _load_protected_env() -> None:
@@ -173,6 +180,7 @@ def _load_protected_env() -> None:
 
 def _service_main(argc: int, argv) -> None:
     global _status_handle, _exit_code
+    _status_report_failed.clear()
     _status_handle = advapi32.RegisterServiceCtrlHandlerW(
         SERVICE_NAME, _service_handler
     )
@@ -181,14 +189,15 @@ def _service_main(argc: int, argv) -> None:
         # callback referenced globally for the entire dispatcher lifetime.
         _exit_code = ctypes.get_last_error() or 10
         return
-    _report(SERVICE_STATUS["START_PENDING"])
-    failure_reason = "SERVICE_CONFIG_UNAVAILABLE"
+    failure_reason = "SERVICE_STATUS_FAILED"
 
     def classify_failure(reason: str) -> None:
         nonlocal failure_reason
         failure_reason = reason if reason in _FAILURE_MESSAGES else "BRIDGE_EXIT_FAILED"
 
     try:
+        _report(SERVICE_STATUS["START_PENDING"])
+        failure_reason = "SERVICE_CONFIG_UNAVAILABLE"
         _load_protected_env()
         sys.path.insert(0, str(REPO_ROOT))
         # The host can be launched by SCM from System32, where a third-party
@@ -220,11 +229,19 @@ def _service_main(argc: int, argv) -> None:
                 failure_reason = "BRIDGE_EXIT_FAILED"
             _write_failure(failure_reason, code)
         _exit_code = code or 0
-        _report(SERVICE_STATUS["STOPPED"], _exit_code)
     except BaseException:  # ctypes callbacks cannot propagate process exit
         _exit_code = 10
         _write_failure(failure_reason, _exit_code)
-        _report(SERVICE_STATUS["STOPPED"], 0x0000000A)
+    finally:
+        # A STOPPED report closes the SCM context; never call it twice.
+        if _status_report_failed.is_set():
+            _exit_code = 10
+            _write_failure("SERVICE_STATUS_FAILED", _exit_code)
+        try:
+            _report(SERVICE_STATUS["STOPPED"], _exit_code)
+        except OSError:
+            _exit_code = 10
+            _write_failure("SERVICE_STATUS_FAILED", _exit_code)
 
 
 def main() -> int:

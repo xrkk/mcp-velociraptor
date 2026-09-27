@@ -68,7 +68,11 @@ deployment environment values or partial bearer tokens to a diagnostic file.
 SCM callback signatures have Windows-only regression tests pending execution.
 The candidate reports running after HTTP startup and forwards service stop
 requests to graceful HTTP shutdown in the same process, without stopping the
-Velociraptor backend. Actual Windows lifecycle acceptance remains unfinished.
+Velociraptor backend. The local candidate reports `STOP_PENDING` before that
+signal, checks native status-report failures, and reports `STOPPED` once. These
+failures use the fixed `SERVICE_STATUS_FAILED` category and a nonzero exit.
+These stop changes are not deployed to the running Windows service; actual Windows
+lifecycle acceptance remains unfinished.
 An existing matching manual/automatic startup mode is preserved and reported;
 new installations remain manual until separate P05 readiness/autostart checks.
 

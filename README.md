@@ -253,8 +253,11 @@ environment values, including partial bearer tokens, into a diagnostic file.
 SCM callback signatures have Windows-only regression tests. The candidate
 service reports running only after HTTP startup and forwards stop requests to
 the existing HTTP server's graceful shutdown path, without creating a second
-server or stopping backend processes. Actual Windows lifecycle acceptance
-remains unfinished.
+server or stopping backend processes. The local candidate reports
+`STOP_PENDING` before signaling that shutdown path, checks native status-report
+failures through the fixed `SERVICE_STATUS_FAILED` category and a nonzero exit,
+and reports `STOPPED` once. These stop changes are not deployed to the
+running Windows service; actual Windows lifecycle acceptance remains unfinished.
 
 The service host requires an existing deployment environment file before it
 imports the bridge. A missing reference/file stops service startup; it does not
