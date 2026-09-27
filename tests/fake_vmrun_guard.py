@@ -12,7 +12,8 @@ if action=='list':
     if row['running']:print(row['vmx'])
 elif action=='listSnapshots':
     print('Total snapshots:',3+len(row['snapshots']))
-    for name in row['base_snapshots']+row['snapshots']:print(name)
+    for name in row['base_snapshots']+row['snapshots']:
+        print(('\t' if row.get('indented_tree') else '')+name)
 elif action=='snapshot':
     if args[3]!=row['vmx'] or args[4] in row['snapshots']:raise SystemExit(2)
     row['snapshots'].append(args[4]);state.write_text(json.dumps(row))
@@ -25,7 +26,9 @@ elif action=='stop':
 elif action=='revertToSnapshot':
     if args[4] not in row['snapshots']:raise SystemExit(2)
     if os.environ.get('FAKE_VMRUN_TIMEOUT')=='1':time.sleep(4)
-    row['reverts']+=1;state.write_text(json.dumps(row))
+    row['reverts']+=1
+    if row.get('running_after_revert'):row['running']=True
+    state.write_text(json.dumps(row))
 elif action=='start':
     row['running']=True;state.write_text(json.dumps(row))
 else:raise SystemExit(2)

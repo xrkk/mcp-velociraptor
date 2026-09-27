@@ -62,6 +62,23 @@ def identity(pid:int):
                 'argv_sha256':digest((proc/'cmdline').read_bytes()),'cgroup_sha256':digest((proc/'cgroup').read_bytes())}
     except (OSError,ValueError,IndexError):return None
 
+def snapshot_names(tree:str):
+    lines=tree.splitlines()
+    if not lines or not re.fullmatch(r'Total snapshots: [0-9]+',lines[0]):
+        raise GuardError('snapshot tree header differs')
+    names=[line.lstrip(' \t') for line in lines[1:]]
+    if len(names)!=int(lines[0].split(': ',1)[1]) or any(not name or name!=name.strip() for name in names):
+        raise GuardError('snapshot tree count/entry differs')
+    return names
+
+def running_count(output:str,vmx:str):
+    lines=output.splitlines()
+    if not lines or not re.fullmatch(r'Total running VMs: [0-9]+',lines[0]):
+        raise GuardError('running VM list header differs')
+    if len(lines)-1!=int(lines[0].split(': ',1)[1]):
+        raise GuardError('running VM list count differs')
+    return lines[1:].count(vmx)
+
 def approval_binding(manifest):
     fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_sha256','canonical_path',
             'canonical_sha256','epoch7_active_snapshot_name','state_dir','deadline_utc','min_free_bytes',
@@ -294,8 +311,7 @@ class Guard:
         return result['stdout']
     def preflight(self):
         self.check_fixed()
-        lines=self.vmrun('list').splitlines()
-        if lines.count(self.m['vmx'])!=1:raise GuardError('VMX not uniquely running')
+        if running_count(self.vmrun('list'),self.m['vmx'])!=1:raise GuardError('VMX not uniquely running')
         return self.vmrun('listSnapshots')
     def checkpoint_metadata(self):
         path=Path(self.m['vmx']).with_suffix('.vmsd')
@@ -331,11 +347,11 @@ class Guard:
                    'test_mode':self.m['test_mode'],'checkpoint_name':self.m['checkpoint_name']})
         self.append('BOOTSTRAP_INTENT',checkpoint=self.m['checkpoint_name'])
         tree=self.preflight()
-        if tree.splitlines().count(self.m['checkpoint_name'])!=0:raise GuardError('checkpoint name already exists')
+        if snapshot_names(tree).count(self.m['checkpoint_name'])!=0:raise GuardError('checkpoint name already exists')
         self.vmrun('snapshot')
         self.check_fixed()
         tree=self.vmrun('listSnapshots')
-        if tree.splitlines().count(self.m['checkpoint_name'])!=1:raise GuardError('INDETERMINATE_CHECKPOINT_READBACK')
+        if snapshot_names(tree).count(self.m['checkpoint_name'])!=1:raise GuardError('INDETERMINATE_CHECKPOINT_READBACK')
         metadata=self.checkpoint_metadata()
         state=self.load();state['status']='CREATED_UNQUALIFIED';state['checkpoint_metadata']=metadata;self.save(state);self.append('CHECKPOINT_CREATED_UNQUALIFIED',tree_sha256=digest(tree.encode()),metadata=metadata)
         return state['status']
@@ -347,7 +363,7 @@ class Guard:
             raise GuardError('prior restore transaction cannot be replaced')
         self.check_fixed()
         tree=self.preflight()
-        if tree.splitlines().count(self.m['checkpoint_name'])!=1:raise GuardError('checkpoint not unique')
+        if snapshot_names(tree).count(self.m['checkpoint_name'])!=1:raise GuardError('checkpoint not unique')
         state=self.load()
         if state.get('restore_transaction') is not None:
             state.setdefault('restore_history',[]).append(state['restore_transaction'])
@@ -361,11 +377,16 @@ class Guard:
         self._restore_stage('BEFORE_REVERT');self._crash_point('before_revert')
         self.vmrun('revertToSnapshot');self._crash_point('after_revert_response')
         self._restore_stage('REVERT_CONFIRMED');self._crash_point('after_revert_stage')
-        self._restore_stage('BEFORE_START');self._crash_point('before_start')
-        self.vmrun('start');self._crash_point('after_start_response')
+        running=running_count(self.vmrun('list'),self.m['vmx'])
+        if running>1:raise GuardError('VMX running list ambiguous after revert')
+        if running==0:
+            self._restore_stage('BEFORE_START');self._crash_point('before_start')
+            self.vmrun('start');self._crash_point('after_start_response')
+        else:
+            self._restore_stage('RUNNING_AFTER_REVERT');self._crash_point('before_start')
         self._restore_stage('START_CONFIRMED');self._crash_point('after_start_stage')
         tree=self.preflight()
-        if tree.splitlines().count(self.m['checkpoint_name'])!=1:raise GuardError('INDETERMINATE_POST_RESTORE')
+        if snapshot_names(tree).count(self.m['checkpoint_name'])!=1:raise GuardError('INDETERMINATE_POST_RESTORE')
         metadata=self.checkpoint_metadata()
         state=self.load()
         if state.get('checkpoint_metadata')!=metadata:raise GuardError('checkpoint metadata drift')

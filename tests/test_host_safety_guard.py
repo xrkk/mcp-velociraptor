@@ -117,6 +117,20 @@ class HostGuardTests(unittest.TestCase):
         self.run_guard('qualify')
         self.assertEqual(guard.read(self.state/'state.json')['status'],'HOST_RESTORED_PENDING_GUEST')
         self.run_guard('arm',expect=3)
+    def test_native_style_indented_tree_and_running_restore(self):
+        row=json.loads(self.fake_state.read_text())
+        row['indented_tree']=True;row['running_after_revert']=True
+        self.fake_state.write_text(json.dumps(row))
+        self.run_guard('bootstrap');self.run_guard('qualify')
+        self.assertEqual(guard.read(self.state/'state.json')['status'],'HOST_RESTORED_PENDING_GUEST')
+        self.assertNotIn('start',self.calls())
+        self.assertEqual(self.calls().count('revertToSnapshot'),1)
+    def test_snapshot_tree_and_running_list_reject_malformed_or_duplicate(self):
+        with self.assertRaises(guard.GuardError):
+            guard.snapshot_names('Total snapshots: 1\n\tX\n\tX\n')
+        self.assertEqual(guard.snapshot_names('Total snapshots: 2\nX\n\tY\n'),['X','Y'])
+        with self.assertRaises(guard.GuardError):
+            guard.running_count('Total running VMs: 1\nX\nX\n','X')
     def test_deadline_and_repeat(self):
         self.prepared();before=self.calls().count('revertToSnapshot')
         self.run_guard('deadline')
