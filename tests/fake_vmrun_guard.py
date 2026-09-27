@@ -32,3 +32,5 @@ elif action=='revertToSnapshot':
 elif action=='start':
     row['running']=True;state.write_text(json.dumps(row))
 else:raise SystemExit(2)
+if action in ('snapshot','stop','revertToSnapshot','start') and row.get('vmx_after_'+action):
+    Path(row['vmx']).write_bytes(row['vmx_after_'+action].encode())

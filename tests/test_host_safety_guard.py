@@ -10,7 +10,7 @@ class HostGuardTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(dir=HERE,prefix='fake-guard-')
         self.dir=Path(self.tmp.name);self.state=self.dir/'state';self.state.mkdir(mode=0o700)
-        self.vmx=self.dir/'fake.vmx';self.vmx.write_bytes(b'fake-vmx')
+        self.vmx=self.dir/'fake.vmx';self.vmx.write_bytes(b'uuid.bios = "fake-uuid"\ndisplayName = "Fake VM"\nvolatile = "before"\n')
         self.canonical=self.dir/'canonical.json'
         self.canonical.write_bytes(guard.encoded({'epoch':7,'phase':'PREPARATION_BASELINE',
             'active_snapshot':{'name':'Approved-Current-Snapshot'}}))
@@ -24,6 +24,7 @@ class HostGuardTests(unittest.TestCase):
         self.m={'schema_version':1,'kind':'velo-g14-safety-guard-v1','attempt_id':self.id,'test_mode':True,
             'vmx':str(self.vmx),'vmx_sha256':guard.digest(self.vmx.read_bytes()),
             'vmx_device':self.vmx.stat().st_dev,'vmx_inode':self.vmx.stat().st_ino,
+            'vmx_identity':{'uuid.bios':'fake-uuid','displayName':'Fake VM'},'vmx_transitions':[],
             'vmrun_path':str(HERE/'fake_vmrun_guard.py'),'vmrun_target':None,'canonical_path':str(self.canonical),
             'canonical_sha256':guard.digest(self.canonical.read_bytes()),
             'epoch7_active_snapshot_name':'Approved-Current-Snapshot','epoch7_phase':'PREPARATION_BASELINE','state_dir':str(self.state),
@@ -149,6 +150,29 @@ class HostGuardTests(unittest.TestCase):
         self.run_guard('deadline')
         self.assertEqual(guard.read(self.state/'state.json')['status'],'INDETERMINATE')
         self.assertEqual(self.calls().count('revertToSnapshot'),before)
+    def test_explicit_vmx_transition_is_durable_and_identity_bound(self):
+        after='uuid.bios = "fake-uuid"\ndisplayName = "Fake VM"\nvolatile = "after"\n'
+        row=json.loads(self.fake_state.read_text());row['vmx_after_snapshot']=after
+        self.fake_state.write_text(json.dumps(row))
+        self.m['vmx_transitions']=[{'action':'snapshot','from_sha256':self.m['vmx_sha256'],
+                                     'to_sha256':guard.digest(after.encode())}]
+        self.seal();self.run_guard('bootstrap')
+        self.assertEqual(guard.read(self.state/'state.json')['vmx_current_sha256'],guard.digest(after.encode()))
+        self.run_guard('qualify')
+    def test_approved_digest_cannot_override_vmx_identity(self):
+        after='uuid.bios = "other-vm"\ndisplayName = "Fake VM"\nvolatile = "after"\n'
+        row=json.loads(self.fake_state.read_text());row['vmx_after_snapshot']=after
+        self.fake_state.write_text(json.dumps(row))
+        self.m['vmx_transitions']=[{'action':'snapshot','from_sha256':self.m['vmx_sha256'],
+                                     'to_sha256':guard.digest(after.encode())}]
+        self.seal();self.run_guard('bootstrap',expect=3)
+        self.assertEqual(guard.read(self.state/'state.json')['pending_operation'],'snapshot')
+    def test_unapproved_vmx_change_refuses_snapshot_readback(self):
+        row=json.loads(self.fake_state.read_text())
+        row['vmx_after_snapshot']='uuid.bios = "fake-uuid"\ndisplayName = "Fake VM"\nvolatile = "unapproved"\n'
+        self.fake_state.write_text(json.dumps(row))
+        self.run_guard('bootstrap',expect=3)
+        self.assertEqual(guard.read(self.state/'state.json')['pending_operation'],'snapshot')
     def test_missing_persistent_lock_refuses_without_vmrun(self):
         self.prepared();before=len(self.calls())
         (self.state/'controller.lock').unlink()

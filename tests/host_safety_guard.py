@@ -92,7 +92,7 @@ def running_count(output:str,vmx:str):
     return lines[1:].count(vmx)
 
 def approval_binding(manifest):
-    fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
+    fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
             'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','deadline_utc','min_free_bytes',
             'vmrun_timeout_seconds','max_actions','approved_guest_collector_sha256',
             'code_sha256','installer_sha256','interpreter_path','interpreter_sha256',
@@ -107,7 +107,7 @@ class Guard:
         raw=self.manifest_path.read_bytes()
         if digest(raw)!=approval_sha or not HEX.fullmatch(approval_sha):raise GuardError('manifest approval SHA differs')
         self.m=strict_json(raw);m=self.m
-        required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmrun_path','vmrun_target','canonical_path',
+        required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmx_identity','vmx_transitions','vmrun_path','vmrun_target','canonical_path',
                   'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
                   'vmrun_timeout_seconds','approved_guest_collector_sha256','code_sha256','retention','max_actions',
                   'approval_decision_sha256','approval_decision_path','authorized_actions',
@@ -153,6 +153,20 @@ class Guard:
             raise GuardError('production safety free-space budget too small')
         if type(m['vmx_device']) is not int or m['vmx_device']<0 or type(m['vmx_inode']) is not int or m['vmx_inode']<=0:
             raise GuardError('VMX file identity invalid')
+        if (type(m['vmx_identity']) is not dict or set(m['vmx_identity'])!={'uuid.bios','displayName'}
+                or any(type(value) is not str or not value for value in m['vmx_identity'].values())):
+            raise GuardError('VMX stable identity approval differs')
+        transitions=m['vmx_transitions']
+        if type(transitions) is not list or len(transitions)>8:
+            raise GuardError('VMX transition approval shape differs')
+        for edge in transitions:
+            if (type(edge) is not dict or set(edge)!={'action','from_sha256','to_sha256'}
+                    or edge['action'] not in ('snapshot','stop','revertToSnapshot','start')
+                    or any(type(edge[key]) is not str or not HEX.fullmatch(edge[key]) for key in ('from_sha256','to_sha256'))
+                    or edge['from_sha256']==edge['to_sha256']):
+                raise GuardError('VMX transition approval differs')
+        if len({(edge['action'],edge['from_sha256']) for edge in transitions})!=len(transitions):
+            raise GuardError('ambiguous VMX transition approval')
         try:due=datetime.datetime.fromisoformat(m['deadline_utc'].replace('Z','+00:00'))
         except (TypeError,AttributeError,ValueError) as exc:raise GuardError('deadline format invalid') from exc
         if due.tzinfo is None or due.utcoffset()!=datetime.timedelta(0):
@@ -199,12 +213,29 @@ class Guard:
         info=self.root.lstat()
         if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or stat.S_IMODE(info.st_mode)!=0o700 or (not self.m['test_mode'] and info.st_uid!=0):
             raise GuardError('state root permissions differ')
-    def check_vmx(self):
+    def check_vmx(self,action=None):
         path=Path(self.m['vmx']);no_symlink_chain(path);info=path.lstat()
         if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
-                or info.st_dev!=self.m['vmx_device'] or info.st_ino!=self.m['vmx_inode']
-                or digest(path.read_bytes())!=self.m['vmx_sha256']):
+                or info.st_dev!=self.m['vmx_device'] or info.st_ino!=self.m['vmx_inode']):
             raise GuardError('VMX byte identity differs')
+        state=self.load();expected=state.get('vmx_current_sha256',self.m['vmx_sha256']) if state else self.m['vmx_sha256']
+        raw=path.read_bytes();actual=digest(raw)
+        try:
+            vmx_text=raw.decode('utf-8')
+        except UnicodeError as exc:raise GuardError('VMX text encoding differs') from exc
+        values={}
+        for line in vmx_text.splitlines():
+            match=re.fullmatch(r'\s*([^=\s]+)\s*=\s*"([^"]*)"\s*',line)
+            if match and match.group(1) in self.m['vmx_identity']:
+                if match.group(1) in values:raise GuardError('duplicate VMX stable identity')
+                values[match.group(1)]=match.group(2)
+        if values!=self.m['vmx_identity']:raise GuardError('VMX stable identity differs')
+        if actual==expected:return
+        edge={'action':action,'from_sha256':expected,'to_sha256':actual}
+        if action is None or edge not in self.m['vmx_transitions'] or not state or state.get('pending_operation')!=action:
+            raise GuardError('unapproved VMX byte transition')
+        state['vmx_current_sha256']=actual;self.save(state)
+        self.append('APPROVED_VMX_TRANSITION',**edge)
     def check_fixed(self,canonical_sha=None):
         m=self.m
         vmx=Path(m['vmx']);canonical=Path(m['canonical_path']);no_symlink_chain(canonical)
@@ -317,7 +348,7 @@ class Guard:
         result={'action':action,'argv':argv,'exit_code':proc.returncode,'stdout':stdout.decode(errors='replace'),
                 'stderr':stderr.decode(errors='replace'),'stdout_sha256':digest(stdout),'stderr_sha256':digest(stderr)}
         self.append('VMRUN_RESPONSE',**result)
-        self.check_vmx()
+        self.check_vmx(action if action not in ('list','listSnapshots') else None)
         if proc.returncode!=0:raise GuardError('INDETERMINATE_VMRUN_NONZERO')
         if action not in ('list','listSnapshots'):
             state=self.load();state['pending_operation']=None;state['child_identity']=None;self.save(state)
