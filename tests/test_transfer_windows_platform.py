@@ -185,6 +185,19 @@ class AclTests(unittest.TestCase):
         with mock.patch.object(platform, "_fingerprint", side_effect=replaced):
             self.assert_code("windows_acl_path_changed", lambda: self.verifier(self.stage, "stage"))
 
+    def test_owner_rights_are_bound_to_trusted_owner_only(self):
+        owner_rights = platform.Ace(0, 0x03, 0x001F01FF, "S-1-3-4")
+        self.snapshots[self.parent] = platform.AclSnapshot(CURRENT,
+            (owner_rights, platform.Ace(0, 0, 0x001F01FF, TRUSTED)))
+        self.assertIs(self.verifier(self.stage, "stage"), True)
+        self.snapshots[self.parent] = platform.AclSnapshot(OTHER,
+            (owner_rights, platform.Ace(0, 0, 0x001F01FF, TRUSTED)))
+        self.assert_code("windows_acl_untrusted_owner", lambda: self.verifier(self.stage, "stage"))
+        self.snapshots[self.parent] = platform.AclSnapshot(CURRENT,
+            (platform.Ace(0, 0x03, 0x001F01FF, "S-1-3-0"),
+             platform.Ace(0, 0, 0x001F01FF, TRUSTED)))
+        self.assert_code("windows_acl_untrusted_write", lambda: self.verifier(self.stage, "stage"))
+
     def test_ace_parser_bounds_and_allowlist(self):
         parsed = platform._decode_ace(ace())
         self.assertEqual(parsed.sid, TRUSTED)

@@ -35,6 +35,7 @@ _BOOT = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z\Z")
 _SID = re.compile(r"S-1-(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*)){1,15}\Z")
 _SYSTEM = "S-1-5-18"
 _ADMINS = "S-1-5-32-544"
+_OWNER_RIGHTS = "S-1-3-4"
 _MAX_OUTPUT = 4096
 _MAX_ACL_BYTES = 1 << 20
 _MAX_ACES = 4096
@@ -255,7 +256,9 @@ def _evaluate(snapshot: AclSnapshot, kind: str, trusted: frozenset[str]) -> None
             raise Error("windows_acl_unsupported")
         if type(ace.mask) is not int or ace.mask < 0 or ace.mask & ~_KNOWN:
             raise Error("windows_acl_unsupported")
-        if ace.sid in trusted or ace.ace_type == 1:
+        # OWNER RIGHTS applies only to this object's owner, already checked
+        # above. Windows adds this ACE to some service-created private dirs.
+        if ace.sid in trusted or ace.sid == _OWNER_RIGHTS or ace.ace_type == 1:
             continue
         # Deny ACEs never cancel an untrusted allow. Inherit-only grants are
         # considered too: they may become effective on a new child object.
