@@ -93,7 +93,7 @@ def running_count(output:str,vmx:str):
 
 def approval_binding(manifest):
     fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
-            'canonical_sha256','epoch7_active_snapshot_name','state_dir','deadline_utc','min_free_bytes',
+            'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','deadline_utc','min_free_bytes',
             'vmrun_timeout_seconds','max_actions','approved_guest_collector_sha256',
             'code_sha256','installer_sha256','interpreter_path','interpreter_sha256',
             'controller_install_path','unit_service_path','unit_timer_path')
@@ -108,7 +108,7 @@ class Guard:
         if digest(raw)!=approval_sha or not HEX.fullmatch(approval_sha):raise GuardError('manifest approval SHA differs')
         self.m=strict_json(raw);m=self.m
         required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmrun_path','vmrun_target','canonical_path',
-                  'canonical_sha256','epoch7_active_snapshot_name','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
+                  'canonical_sha256','epoch7_active_snapshot_name','epoch7_phase','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
                   'vmrun_timeout_seconds','approved_guest_collector_sha256','code_sha256','retention','max_actions',
                   'approval_decision_sha256','approval_decision_path','authorized_actions',
                   'interpreter_path','interpreter_sha256','vmrun_sha256',
@@ -125,6 +125,8 @@ class Guard:
             raise GuardError('checkpoint name differs')
         if type(m['epoch7_active_snapshot_name']) is not str or not m['epoch7_active_snapshot_name']:
             raise GuardError('epoch7 active snapshot identity missing')
+        if m['epoch7_phase'] not in ('PREPARATION_BASELINE','NETWORK_ACTIVE'):
+            raise GuardError('epoch7 phase differs')
         if m['test_mode'] is True:
             if (not Path(m['state_dir']).resolve().is_relative_to(Path(__file__).resolve().parent)
                     or m['vmrun_path']!=str(Path(__file__).with_name('fake_vmrun_guard.py').resolve())
@@ -457,7 +459,7 @@ class Guard:
         self.check_fixed()
         canonical=strict_json(Path(self.m['canonical_path']).read_bytes())
         active=canonical.get('active_snapshot')
-        if type(canonical.get('epoch')) is not int or canonical['epoch']!=7 or canonical.get('phase')!='NETWORK_ACTIVE' or type(active) is not dict or active.get('name')!=self.m['epoch7_active_snapshot_name']:
+        if type(canonical.get('epoch')) is not int or canonical['epoch']!=7 or canonical.get('phase')!=self.m['epoch7_phase'] or type(active) is not dict or active.get('name')!=self.m['epoch7_active_snapshot_name']:
             raise GuardError('epoch7 canonical readback differs')
         finish={'kind':'velo-g14-safety-finish-receipt-v1','attempt_id':self.m['attempt_id'],
                 'checkpoint_name':self.m['checkpoint_name'],'manifest_sha256':self.manifest_sha,

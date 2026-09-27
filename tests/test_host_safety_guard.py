@@ -12,7 +12,7 @@ class HostGuardTests(unittest.TestCase):
         self.dir=Path(self.tmp.name);self.state=self.dir/'state';self.state.mkdir(mode=0o700)
         self.vmx=self.dir/'fake.vmx';self.vmx.write_bytes(b'fake-vmx')
         self.canonical=self.dir/'canonical.json'
-        self.canonical.write_bytes(guard.encoded({'epoch':7,'phase':'NETWORK_ACTIVE',
+        self.canonical.write_bytes(guard.encoded({'epoch':7,'phase':'PREPARATION_BASELINE',
             'active_snapshot':{'name':'Approved-Current-Snapshot'}}))
         self.fake_state=self.dir/'vmrun-state.json';self.log=self.dir/'vmrun-log.jsonl'
         self.id=str(uuid.uuid4());self.name='Snapshot G14-SAFETY-'+self.id
@@ -26,7 +26,7 @@ class HostGuardTests(unittest.TestCase):
             'vmx_device':self.vmx.stat().st_dev,'vmx_inode':self.vmx.stat().st_ino,
             'vmrun_path':str(HERE/'fake_vmrun_guard.py'),'vmrun_target':None,'canonical_path':str(self.canonical),
             'canonical_sha256':guard.digest(self.canonical.read_bytes()),
-            'epoch7_active_snapshot_name':'Approved-Current-Snapshot','state_dir':str(self.state),
+            'epoch7_active_snapshot_name':'Approved-Current-Snapshot','epoch7_phase':'PREPARATION_BASELINE','state_dir':str(self.state),
             'checkpoint_name':self.name,'deadline_utc':'2000-01-01T00:00:00Z','min_free_bytes':0,
             'vmrun_timeout_seconds':1,'approved_guest_collector_sha256':'a'*64,
             'interpreter_path':sys.executable,'interpreter_sha256':guard.digest(Path(sys.executable).read_bytes()),
