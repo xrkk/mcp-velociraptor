@@ -24,7 +24,7 @@ class HostGuardTests(unittest.TestCase):
         self.m={'schema_version':1,'kind':'velo-g14-safety-guard-v1','attempt_id':self.id,'test_mode':True,
             'vmx':str(self.vmx),'vmx_sha256':guard.digest(self.vmx.read_bytes()),
             'vmx_device':self.vmx.stat().st_dev,'vmx_inode':self.vmx.stat().st_ino,
-            'vmrun_path':str(HERE/'fake_vmrun_guard.py'),'canonical_path':str(self.canonical),
+            'vmrun_path':str(HERE/'fake_vmrun_guard.py'),'vmrun_target':None,'canonical_path':str(self.canonical),
             'canonical_sha256':guard.digest(self.canonical.read_bytes()),
             'epoch7_active_snapshot_name':'Approved-Current-Snapshot','state_dir':str(self.state),
             'checkpoint_name':self.name,'deadline_utc':'2000-01-01T00:00:00Z','min_free_bytes':0,
@@ -330,6 +330,14 @@ class HostGuardTests(unittest.TestCase):
         self.m['vmrun_path']='/usr/bin/vmrun';self.seal()
         self.run_guard('bootstrap',expect=3)
         self.assertFalse(self.log.exists())
+    def test_vmrun_link_must_have_exact_approved_target_and_bytes(self):
+        target=self.dir/'target';target.write_bytes(b'approved-executable');target.chmod(0o755)
+        link=self.dir/'link';link.symlink_to(target)
+        self.assertEqual(guard.vmrun_bytes(link,str(target)),b'approved-executable')
+        with self.assertRaises(guard.GuardError):guard.vmrun_bytes(link,str(self.dir/'other'))
+        with self.assertRaises(guard.GuardError):guard.vmrun_bytes(link,None)
+        target.write_bytes(b'drifted-executable')
+        self.assertNotEqual(guard.digest(guard.vmrun_bytes(link,str(target))),guard.digest(b'approved-executable'))
     def test_review_units_have_inert_condition_and_boot_timer(self):
         m=dict(self.m);m['test_mode']=False;m['vmrun_path']='/usr/bin/vmrun';m['vmx']='/opt/example/safety.vmx'
         m['state_dir']=f'/var/lib/velo-g14-guard/{self.id}'

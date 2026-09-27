@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.host_safety_guard import GuardError, approval_binding, no_symlink_chain, strict_json
+from tests.host_safety_guard import GuardError, approval_binding, no_symlink_chain, strict_json, vmrun_bytes
 
 
 def sha(data: bytes) -> str:
@@ -145,7 +145,7 @@ def install(manifest_path: Path, manifest_sha: str, decision_path: Path) -> dict
         raise ValueError('controller code identity differs')
     if sha(_plain(Path(manifest['interpreter_path']))) != manifest['interpreter_sha256']:
         raise ValueError('interpreter identity differs')
-    if sha(_plain(Path(manifest['vmrun_path']))) != manifest['vmrun_sha256']:
+    if sha(vmrun_bytes(Path(manifest['vmrun_path']), manifest['vmrun_target'])) != manifest['vmrun_sha256']:
         raise ValueError('vmrun identity differs')
     vmx_path = Path(manifest['vmx'])
     if (sha(_plain(vmx_path)) != manifest['vmx_sha256']

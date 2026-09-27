@@ -52,6 +52,18 @@ def no_symlink_chain(path:Path):
     for part in path.parts[1:]:
         current=current/part
         if stat.S_ISLNK(current.lstat().st_mode):raise GuardError('symlink in protected path')
+def vmrun_bytes(path:Path,target):
+    no_symlink_chain(path.parent)
+    if target is None:
+        no_symlink_chain(path);executable=path
+    else:
+        if type(target) is not str or not Path(target).is_absolute() or not stat.S_ISLNK(path.lstat().st_mode) or os.readlink(path)!=target:
+            raise GuardError('vmrun link target differs')
+        executable=Path(target);no_symlink_chain(executable)
+    info=executable.lstat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_mode & 0o022:
+        raise GuardError('vmrun executable identity differs')
+    return executable.read_bytes()
 def identity(pid:int):
     proc=Path('/proc')/str(pid)
     try:
@@ -80,7 +92,7 @@ def running_count(output:str,vmx:str):
     return lines[1:].count(vmx)
 
 def approval_binding(manifest):
-    fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_sha256','canonical_path',
+    fields=('test_mode','vmx_sha256','vmx_device','vmx_inode','vmrun_path','vmrun_target','vmrun_sha256','canonical_path',
             'canonical_sha256','epoch7_active_snapshot_name','state_dir','deadline_utc','min_free_bytes',
             'vmrun_timeout_seconds','max_actions','approved_guest_collector_sha256',
             'code_sha256','installer_sha256','interpreter_path','interpreter_sha256',
@@ -95,7 +107,7 @@ class Guard:
         raw=self.manifest_path.read_bytes()
         if digest(raw)!=approval_sha or not HEX.fullmatch(approval_sha):raise GuardError('manifest approval SHA differs')
         self.m=strict_json(raw);m=self.m
-        required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmrun_path','canonical_path',
+        required={'schema_version','kind','attempt_id','test_mode','vmx','vmx_sha256','vmrun_path','vmrun_target','canonical_path',
                   'canonical_sha256','epoch7_active_snapshot_name','state_dir','checkpoint_name','deadline_utc','min_free_bytes',
                   'vmrun_timeout_seconds','approved_guest_collector_sha256','code_sha256','retention','max_actions',
                   'approval_decision_sha256','approval_decision_path','authorized_actions',
@@ -116,11 +128,12 @@ class Guard:
         if m['test_mode'] is True:
             if (not Path(m['state_dir']).resolve().is_relative_to(Path(__file__).resolve().parent)
                     or m['vmrun_path']!=str(Path(__file__).with_name('fake_vmrun_guard.py').resolve())
+                    or m['vmrun_target'] is not None
                     or not Path(m['vmx']).resolve().is_relative_to(Path(__file__).resolve().parent)
                     or not Path(m['canonical_path']).resolve().is_relative_to(Path(__file__).resolve().parent)):
                 raise GuardError('test paths escape isolated candidate root')
         elif m['test_mode'] is False:
-            if (m['vmrun_path']!=VMRUN or not Path(m['vmx']).is_absolute()
+            if (m['vmrun_path']!=VMRUN or m['vmrun_target']!='/usr/lib/vmware/bin/appLoader' or not Path(m['vmx']).is_absolute()
                     or not Path(m['canonical_path']).is_absolute()
                     or m['state_dir']!=f"/var/lib/velo-g14-guard/{m['attempt_id']}"
                     or m['controller_install_path']!=f"/usr/local/libexec/velo-g14-guard-{m['attempt_id']}.py"
@@ -146,8 +159,7 @@ class Guard:
         self.verify_approval()
         if Path(m['interpreter_path']).resolve()!=Path(sys.executable).resolve() or digest(Path(sys.executable).read_bytes())!=m['interpreter_sha256']:
             raise GuardError('interpreter identity differs')
-        no_symlink_chain(Path(m['vmrun_path']))
-        if digest(Path(m['vmrun_path']).read_bytes())!=m['vmrun_sha256']:
+        if digest(vmrun_bytes(Path(m['vmrun_path']),m['vmrun_target']))!=m['vmrun_sha256']:
             raise GuardError('vmrun code identity differs')
         self.root=Path(m['state_dir'])
         self.state_path=self.root/'state.json';self.owner_path=self.root/'owner.json';self.lock_path=self.root/'controller.lock'
@@ -203,8 +215,7 @@ class Guard:
         if disk.f_bavail*disk.f_frsize<m['min_free_bytes']:
             raise GuardError('insufficient host free space')
         if digest(Path(__file__).read_bytes())!=m['code_sha256']:raise GuardError('guard code SHA differs')
-        no_symlink_chain(Path(m['vmrun_path']))
-        if digest(Path(m['vmrun_path']).read_bytes())!=m['vmrun_sha256']:raise GuardError('vmrun code identity differs')
+        if digest(vmrun_bytes(Path(m['vmrun_path']),m['vmrun_target']))!=m['vmrun_sha256']:raise GuardError('vmrun code identity differs')
     def verify_journal(self):
         folder=self.root/'events'
         if not folder.exists():
