@@ -27,6 +27,7 @@ from velo_transfer.protocol import (GuestTerminal, prepare_receipt,
 from velo_transfer.request import load_request
 from velo_transfer.__main__ import main as cli_main
 from velo_transfer.errors import TransferContentError
+from velo_transfer.connection import ConnectionError
 from velo_transfer import host_publication
 
 
@@ -821,6 +822,22 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_cli_connection_profile_error_is_bounded(self):
+        class Request:
+            resume = False
+
+        async def invalid_profile(_request, *, abort):
+            raise ConnectionError("invalid_profile")
+
+        output = io.StringIO()
+        with mock.patch("velo_transfer.__main__.load_request", return_value=Request()), \
+             mock.patch("velo_transfer.__main__.transfer", invalid_profile), \
+             redirect_stdout(output):
+            code = cli_main(["--spec", "/tmp/fixture-spec.json"])
+        self.assertEqual(code, 3)
+        self.assertEqual(output.getvalue().splitlines(),
+                         ['{"schema":"velo.transfer.command-error.v1","error":"invalid_profile"}'])
+
     def test_c6_cli_subprocess_summary_matches_durable_result(self):
         script = """
 import json

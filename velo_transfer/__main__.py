@@ -5,6 +5,7 @@ import json
 import sys
 
 from .adapters import AdapterError
+from .connection import ConnectionError
 from .errors import TransferContentError
 from .host_coordinator import transfer
 from .request import load_request
@@ -20,9 +21,9 @@ def main(argv=None):
         if args.abort and not request.resume:
             raise TransferContentError("abort_requires_resume")
         summary = asyncio.run(transfer(request, abort=args.abort))
-    except (TransferContentError, AdapterError, OSError) as exc:
+    except (TransferContentError, AdapterError, ConnectionError, OSError) as exc:
         # No result path is claimed when parsing or durable publication failed.
-        code = exc.code if isinstance(exc, (TransferContentError, AdapterError)) else "host_io_failed"
+        code = exc.code if isinstance(exc, (TransferContentError, AdapterError, ConnectionError)) else "host_io_failed"
         print(json.dumps({"schema": "velo.transfer.command-error.v1", "error": code}, separators=(",", ":")))
         return 4 if "conflict" in code or "revision" in code else 3
     print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
