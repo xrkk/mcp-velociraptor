@@ -86,6 +86,37 @@ class ServiceHostABITests(unittest.TestCase):
         self.assertIn(('SERVICE_STATUS_FAILED', 10), [call.args for call in failure.call_args_list])
         self.assertEqual(api.SetServiceStatus.call_count, 2)  # start, then one STOPPED attempt
 
+    def test_failed_stop_pending_keeps_signal_and_sets_fixed_nonzero_result(self):
+        api = Mock()
+        api.RegisterServiceCtrlHandlerW.return_value = 1
+        api.SetServiceStatus.side_effect = [True, False, True]
+        bridge = Mock()
+
+        def stop_bridge(**kwargs):
+            self.host._service_handler(1)
+            self.assertTrue(kwargs['stop_requested']())
+            return 0
+
+        bridge.main.side_effect = stop_bridge
+        observation = types.ModuleType('p05_service_observation')
+        observation.observe_dispatch = Mock(return_value=nullcontext())
+        stderr = io.StringIO()
+        with patch.object(self.host, 'advapi32', api), \
+                patch.object(self.host, '_write_failure') as failure, \
+                patch.object(self.host, '_load_protected_env'), \
+                patch.object(self.host, '_stop_requested', threading.Event()), \
+                patch.object(sys, 'path', list(sys.path)), \
+                patch.dict(sys.modules, {'mcp_velociraptor_bridge': bridge,
+                                         'p05_service_observation': observation}), \
+                patch('builtins.open', mock_open()), \
+                patch.object(ctypes, 'get_last_error', return_value=5), \
+                redirect_stderr(stderr):
+            self.host._service_main(0, None)
+        self.assertEqual(stderr.getvalue(), '')
+        self.assertEqual(api.SetServiceStatus.call_count, 3)
+        self.assertEqual(self.host._exit_code, 10)
+        failure.assert_called_with('SERVICE_STATUS_FAILED', 10)
+
     def test_failed_stopped_report_is_single_and_nonzero(self):
         api = Mock()
         api.RegisterServiceCtrlHandlerW.return_value = 1
