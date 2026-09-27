@@ -114,8 +114,8 @@ def _report(state: int, exit_code: int = 0) -> None:
 @_HANDLER
 def _service_handler(control: int) -> None:
     if control == 0x00000001:  # SERVICE_CONTROL_STOP
-        _stop_requested.set()
         _report(SERVICE_STATUS["STOP_PENDING"])
+        _stop_requested.set()
 
 
 def _load_protected_env() -> None:
