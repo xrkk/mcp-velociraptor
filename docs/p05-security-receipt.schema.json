@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/velo/p05-security-receipt.schema.json",
+  "title": "Offline P05 security command receipt; no Phase admission",
+  "$defs": {
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "label",
+        "argv",
+        "exit_code",
+        "stdout",
+        "stdout_sha256",
+        "stderr",
+        "collector_instance",
+        "run_id",
+        "restore_attempt_id"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "label": {
+          "enum": [
+            "service",
+            "policy",
+            "acl",
+            "entry",
+            "schema",
+            "network"
+          ]
+        },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exit_code": {
+          "const": 0
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "stdout_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stderr": {
+          "const": ""
+        },
+        "collector_instance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "restore_attempt_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "run_id",
+    "restore_attempt_id",
+    "collector_sha256",
+    "collector_instance",
+    "vm_uuid",
+    "boot_id",
+    "server_identity",
+    "network_evidence_sha256",
+    "ready_sha256",
+    "source_inputs_sha256",
+    "implementation_sources_sha256",
+    "tools_schema_sha256",
+    "native_originals",
+    "commands"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "p05-security-command-receipt-v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "restore_attempt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "collector_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "collector_instance": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vm_uuid": {
+      "type": "string",
+      "minLength": 1
+    },
+    "boot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pid",
+        "instance_id"
+      ],
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "instance_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "network_evidence_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ready_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_inputs_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "implementation_sources_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "tools_schema_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "native_originals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sdk",
+        "wfp"
+      ],
+      "properties": {
+        "sdk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "wfp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 1
+                },
+                "label": {
+                  "const": "service"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 2
+                },
+                "label": {
+                  "const": "policy"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 3
+                },
+                "label": {
+                  "const": "acl"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 4
+                },
+                "label": {
+                  "const": "entry"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 5
+                },
+                "label": {
+                  "const": "schema"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/$defs/command"
+            },
+            {
+              "properties": {
+                "sequence": {
+                  "const": 6
+                },
+                "label": {
+                  "const": "network"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
