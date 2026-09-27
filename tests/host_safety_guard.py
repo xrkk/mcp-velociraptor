@@ -228,7 +228,7 @@ class Guard:
             owner=read(self.owner_path) if self.owner_path.exists() else None
             current=identity(owner['identity']['pid']) if owner and owner.get('attempt_id')==self.m['attempt_id'] and owner.get('role')=='controller' else None
             state=self.load()
-            if not owner or current!=owner['identity'] or not state or state.get('pending_operation') is not None or state.get('child_identity') is not None or not self._owner_matches(owner['identity']['pid']):
+            if not owner or current!=owner['identity'] or not state or state.get('pending_operation') is not None or state.get('child_identity') is not None or self._restore_open(state) or not self._owner_matches(owner['identity']['pid']):
                 os.close(fd);raise GuardError('INDETERMINATE_LOCK_OWNER_OR_CHILD')
             if identity(owner['identity']['pid'])!=owner['identity']:
                 os.close(fd);raise GuardError('INDETERMINATE_OWNER_CHANGED')
@@ -253,6 +253,15 @@ class Guard:
         return [x.decode(errors='replace') for x in argv[:len(expected)]]==expected and len(argv)>len(expected)
     def release(self):
         fcntl.flock(self.fd,fcntl.LOCK_UN);os.close(self.fd)
+    @staticmethod
+    def _restore_open(state):
+        txn=state.get('restore_transaction')
+        return txn is not None and (type(txn) is not dict or txn.get('stage')!='COMPLETE')
+    def _restore_stage(self,stage):
+        state=self.load();txn=state['restore_transaction'];txn['stage']=stage
+        self.save(state);self.append('RESTORE_TRANSACTION_STAGE',transaction_id=txn['id'],stage=stage)
+    def _crash_point(self,point):
+        if self.m['test_mode'] and os.environ.get('FAKE_GUARD_CRASH_RESTORE_AT')==point:os._exit(98)
     def vmrun(self,action,*args):
         allowed={'list','listSnapshots','snapshot','stop','revertToSnapshot','start'}
         if action not in allowed:raise GuardError('vmrun action not allowlisted')
@@ -331,16 +340,38 @@ class Guard:
         state=self.load();state['status']='CREATED_UNQUALIFIED';state['checkpoint_metadata']=metadata;self.save(state);self.append('CHECKPOINT_CREATED_UNQUALIFIED',tree_sha256=digest(tree.encode()),metadata=metadata)
         return state['status']
     def revert_once(self):
+        prior=self.load()
+        if not prior or self._restore_open(prior):
+            raise GuardError('restore transaction already recorded')
+        if prior.get('restore_transaction') is not None and prior['status']!='ARMED':
+            raise GuardError('prior restore transaction cannot be replaced')
         self.check_fixed()
         tree=self.preflight()
         if tree.splitlines().count(self.m['checkpoint_name'])!=1:raise GuardError('checkpoint not unique')
-        self.vmrun('stop');self.vmrun('revertToSnapshot');self.vmrun('start')
+        state=self.load()
+        if state.get('restore_transaction') is not None:
+            state.setdefault('restore_history',[]).append(state['restore_transaction'])
+        state['restore_transaction']={'id':str(uuid.uuid4()),'attempt_id':self.m['attempt_id'],
+            'checkpoint_name':self.m['checkpoint_name'],'scope':state['status'],
+            'stage':'BEFORE_STOP','action_count_at_start':state['action_count']}
+        self.save(state);self.append('RESTORE_TRANSACTION_INTENT',transaction=state['restore_transaction'])
+        self._crash_point('after_transaction_intent')
+        self.vmrun('stop');self._crash_point('after_stop_response')
+        self._restore_stage('STOP_CONFIRMED');self._crash_point('after_stop_stage')
+        self._restore_stage('BEFORE_REVERT');self._crash_point('before_revert')
+        self.vmrun('revertToSnapshot');self._crash_point('after_revert_response')
+        self._restore_stage('REVERT_CONFIRMED');self._crash_point('after_revert_stage')
+        self._restore_stage('BEFORE_START');self._crash_point('before_start')
+        self.vmrun('start');self._crash_point('after_start_response')
+        self._restore_stage('START_CONFIRMED');self._crash_point('after_start_stage')
         tree=self.preflight()
         if tree.splitlines().count(self.m['checkpoint_name'])!=1:raise GuardError('INDETERMINATE_POST_RESTORE')
         metadata=self.checkpoint_metadata()
         state=self.load()
         if state.get('checkpoint_metadata')!=metadata:raise GuardError('checkpoint metadata drift')
-        state['status']='HOST_RESTORED_PENDING_GUEST';self.save(state)
+        self._restore_stage('READBACK_CONFIRMED');self._crash_point('before_final_state')
+        state=self.load();state['status']='HOST_RESTORED_PENDING_GUEST'
+        state['restore_transaction']['stage']='COMPLETE';self.save(state)
         self.append('HOST_RESTORE_VERIFIED',tree_sha256=digest(tree.encode()))
         return state['status']
     def qualify(self):
@@ -376,7 +407,7 @@ class Guard:
             if not finish_path.exists() or digest(finish_path.read_bytes())!=state.get('finish_receipt_sha256'):
                 raise GuardError('safety finish receipt lost or changed')
             return state['status']
-        if not state or state['status']!='ARMED' or state.get('pending_operation') is not None or state.get('child_identity') is not None:
+        if not state or state['status']!='ARMED' or self._restore_open(state) or state.get('pending_operation') is not None or state.get('child_identity') is not None:
             raise GuardError('safety rehearsal is not ready to finish')
         health_path=self.root/'safety-finish-health.json'
         health=read(health_path)
@@ -412,6 +443,10 @@ class Guard:
     def deadline(self):
         state=self.load()
         if not state:raise GuardError('no attempt')
+        if self._restore_open(state):
+            if state['status']!='INDETERMINATE':
+                state['status']='INDETERMINATE';self.save(state);self.append('INDETERMINATE_RESTORE_TRANSACTION')
+            return 'INDETERMINATE'
         if state['status']=='SAFETY_REHEARSAL_COMPLETE':
             finish_path=self.root/'safety-finish-receipt.json'
             if not finish_path.exists() or digest(finish_path.read_bytes())!=state.get('finish_receipt_sha256'):
@@ -430,7 +465,7 @@ class Guard:
     def commit(self,decision_path=None,decision_sha=None):
         if (self.root/'safety-finish-receipt.json').exists():raise GuardError('safety finish precludes business commit')
         state=self.load();receipt=read(self.root/'commit-qualification.json')
-        if not state or state['status']!='ARMED' or state['pending_operation'] is not None:
+        if not state or state['status']!='ARMED' or self._restore_open(state) or state['pending_operation'] is not None:
             raise GuardError('not eligible to commit')
         expected={'kind','attempt_id','collector_sha256','epoch8_committed','guest_and_host_healthy',
                   'epoch8_canonical_sha256','transition_receipt_sha256','vmx','active_snapshot_name',

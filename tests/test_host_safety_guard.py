@@ -278,6 +278,40 @@ class HostGuardTests(unittest.TestCase):
         self.run_guard('deadline')
         self.assertEqual(guard.read(self.state/'state.json')['status'],'INDETERMINATE')
         self.assertEqual(self.calls().count('revertToSnapshot'),before)
+    def assert_restore_crash_is_not_replayed(self,point):
+        self.prepared();before=self.calls().count('revertToSnapshot')
+        self.run_guard('deadline',env=dict(self.env,FAKE_GUARD_CRASH_RESTORE_AT=point),expect=98)
+        crashed=guard.read(self.state/'state.json')
+        self.assertEqual(crashed['status'],'ARMED')
+        self.assertNotEqual(crashed['restore_transaction']['stage'],'COMPLETE')
+        after=self.calls().count('revertToSnapshot')
+        self.assertIn(after-before,(0,1))
+        self.run_guard('deadline')
+        self.assertEqual(guard.read(self.state/'state.json')['status'],'INDETERMINATE')
+        self.run_guard('deadline')
+        self.assertEqual(self.calls().count('revertToSnapshot'),after)
+    def test_qualification_crash_does_not_replay_revert(self):
+        self.run_guard('bootstrap')
+        self.run_guard('qualify',env=dict(self.env,FAKE_GUARD_CRASH_RESTORE_AT='after_revert_response'),expect=98)
+        before=self.calls().count('revertToSnapshot')
+        self.run_guard('qualify',expect=3)
+        self.assertEqual(self.calls().count('revertToSnapshot'),before)
+    def test_held_lock_open_restore_transaction_is_not_signalled(self):
+        self.prepared()
+        proc=subprocess.Popen([sys.executable,str(HERE/'host_safety_guard.py'),'--manifest',str(self.manifest),
+             '--approval-sha',self.approval,'hold','--hold-seconds','10'],env=self.env,
+             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(60):
+                if (self.state/'owner.json').exists() and guard.read(self.state/'owner.json')['identity']['pid']==proc.pid:break
+                time.sleep(.05)
+            state=guard.read(self.state/'state.json')
+            state['restore_transaction']={'id':'test-open','stage':'BEFORE_REVERT'}
+            (self.state/'state.json').write_bytes(guard.encoded(state))
+            self.run_guard('deadline',expect=3)
+            self.assertIsNone(proc.poll())
+        finally:
+            if proc.poll() is None:proc.kill();proc.wait()
     def test_test_mode_cannot_choose_real_vmrun(self):
         self.m['vmrun_path']='/usr/bin/vmrun';self.seal()
         self.run_guard('bootstrap',expect=3)
@@ -306,5 +340,12 @@ class HostGuardTests(unittest.TestCase):
         self.assertEqual(cli.returncode,0,cli.stderr)
         self.assertTrue(json.loads(cli.stdout)['review_only'])
         self.assertEqual(len(list(cli_output.iterdir())),2)
+
+for _point in ('after_transaction_intent','after_stop_response','after_stop_stage',
+               'before_revert','after_revert_response','after_revert_stage',
+               'before_start','after_start_response','after_start_stage','before_final_state'):
+    def _case(self, point=_point):
+        self.assert_restore_crash_is_not_replayed(point)
+    setattr(HostGuardTests,f'test_restore_crash_{_point}',_case)
 
 if __name__=='__main__':unittest.main()
