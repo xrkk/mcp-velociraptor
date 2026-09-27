@@ -1,6 +1,8 @@
 """Windows-only ABI checks without installing or starting an SCM service."""
 import ctypes
+from contextlib import redirect_stderr
 from contextlib import nullcontext
+import io
 from ctypes import wintypes
 import os
 import json
@@ -43,6 +45,67 @@ class ServiceHostABITests(unittest.TestCase):
             self.host._service_handler(1)
             self.assertTrue(self.host._stop_requested.is_set())
             report.assert_called_once_with(self.host.SERVICE_STATUS['STOP_PENDING'])
+
+    def test_failed_pending_report_does_not_escape_real_ctypes_callback(self):
+        event = threading.Event()
+        failed = threading.Event()
+        stderr = io.StringIO()
+        with patch.object(self.host, '_stop_requested', event), \
+                patch.object(self.host, '_status_report_failed', failed), \
+                patch.object(self.host, '_report', side_effect=OSError(5, 'synthetic')) as report, \
+                redirect_stderr(stderr):
+            self.host._service_handler(1)
+        report.assert_called_once_with(self.host.SERVICE_STATUS['STOP_PENDING'])
+        self.assertTrue(event.is_set())
+        self.assertTrue(failed.is_set())
+        self.assertEqual(stderr.getvalue(), '')
+
+    def test_native_status_failure_marks_all_service_states(self):
+        api = Mock()
+        api.SetServiceStatus.return_value = False
+        for state in ('START_PENDING', 'STOP_PENDING', 'STOPPED'):
+            with self.subTest(state=state), \
+                    patch.object(self.host, 'advapi32', api), \
+                    patch.object(self.host, '_status_report_failed', threading.Event()) as failed, \
+                    patch.object(ctypes, 'get_last_error', return_value=5):
+                with self.assertRaises(OSError):
+                    self.host._report(self.host.SERVICE_STATUS[state])
+                self.assertTrue(failed.is_set())
+
+    def test_failed_start_pending_exits_nonzero_with_fixed_category(self):
+        api = Mock()
+        api.RegisterServiceCtrlHandlerW.return_value = 1
+        api.SetServiceStatus.return_value = False
+        with patch.object(self.host, 'advapi32', api), \
+                patch.object(self.host, '_write_failure') as failure, \
+                patch.object(self.host, '_load_protected_env') as load, \
+                patch.object(ctypes, 'get_last_error', return_value=5):
+            self.host._service_main(0, None)
+        load.assert_not_called()
+        self.assertNotEqual(self.host._exit_code, 0)
+        self.assertIn(('SERVICE_STATUS_FAILED', 10), [call.args for call in failure.call_args_list])
+        self.assertEqual(api.SetServiceStatus.call_count, 2)  # start, then one STOPPED attempt
+
+    def test_failed_stopped_report_is_single_and_nonzero(self):
+        api = Mock()
+        api.RegisterServiceCtrlHandlerW.return_value = 1
+        api.SetServiceStatus.side_effect = [True, False]
+        bridge = Mock()
+        bridge.main.return_value = 0
+        observation = types.ModuleType('p05_service_observation')
+        observation.observe_dispatch = Mock(return_value=nullcontext())
+        with patch.object(self.host, 'advapi32', api), \
+                patch.object(self.host, '_write_failure') as failure, \
+                patch.object(self.host, '_load_protected_env'), \
+                patch.object(sys, 'path', list(sys.path)), \
+                patch.dict(sys.modules, {'mcp_velociraptor_bridge': bridge,
+                                         'p05_service_observation': observation}), \
+                patch('builtins.open', mock_open()), \
+                patch.object(ctypes, 'get_last_error', return_value=5):
+            self.host._service_main(0, None)
+        self.assertEqual(api.SetServiceStatus.call_count, 2)
+        self.assertEqual(self.host._exit_code, 10)
+        failure.assert_called_with('SERVICE_STATUS_FAILED', 10)
 
     def test_failed_registration_cannot_report_ready(self):
         api = Mock()

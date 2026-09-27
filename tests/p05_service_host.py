@@ -121,6 +121,9 @@ def _service_handler(control: int) -> None:
     if control == 0x00000001:  # SERVICE_CONTROL_STOP
         try:
             _report(SERVICE_STATUS["STOP_PENDING"])
+        except BaseException:
+            # ctypes callbacks must never propagate an exception into SCM.
+            _status_report_failed.set()
         finally:
             _stop_requested.set()
 

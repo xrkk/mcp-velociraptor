@@ -45,6 +45,7 @@ class ServiceStopOrderTests(unittest.TestCase):
 
     def test_stop_signal_survives_failed_pending_report(self):
         event = threading.Event()
+        failed = threading.Event()
 
         def failed_report(_status):
             raise OSError(5, "SetServiceStatus failed")
@@ -52,10 +53,11 @@ class ServiceStopOrderTests(unittest.TestCase):
         callback = load_host_function("_service_handler", {"_HANDLER": lambda function: function,
                                        "SERVICE_STATUS": {"STOP_PENDING": 3},
                                        "_stop_requested": event,
+                                       "_status_report_failed": failed,
                                        "_report": failed_report})
-        with self.assertRaises(OSError):
-            callback(1)
+        callback(1)
         self.assertTrue(event.is_set())
+        self.assertTrue(failed.is_set())
 
     def test_status_report_checks_native_failure(self):
         native = SimpleNamespace(SetServiceStatus=lambda *_: 0)
