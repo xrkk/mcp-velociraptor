@@ -353,10 +353,18 @@ def _read_security(path: Path) -> AclSnapshot:
     owner = ctypes.c_void_p()
     dacl = ctypes.c_void_p()
     descriptor = ctypes.c_void_p()
-    code = get_info(str(path), 1, 0x1 | 0x4, ctypes.byref(owner), None,
-                    ctypes.byref(dacl), None, ctypes.byref(descriptor))
-    if code:
-        raise Error("windows_acl_unavailable", winerror=int(code))
+    code = 0
+    for attempt in range(3):
+        code = get_info(str(path), 1, 0x1 | 0x4, ctypes.byref(owner), None,
+                        ctypes.byref(dacl), None, ctypes.byref(descriptor))
+        if not code:
+            break
+        # A transient external exclusive handle (real-time scanning class)
+        # denies the internal open with ERROR_ACCESS_DENIED; retrying the
+        # idempotent security query does not skip any evaluation below.
+        if code != 5 or attempt == 2:
+            raise Error("windows_acl_unavailable", winerror=int(code))
+        time.sleep(0.05 * (attempt + 1))
     try:
         if not descriptor.value or not owner.value or not dacl.value:
             raise Error("windows_acl_unprotected")
