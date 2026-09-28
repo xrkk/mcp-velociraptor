@@ -144,7 +144,7 @@ def invoke_script(path: str, python_path: str, project_root: str, policy_path: s
         prefix = "$env:VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS=" + literal(extra_trusted_sids) + ";"
     return bounded(
         "$p=" + literal(path) + ";$id=" + _checked_identity(identity) + ";" + _identity_setup() +
-        "$fi=[IO.FileInfo]::new($p);if(-not $fi.Exists -or ($fi.Attributes -band [IO.FileAttributes.ReparsePoint) -ne 0){throw 'request_replaced'};"
+        "$fi=[IO.FileInfo]::new($p);if(-not $fi.Exists -or ($fi.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'request_replaced'};"
         "$f=[IO.File]::OpenRead($p);try{if([VeloRequestIdentity]::Read($f.SafeFileHandle) -ne $id){throw 'request_replaced'}}finally{$f.Dispose()};"
         "$env:VELOCIRAPTOR_TRANSFER_POLICY=" + literal(policy_path) + ";" + prefix +
         "Push-Location -LiteralPath " + literal(project_root) + ";"
