@@ -16,6 +16,7 @@ import time
 import unittest
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import uvicorn
@@ -766,6 +767,86 @@ class SelectionRules(unittest.TestCase):
             self.assertEqual(asyncio.run(trial(cause)), (["velo"], cause, None))
         self.assertEqual(asyncio.run(trial("connection_unavailable", "velo")),
                          (["velo"], "connection_unavailable", None))
+
+    def test_async_context_preserves_sole_local_error_and_fails_closed_on_mixed_groups(self):
+        import velo_transfer.adapters as module
+
+        class Context:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *_):
+                return False
+
+        class Session(Context):
+            async def initialize(self):
+                pass
+
+        profile = SimpleNamespace(
+            velo=SimpleNamespace(url="http://127.0.0.1:9/mcp", token=None),
+            windows=SimpleNamespace(url="http://127.0.0.1:10/mcp", token=None),
+            deployment=None)
+        identity = {"vm_uuid": "fixture-vm", "boot_identity": "fixture-boot"}
+
+        async def probe(self, _identity):
+            pass
+
+        async def trial(error, *, wrap=False):
+            opened = []
+
+            @asynccontextmanager
+            async def stream(url, **_):
+                opened.append(url)
+                try:
+                    yield None, None
+                except BaseException as exc:
+                    if wrap:
+                        raise ExceptionGroup("sdk nursery", [ExceptionGroup("stream task group", [exc])]) from None
+                    raise
+
+            with mock.patch.object(module.httpx2, "AsyncClient", return_value=Context()), \
+                 mock.patch.object(module, "streamable_http_client", stream), \
+                 mock.patch.object(module, "ClientSession", return_value=Session()), \
+                 mock.patch.object(TransportAdapter, "probe", probe):
+                try:
+                    async with select_adapter(profile, expected_vm_identity=identity,
+                                              deadline_monotonic=time.monotonic() + 10,
+                                              request_timeout_seconds=1):
+                        raise error
+                except BaseException as exc:
+                    return exc, opened
+            self.fail("body exception was lost")
+
+        local = TransferContentError("untrusted_ancestor")
+        for wrap in (False, True):
+            caught, opened = asyncio.run(trial(local, wrap=wrap))
+            self.assertIs(caught, local)
+            self.assertEqual(opened, [profile.velo.url])
+
+        network = httpx2.ConnectError("refused")
+        network.__cause__ = OSError(errno.ECONNREFUSED, "refused")
+        for grouped in (ExceptionGroup("mixed", [local, network]),
+                        ExceptionGroup("mixed", [network, local])):
+            caught, opened = asyncio.run(trial(grouped))
+            self.assertIsInstance(caught, AdapterError)
+            self.assertEqual(caught.code, "protocol_error")
+            self.assertTrue(caught.may_have_committed)
+            self.assertEqual(opened, [profile.velo.url])
+
+        cancellation = asyncio.CancelledError()
+        mixed_cancel = BaseExceptionGroup("cancelled nursery", [local, cancellation])
+        caught, opened = asyncio.run(trial(mixed_cancel))
+        self.assertIs(caught, mixed_cancel)
+        self.assertEqual(opened, [profile.velo.url])
+
+        caught, opened = asyncio.run(trial(AdapterError("schema_mismatch"), wrap=True))
+        self.assertIsInstance(caught, AdapterError)
+        self.assertEqual(caught.code, "schema_mismatch")
+        self.assertEqual(opened, [profile.velo.url])
+
+        caught, opened = asyncio.run(trial(RuntimeError("unexpected"), wrap=True))
+        self.assertIsInstance(caught, AdapterError)
+        self.assertEqual(caught.code, "protocol_error")
+        self.assertEqual(opened, [profile.velo.url])
 
     def test_mutation_timeout_is_unknown_without_retry(self):
         class Session:

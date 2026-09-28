@@ -21,6 +21,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from .connection import ConnectionProfile
 from . import windows_commands as wc
+from .errors import TransferContentError
 
 NAMES = ("transfer_capabilities", "transfer_begin", "transfer_status", "transfer_chunk",
          "transfer_finish", "transfer_abort")
@@ -143,6 +144,16 @@ def _classify(exc: Exception, operation: str | None = None) -> AdapterError:
         if status in (400, 421):
             return AdapterError("host_rejected")
     return AdapterError("protocol_error", may_have_committed=unknown)
+
+
+def _group_leaves(group: BaseExceptionGroup) -> list[BaseException]:
+    leaves = []
+    for child in group.exceptions:
+        if isinstance(child, BaseExceptionGroup):
+            leaves.extend(_group_leaves(child))
+        else:
+            leaves.append(child)
+    return leaves
 
 
 class TransportAdapter:
@@ -451,6 +462,15 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        if opened and isinstance(exc, BaseExceptionGroup):
+            leaves = _group_leaves(exc)
+            local = [leaf for leaf in leaves if isinstance(leaf, TransferContentError)]
+            if len(leaves) == 1 and local:
+                raise local[0] from None
+            if local:
+                # Other leaves make the outcome uncertain; never select a
+                # local leaf or trigger pre-begin fallback.
+                raise AdapterError("protocol_error", may_have_committed=True) from None
         if opened and not isinstance(exc, (AdapterError, BaseExceptionGroup)):
             raise
         if any(status in (401, 403) for status in denied_status):
