@@ -238,7 +238,10 @@ class TransportAdapter:
                     if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
                         self.raw_chunk_bytes = min(1 << 20, limit)
                     batch = result.get("max_batch_chunks")
-                    self.batch_chunks = batch if isinstance(batch, int) and 1 <= batch <= 64 else 1
+                    # Response-size safety: measured client SDK instability on
+                    # multi-MiB SSE responses; four chunks per batch keeps the
+                    # encoded response near the size that has proven stable.
+                    self.batch_chunks = min(batch, 4) if isinstance(batch, int) and 1 <= batch <= 64 else 1
                 self._last_result = result
                 return result
             except AdapterError as exc:
