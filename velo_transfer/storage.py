@@ -134,11 +134,23 @@ def _transfer_id(value: str) -> str:
 def _replace(source: Path, destination: Path) -> None:
     if os.name == "nt":
         import ctypes
+        import time
         move = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
         move.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_ulong]
         move.restype = ctypes.c_int
-        if not move(str(source), str(destination), 0x1 | 0x8):
-            raise OSError(ctypes.get_last_error(), "MoveFileExW failed")
+        flags = 0x1 | 0x8
+        for attempt in range(3):
+            if move(str(source), str(destination), flags):
+                return
+            code = ctypes.get_last_error()
+            # An unrelated transient handle on the destination (for example a
+            # real-time scanner) briefly denies this atomic replacement with
+            # ERROR_ACCESS_DENIED. Retrying the same idempotent move does not
+            # bypass any check: callers still verify identity afterwards.
+            if code != 5 or attempt == 2:
+                raise OSError(code, "MoveFileExW failed")
+            time.sleep(0.05 * (attempt + 1))
+        raise OSError(5, "MoveFileExW failed")
     else:
         os.replace(source, destination)
 

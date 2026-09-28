@@ -114,3 +114,35 @@ class ConnectionProfileTrustTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReplaceRetryTests(unittest.TestCase):
+    """Windows-only: transient ERROR_ACCESS_DENIED on MoveFileExW is retried."""
+
+    def test_retries_bounded_on_windows(self):
+        import sys
+        if sys.platform != "win32":
+            self.skipTest("windows only")
+        import ctypes
+        import tempfile
+        from velo_transfer import storage
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src.bin"
+            dst = Path(tmp) / "dst.bin"
+            src.write_bytes(b"payload")
+            dst.write_bytes(b"old")
+            real = ctypes.WinDLL("kernel32", use_last_error=True).MoveFileExW
+            real.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_ulong]
+            real.restype = ctypes.c_int
+            calls = {"n": 0}
+            def flaky(source, destination, flags):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    ctypes.set_last_error(5)
+                    return 0
+                return real(source, destination, flags)
+            with mock.patch("ctypes.WinDLL", lambda *_a, **_k: type(
+                    "D", (), {"MoveFileExW": flaky})):
+                storage._replace(src, dst)
+            self.assertGreaterEqual(calls["n"], 2)
+            self.assertEqual(dst.read_bytes(), b"payload")
