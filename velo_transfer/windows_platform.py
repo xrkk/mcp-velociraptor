@@ -14,7 +14,6 @@ import os
 import re
 import stat
 import struct
-import time
 import subprocess
 import threading
 import time
