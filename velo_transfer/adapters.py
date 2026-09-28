@@ -366,7 +366,8 @@ class WindowsAdapter(TransportAdapter):
             invoked = True
             stdout, exit_code = await self._powershell(_command(wc.invoke_script, path, self._deployment.python_path,
                                                                 self._deployment.project_root,
-                                                                self._deployment.policy_path, owner_identity),
+                                                                self._deployment.policy_path, owner_identity,
+                                                                self._deployment.extra_trusted_sids),
                                                        operation=operation, helper=True)
             try:
                 result = wc.parse_helper(stdout, exit_code)

@@ -78,6 +78,26 @@ def _strict_json(raw: bytes, maximum: int):
         raise Error("invalid_json") from exc
 
 
+_EXTRA_SID = re.compile(r"S-1-(?:\d+-){1,14}\d+")
+
+
+def _extra_trusted_sids() -> tuple[str, ...]:
+    """Deployment-granted SIDs the Windows fallback bridge trusts for work-root ACLs.
+
+    Set by the host adapter from the connection profile; absent or empty grants
+    nothing. Malformed values fail closed exactly like the verifier itself.
+    """
+    raw = os.environ.get("VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS")
+    if not raw:
+        return ()
+    parts = tuple(item for item in raw.split(";") if item)
+    if not parts or len(parts) > 32 or any(not _EXTRA_SID.fullmatch(item) for item in parts):
+        raise Error("invalid_trusted_sid")
+    if len(set(parts)) != len(parts):
+        raise Error("invalid_trusted_sid")
+    return parts
+
+
 class GuestTransferService:
     """Six bounded guest operations. `_observation` is only for isolated in-process tests."""
 
@@ -91,7 +111,8 @@ class GuestTransferService:
         self._owned = {}
         self._chunk_cache = {}
         self.observation = _observation if _observation is not None else observe_windows()
-        self.acl = _acl_verifier if _acl_verifier is not None else WindowsAclVerifier()
+        self.acl = (_acl_verifier if _acl_verifier is not None
+                    else WindowsAclVerifier(extra_trusted_sids=_extra_trusted_sids()))
         status = load_policy(policy_path, observation=self.observation.for_policy(),
                              guest=_guest, verify_windows_acl=self.acl)
         self.enabled = status.enabled

@@ -122,6 +122,7 @@ class Deployment:
     project_root: str
     policy_path: str
     guest_work_root: str
+    extra_trusted_sids: str = ""
 
     def __repr__(self):
         return "Deployment(<protected>)"
@@ -156,12 +157,17 @@ def load_connection_profile(absolute_path: str | Path) -> ConnectionProfile:
             return Endpoint(_url(value["endpoint"]), token)
 
         deployed = data["deployment"]
-        if not isinstance(deployed, dict) or set(deployed) != {"python_path", "project_root", "policy_path", "guest_work_root"}:
+        base = {"python_path", "project_root", "policy_path", "guest_work_root"}
+        if not isinstance(deployed, dict) or not base <= set(deployed) <= base | {"extra_trusted_sids"}:
+            raise ConnectionError("invalid_profile")
+        extra = deployed.get("extra_trusted_sids", "")
+        if not isinstance(extra, str) or len(extra) > 1024:
             raise ConnectionError("invalid_profile")
         return ConnectionProfile(endpoint(data["velo"], required_token=True),
                                  endpoint(data["windows"], required_token=False) if data["windows"] is not None else None,
                                  Deployment(*(_windows_path(deployed[key]) for key in (
-                                     "python_path", "project_root", "policy_path", "guest_work_root"))))
+                                     "python_path", "project_root", "policy_path", "guest_work_root")),
+                                     extra_trusted_sids=extra))
     except ConnectionError:
         raise
     except (OSError, ValueError, TypeError, UnicodeError, json.JSONDecodeError, RecursionError):

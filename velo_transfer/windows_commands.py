@@ -135,12 +135,18 @@ def verify_script(path: str, size: int, sha256: str, identity: str) -> str:
 
 
 def invoke_script(path: str, python_path: str, project_root: str, policy_path: str,
-                  identity: str) -> str:
+                  identity: str, extra_trusted_sids: str = "") -> str:
+    prefix = ""
+    if extra_trusted_sids:
+        # SIDs are validated on the guest side too; here we only guard quoting.
+        if "\x00" in extra_trusted_sids or "'" in extra_trusted_sids:
+            raise ValueError("invalid_trusted_sid")
+        prefix = "$env:VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS=" + literal(extra_trusted_sids) + ";"
     return bounded(
         "$p=" + literal(path) + ";$id=" + _checked_identity(identity) + ";" + _identity_setup() +
-        "$fi=[IO.FileInfo]::new($p);if(-not $fi.Exists -or ($fi.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'request_replaced'};"
+        "$fi=[IO.FileInfo]::new($p);if(-not $fi.Exists -or ($fi.Attributes -band [IO.FileAttributes.ReparsePoint) -ne 0){throw 'request_replaced'};"
         "$f=[IO.File]::OpenRead($p);try{if([VeloRequestIdentity]::Read($f.SafeFileHandle) -ne $id){throw 'request_replaced'}}finally{$f.Dispose()};"
-        "$env:VELOCIRAPTOR_TRANSFER_POLICY=" + literal(policy_path) + ";"
+        "$env:VELOCIRAPTOR_TRANSFER_POLICY=" + literal(policy_path) + ";" + prefix +
         "Push-Location -LiteralPath " + literal(project_root) + ";"
         "try{& " + literal(python_path) + " -m velo_transfer.guest_cli --request-file " + literal(path) +
         ";$rc=$LASTEXITCODE}finally{Pop-Location};if($rc -ne 0){exit $rc}")
