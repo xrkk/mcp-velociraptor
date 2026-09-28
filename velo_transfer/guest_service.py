@@ -98,8 +98,15 @@ class GuestTransferService:
         self.reason = status.reason
         self.policy = status.policy
 
-    def _identity(self):
-        current = self._test_observation if self._test_observation is not None else observe_windows()
+    def _identity(self, observation=None):
+        # A reused observation is only valid inside one worker operation; every
+        # state mutation and external action path must observe fresh.
+        if self._test_observation is not None:
+            current = self._test_observation
+        elif observation is not None:
+            current = observation
+        else:
+            current = observe_windows()
         if (current.vm_uuid != self.observation.vm_uuid or
                 current.boot_identity != self.observation.boot_identity or
                 current.os_name != self.observation.os_name):
@@ -109,8 +116,8 @@ class GuestTransferService:
         self.policy.revalidate()
         return current
 
-    def _store(self):
-        self._identity()
+    def _store(self, observation=None):
+        self._identity(observation)
         return TaskStore(self.policy)
 
     def transfer_capabilities(self):
@@ -214,18 +221,22 @@ class GuestTransferService:
 
     def _budget(self, state, *, cancel=False):
         values = state["request"]["budget"]
+        # One full identity observation opens a cancellable worker operation; the
+        # cancel closure reuses only that observation while still re-reading the
+        # protected state (and its ACL/revision checks) on every check.
+        observation = self._identity() if cancel else None
         def check_cancel():
-            if cancel and self._load(state["request"]["transfer_id"], state["request"]["request_digest"])["state"]["cancelled"]:
+            if cancel and self._load(state["request"]["transfer_id"], state["request"]["request_digest"], observation=observation)["state"]["cancelled"]:
                 raise Error("transfer_cancelled")
         return Budget(values["max_files"], values["max_metadata_bytes"],
                       values["max_logical_bytes"], values["max_package_bytes"],
                       values["min_free_bytes"], state["deadline_monotonic"],
                       check_cancel=check_cancel if cancel else None)
 
-    def _load(self, transfer_id, digest, store=None):
+    def _load(self, transfer_id, digest, store=None, observation=None):
         if not isinstance(transfer_id, str) or not _ID.fullmatch(transfer_id) or transfer_id.startswith("guest-internal-") or not _hex(digest):
             raise Error("invalid_transfer_id")
-        store = store or self._store()
+        store = store or self._store(observation)
         for attempt in range(3):
             try:
                 raw = store._read(store._state_path(transfer_id))
