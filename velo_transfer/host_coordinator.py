@@ -391,6 +391,13 @@ class TransferCoordinator:
                                                      "chunks": items})
                         advanced = response.get("verified_offset")
                     except AdapterError as exc:
+                        if exc.code in ("protocol_error", "transport_timeout", "outcome_unknown",
+                                        "connection_failed"):
+                            # Large batched responses hit the client transport
+                            # intermittently; degrade to single chunks instead of
+                            # failing the transfer. Chunks are idempotent replays.
+                            self.adapter.batch_chunks = 1
+                            continue
                         if not exc.may_have_committed:
                             raise
                         reconciled = await self._status()
@@ -450,9 +457,18 @@ class TransferCoordinator:
                 if batch > 1:
                     room = -(-(data["package"]["size"] - offset) // maximum)
                     chunk_count = min(batch, room)
-                    response = await self._call("transfer_chunks", {**self._identity_args(), "offset": offset,
-                                                                    "count_per_chunk": maximum,
-                                                                    "chunk_count": chunk_count})
+                    try:
+                        response = await self._call("transfer_chunks", {**self._identity_args(), "offset": offset,
+                                                                        "count_per_chunk": maximum,
+                                                                        "chunk_count": chunk_count})
+                    except AdapterError as exc:
+                        if exc.code not in ("protocol_error", "transport_timeout", "outcome_unknown",
+                                            "connection_failed"):
+                            raise
+                        # Same response-size transport instability as push;
+                        # degrade to single-chunk pulls for the remainder.
+                        self.adapter.batch_chunks = 1
+                        continue
                     items = response.get("chunks")
                     if not isinstance(items, list) or not items:
                         raise Error("invalid_chunk")
