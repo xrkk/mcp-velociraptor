@@ -148,8 +148,14 @@ def invoke_script(path: str, python_path: str, project_root: str, policy_path: s
         "$f=[IO.File]::OpenRead($p);try{if([VeloRequestIdentity]::Read($f.SafeFileHandle) -ne $id){throw 'request_replaced'}}finally{$f.Dispose()};"
         "$env:VELOCIRAPTOR_TRANSFER_POLICY=" + literal(policy_path) + ";" + prefix +
         "Push-Location -LiteralPath " + literal(project_root) + ";"
-        "try{& " + literal(python_path) + " -m velo_transfer.guest_cli --request-file " + literal(path) +
-        ";$rc=$LASTEXITCODE}finally{Pop-Location};if($rc -ne 0){exit $rc}")
+        # Capture the helper's stdout and stderr separately so unrelated stream
+        # noise (Add-Type compilation notes, provider messages) can never turn
+        # the single-line helper JSON response into a multi-line output.
+        "$err=[IO.Path]::GetTempFileName();"
+        "try{$resp = & " + literal(python_path) + " -m velo_transfer.guest_cli --request-file " + literal(path) +
+        " 2>$err | Where-Object {$null -ne $_};$rc=$LASTEXITCODE}finally{Pop-Location};"
+        "$resp;if($rc -ne 0){Get-Content -LiteralPath $err | Write-Error;exit $rc};" +
+        "Remove-Item -LiteralPath $err -ErrorAction SilentlyContinue")
 
 
 def cleanup_script(path: str, identity: str) -> str:
