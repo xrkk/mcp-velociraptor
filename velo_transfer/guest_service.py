@@ -280,8 +280,8 @@ class GuestTransferService:
     def _save(self, store, envelope, state):
         return store.save(envelope["transfer_id"], envelope["binding"], envelope["revision"], state)
 
-    def _task_path(self, transfer_id):
-        store = self._store()
+    def _task_path(self, transfer_id, observation=None):
+        store = self._store(observation=observation)
         return store._task_dir(transfer_id)
 
     def _lease_binding(self):
@@ -753,15 +753,15 @@ class GuestTransferService:
                                                  request["expected_destination"]).snapshot()
             self._save(store, fresh, current)
 
-    def _ledger_paths(self, state):
-        task = self._task_path(state["request"]["transfer_id"])
+    def _ledger_paths(self, state, observation=None):
+        task = self._task_path(state["request"]["transfer_id"], observation=observation)
         return task / "received.part", task / "chunks.jsonl"
 
-    def _verified_partial(self, state, *, force=False, budget=None, short_call=False):
+    def _verified_partial(self, state, *, force=False, budget=None, short_call=False, observation=None):
         """Full byte verification on resume; protected identity continuity per chunk."""
         budget = budget or self._budget(state)
         budget.check()
-        partial, ledger = self._ledger_paths(state)
+        partial, ledger = self._ledger_paths(state, observation=observation)
         offset = state["offset"]
         if not partial.exists() and not ledger.exists() and offset == 0:
             return
@@ -830,7 +830,11 @@ class GuestTransferService:
                        chunk_sha256: str | None = None):
         if not _positive(count) or not _positive(offset, allow_zero=True):
             raise Error("invalid_chunk_range")
-        envelope = self._load(transfer_id, request_digest)
+        # One full identity observation per chunk call, reused for the load and
+        # the store inside this single operation; durable publication and
+        # external actions elsewhere still observe fresh each time.
+        observed = self._identity()
+        envelope = self._load(transfer_id, request_digest, observation=observed)
         state = envelope["state"]
         maximum = state["request"]["budget"]["max_chunk_bytes"]
         if count > maximum or time.monotonic() >= state["deadline_monotonic"]:
@@ -864,7 +868,7 @@ class GuestTransferService:
             raise Error("invalid_chunk") from exc
         if len(data) != count or hashlib.sha256(data).hexdigest() != chunk_sha256:
             raise Error("chunk_hash_mismatch")
-        store = self._store()
+        store = self._store(observation=observed)
         with store.writer():
             fresh = self._load(transfer_id, request_digest, store)
             state = fresh["state"]
@@ -873,8 +877,8 @@ class GuestTransferService:
                 raise Error("chunk_precondition_failed")
             if offset + count > state["package"]["size"]:
                 raise Error("invalid_chunk_range")
-            self._verified_partial(state, short_call=True)
-            partial, ledger = self._ledger_paths(state)
+            self._verified_partial(state, short_call=True, observation=observed)
+            partial, ledger = self._ledger_paths(state, observation=observed)
             if offset < state["offset"]:
                 if offset + count > state["offset"]:
                     raise Error("chunk_offset_conflict")

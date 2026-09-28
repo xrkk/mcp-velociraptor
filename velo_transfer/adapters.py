@@ -211,7 +211,12 @@ class TransportAdapter:
             error = _classify(exc, name)
             if attempted and name not in READ_ONLY:
                 error.may_have_committed = True
-                error.retryable = False
+                # A chunk is idempotent on this protocol: re-sending a pull
+                # chunk is a pure read, and a push chunk for an already
+                # acknowledged offset is verified against the stored bytes and
+                # answered as a replay, so transient transport failures may be
+                # retried safely instead of failing the whole transfer.
+                error.retryable = name == "transfer_chunk"
             raise error from None
 
     async def call(self, operation: str, arguments: dict) -> dict:
@@ -221,7 +226,7 @@ class TransportAdapter:
             raise AdapterError("invalid_arguments")
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
-        attempts = 3 if operation in READ_ONLY else 1
+        attempts = 3 if operation in READ_ONLY or operation == "transfer_chunk" else 1
         for i in range(attempts):
             try:
                 result = await self._invoke(operation, arguments)
