@@ -363,11 +363,45 @@ class TransferCoordinator:
             maximum = min(self.request.guest_budget["max_chunk_bytes"], self.adapter.raw_chunk_bytes)
             if type(maximum) is not int or maximum <= 0:
                 raise Error("invalid_chunk_range")
+            batch = getattr(self.adapter, "batch_chunks", 1)
+            if type(batch) is not int or batch < 1:
+                batch = 1
             while offset < package["size"]:
                 self._check()
                 before = {**file_identity(os.fstat(fd)), "ctime_ns": os.fstat(fd).st_ctime_ns}
                 if before != expected or _package_identity(path) != expected:
                     raise Error("host_package_ownership_conflict")
+                if batch > 1:
+                    items = []
+                    batch_end = offset
+                    while len(items) < batch and batch_end < package["size"]:
+                        count = min(maximum, package["size"] - batch_end)
+                        raw = os.pread(fd, count, batch_end)
+                        if len(raw) != count:
+                            raise Error("package_changed")
+                        items.append({"count": count,
+                                      "data_base64": base64.b64encode(raw).decode("ascii"),
+                                      "chunk_sha256": hashlib.sha256(raw).hexdigest()})
+                        batch_end += count
+                    self._save(pending_chunk={"offset": offset, "count": items[0]["count"],
+                                              "sha256": items[0]["chunk_sha256"], "batch": len(items)})
+                    try:
+                        response = await self._call("transfer_chunks",
+                                                    {**self._identity_args(), "offset": offset,
+                                                     "chunks": items})
+                        advanced = response.get("verified_offset")
+                    except AdapterError as exc:
+                        if not exc.may_have_committed:
+                            raise
+                        reconciled = await self._status()
+                        advanced = reconciled["verified_offset"]
+                        if advanced == offset:
+                            raise Error("chunk_outcome_unresolved")
+                    if type(advanced) is not int or not offset < advanced <= batch_end:
+                        raise Error("guest_offset_conflict")
+                    offset = advanced
+                    self._save(push_offset=offset, pending_chunk=None)
+                    continue
                 count = min(maximum, package["size"] - offset)
                 raw = os.pread(fd, count, offset)
                 if len(raw) != count:
@@ -409,7 +443,39 @@ class TransferCoordinator:
             maximum = min(self.request.guest_budget["max_chunk_bytes"], self.adapter.raw_chunk_bytes)
             if type(maximum) is not int or maximum <= 0:
                 raise Error("invalid_chunk_range")
+            batch = getattr(self.adapter, "batch_chunks", 1)
+            if type(batch) is not int or batch < 1:
+                batch = 1
             while offset < data["package"]["size"]:
+                if batch > 1:
+                    room = -(-(data["package"]["size"] - offset) // maximum)
+                    chunk_count = min(batch, room)
+                    response = await self._call("transfer_chunks", {**self._identity_args(), "offset": offset,
+                                                                    "count_per_chunk": maximum,
+                                                                    "chunk_count": chunk_count})
+                    items = response.get("chunks")
+                    if not isinstance(items, list) or not items:
+                        raise Error("invalid_chunk")
+                    expected_offset = offset
+                    for item in items:
+                        if not isinstance(item, dict):
+                            raise Error("invalid_chunk")
+                        item_offset, count = item.get("offset"), item.get("count")
+                        encoded = item.get("data_base64")
+                        if (item_offset != expected_offset or type(item_offset) is not int or
+                                type(count) is not int or count <= 0 or count > maximum or
+                                not isinstance(encoded, str) or len(encoded) > 4 * ((count + 2) // 3)):
+                            raise Error("invalid_chunk")
+                        try:
+                            raw = base64.b64decode(encoded, validate=True)
+                        except (ValueError, binascii.Error):
+                            raise Error("invalid_chunk") from None
+                        if len(raw) != count:
+                            raise Error("invalid_chunk")
+                        current = partial.append(item_offset, raw, item.get("chunk_sha256"))
+                        expected_offset = item_offset + count
+                    offset = current["verified_offset"]
+                    continue
                 count = min(maximum, data["package"]["size"] - offset)
                 response = await self._call("transfer_chunk", {**self._identity_args(), "offset": offset, "count": count})
                 encoded = response.get("data_base64")

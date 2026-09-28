@@ -21,7 +21,7 @@ from .guest_service import GuestTransferService
 
 TRANSFER_TOOL_NAMES = (
     "transfer_capabilities", "transfer_begin", "transfer_status",
-    "transfer_chunk", "transfer_finish", "transfer_abort",
+    "transfer_chunk", "transfer_chunks", "transfer_finish", "transfer_abort",
 )
 _SCHEMA = "velo.transfer.mcp.response.v1"
 HexDigest = Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -256,6 +256,15 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
                           offset=offset, count=count, data_base64=data_base64,
                           chunk_sha256=chunk_sha256)
 
+    async def transfer_chunks(transfer_id: StrictStr, request_digest: StrictStr,
+                              offset: StrictInt,
+                              chunks: list[dict] | None = None,
+                              count_per_chunk: StrictInt | None = None,
+                              chunk_count: StrictInt | None = None) -> TransferEnvelope:
+        return await call("transfer_chunks", transfer_id=transfer_id, request_digest=request_digest,
+                          offset=offset, chunks=chunks, count_per_chunk=count_per_chunk,
+                          chunk_count=chunk_count)
+
     async def transfer_finish(transfer_id: StrictStr, request_digest: StrictStr,
                               action: Literal["prepare", "commit", "release"],
                               prepare_receipt: PrepareReceipt | None = None,
@@ -272,7 +281,7 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
         return await call("transfer_abort", transfer_id=transfer_id, request_digest=request_digest)
 
     handlers = (transfer_capabilities, transfer_begin, transfer_status,
-                transfer_chunk, transfer_finish, transfer_abort)
+                transfer_chunk, transfer_chunks, transfer_finish, transfer_abort)
     for name, handler in zip(TRANSFER_TOOL_NAMES, handlers, strict=True):
         server.add_tool(handler, name=name, description=f"Local guest {name.replace('_', ' ')}")
         tool = server._tool_manager.get_tool(name)
@@ -304,6 +313,22 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
             parameters["oneOf"] = [{"required": ["data_base64", "chunk_sha256"]},
                                    {"not": {"anyOf": [{"required": ["data_base64"]},
                                                         {"required": ["chunk_sha256"]}]}}]
+        if name == "transfer_chunks":
+            props["offset"]["minimum"] = 0
+            props["chunks"] = {"type": "array", "minItems": 1, "maxItems": 64, "items": {
+                "type": "object", "additionalProperties": False,
+                "required": ["count", "data_base64", "chunk_sha256"],
+                "properties": {
+                    "count": {"title": "Count", "type": "integer", "minimum": 1},
+                    "data_base64": {"type": "string"},
+                    "chunk_sha256": {"type": "string", "pattern": r"^[0-9a-f]{64}$"},
+                }}}
+            props["count_per_chunk"] = {"title": "Count Per Chunk", "type": "integer", "minimum": 1}
+            props["chunk_count"] = {"title": "Chunk Count", "type": "integer", "minimum": 1, "maximum": 64}
+            parameters["additionalProperties"] = False
+            parameters["oneOf"] = [{"required": ["chunks"]},
+                                   {"required": ["count_per_chunk", "chunk_count"],
+                                    "not": {"anyOf": [{"required": ["chunks"]}]}}]
         if name == "transfer_finish":
             for receipt in ("prepare_receipt", "source_validation_receipt", "publication_receipt"):
                 model = {"prepare_receipt": "PrepareReceipt",

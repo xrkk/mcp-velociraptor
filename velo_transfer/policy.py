@@ -24,6 +24,8 @@ _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
 _LIMITS = frozenset(("max_files", "max_metadata_bytes", "max_logical_bytes",
                      "max_package_bytes", "min_free_bytes", "max_chunk_bytes",
                      "max_state_bytes", "max_duration_seconds"))
+# Optional deployment capability: absent means batched chunks are not offered.
+_LIMITS_OPTIONAL = frozenset(("max_batch_chunks",))
 AclVerifier = Callable[[Path, str], bool]
 
 
@@ -212,7 +214,9 @@ def load_policy(path: str | Path | None = None, *, observation: dict | None = No
         raise Error("invalid_policy")
     expected_uuid = _uuid(data["expected_vm_uuid"])
     limits = data["limits"]
-    if not isinstance(limits, dict) or set(limits) not in (_LIMITS, _LIMITS - {"max_chunk_bytes"}):
+    if not isinstance(limits, dict) or set(limits) not in (
+            _LIMITS, _LIMITS - {"max_chunk_bytes"}, _LIMITS | _LIMITS_OPTIONAL,
+            _LIMITS - {"max_chunk_bytes"} | _LIMITS_OPTIONAL):
         raise Error("invalid_policy")
     limits = dict(limits)
     limits.setdefault("max_chunk_bytes", DEFAULT_CHUNK_BYTES)
@@ -221,7 +225,8 @@ def load_policy(path: str | Path | None = None, *, observation: dict | None = No
         raise Error("invalid_policy")
     if (min(limits[key] for key in _LIMITS - {"min_free_bytes", "max_logical_bytes"}) <= 0 or
             limits["max_chunk_bytes"] > limits["max_package_bytes"] or
-            limits["max_duration_seconds"] > 604800):
+            limits["max_duration_seconds"] > 604800 or
+            ("max_batch_chunks" in limits and not 1 <= limits["max_batch_chunks"] <= 64)):
         raise Error("invalid_policy")
     read_roots = _roots(data["read_roots"], "read", verify_windows_acl)
     write_roots = _roots(data["write_roots"], "write", verify_windows_acl)

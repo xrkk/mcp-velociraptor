@@ -155,7 +155,9 @@ class GuestTransferService:
                 "read_root_ids": [digest_json(str(p)) for p in self.policy.read_roots],
                 "write_root_ids": [digest_json(str(p)) for p in self.policy.write_roots],
                 "default_chunk_bytes": min(1 << 20, limits["max_chunk_bytes"]),
-                "limits": limits}
+                "limits": limits,
+                **({"max_batch_chunks": limits["max_batch_chunks"]}
+                   if "max_batch_chunks" in limits else {})}
 
     def _validate_request(self, request):
         self._identity()
@@ -240,12 +242,12 @@ class GuestTransferService:
                 "package_sha256": package["sha256"],
                 "manifest_sha256": package["manifest_sha256"]}
 
-    def _budget(self, state, *, cancel=False):
+    def _budget(self, state, *, cancel=False, observation=None):
         values = state["request"]["budget"]
-        # One full identity observation opens a cancellable worker operation; the
+        # One full identity observation opens a cancellable worker operation, the
         # cancel closure reuses only that observation while still re-reading the
-        # protected state (and its ACL/revision checks) on every check.
-        observation = self._identity() if cancel else None
+        # protected task state (and its ACL/revision checks) on every check.
+        observation = self._identity(observation) if cancel else None
         def check_cancel():
             if cancel and self._load(state["request"]["transfer_id"], state["request"]["request_digest"], observation=observation)["state"]["cancelled"]:
                 raise Error("transfer_cancelled")
@@ -692,8 +694,8 @@ class GuestTransferService:
             raise Error("manifest_hash_mismatch")
         return manifest
 
-    def _package_file(self, state):
-        path = self._task_path(state["request"]["transfer_id"]) / ("bundle.zip" if state["request"]["direction"] == "pull" else "received.part")
+    def _package_file(self, state, observation=None):
+        path = self._task_path(state["request"]["transfer_id"], observation=observation) / ("bundle.zip" if state["request"]["direction"] == "pull" else "received.part")
         safe_chain(path, self.policy.work_root)
         return path
 
@@ -918,6 +920,129 @@ class GuestTransferService:
             self._save(store, fresh, state)
             return {"schema": "velo.transfer.guest.response.v1", "verified_offset": state["offset"],
                     "replayed": False}
+
+    def transfer_chunks(self, transfer_id: str, request_digest: str, offset: int,
+                        chunks=None, count_per_chunk: int = 0, chunk_count: int = 0):
+        """Batched sequential chunks: one observation, writer and journal save per batch.
+
+        Every chunk still runs its budget, deadline, cancellation and hash
+        checks; the ledger is appended per chunk and fsynced once with the
+        partial file at batch end, and the durable state save records the
+        batch-final offset. An interrupted batch leaves the journal at the
+        pre-batch offset, so recovery re-verifies through the existing
+        partial-identity path.
+        """
+        batch_limit = self.policy.limits.get("max_batch_chunks")
+        if not isinstance(batch_limit, int) or isinstance(batch_limit, bool) or batch_limit < 1:
+            raise Error("batch_not_allowed")
+        if not _positive(offset, allow_zero=True):
+            raise Error("invalid_chunk_range")
+        observed = self._identity()
+        envelope = self._load(transfer_id, request_digest, observation=observed)
+        state = envelope["state"]
+        maximum = state["request"]["budget"]["max_chunk_bytes"]
+        if state["cancelled"]:
+            raise Error("transfer_cancelled")
+        if state["request"]["direction"] == "pull":
+            if chunks is not None or not _positive(count_per_chunk) or not _positive(chunk_count):
+                raise Error("invalid_chunk")
+            if count_per_chunk > maximum or chunk_count > batch_limit:
+                raise Error("chunk_budget_or_deadline")
+            if state["phase"] not in ("SOURCE_READY", "SOURCE_PREPARED"):
+                raise Error("chunk_precondition_failed")
+            package = state["package"]
+            if offset + (chunk_count - 1) * count_per_chunk >= max(package["size"], 1) and package["size"] > offset + count_per_chunk:
+                raise Error("invalid_chunk_range")
+            if offset >= package["size"] and package["size"] > 0:
+                raise Error("invalid_chunk_range")
+            budget = self._budget(state, cancel=True, observation=observed)
+            path = self._package_file(state, observation=observed)
+            before = _no_link(path)
+            if before.st_size != package["size"]:
+                raise Error("package_changed")
+            out = []
+            with path.open("rb") as source:
+                for index in range(chunk_count):
+                    budget.check()
+                    chunk_offset = offset + index * count_per_chunk
+                    if chunk_offset >= package["size"]:
+                        break
+                    count = min(count_per_chunk, package["size"] - chunk_offset)
+                    source.seek(chunk_offset)
+                    data = source.read(count)
+                    if len(data) != count or file_identity(_no_link(path)) != file_identity(before):
+                        raise Error("package_changed")
+                    out.append({"offset": chunk_offset, "count": count,
+                                "data_base64": base64.b64encode(data).decode("ascii"),
+                                "chunk_sha256": hashlib.sha256(data).hexdigest()})
+            return {"schema": "velo.transfer.guest.response.v1", "chunks": out,
+                    "verified_offset": state["offset"]}
+        if not isinstance(chunks, list) or not chunks or len(chunks) > batch_limit:
+            raise Error("invalid_chunk")
+        prepared = []
+        total = 0
+        for item in chunks:
+            if not isinstance(item, dict) or set(item) != {"count", "data_base64", "chunk_sha256"}:
+                raise Error("invalid_chunk")
+            count = item["count"]
+            if not _positive(count) or count > maximum:
+                raise Error("invalid_chunk")
+            if len(item["data_base64"]) > 4 * ((count + 2) // 3) or not _hex(item["chunk_sha256"]):
+                raise Error("invalid_chunk")
+            prepared.append((count, item["data_base64"], item["chunk_sha256"]))
+            total += count
+        store = self._store(observation=observed)
+        with store.writer():
+            fresh = self._load(transfer_id, request_digest, store)
+            state = fresh["state"]
+            self._check_idle(store)
+            if state["phase"] not in ("DEST_RECEIVING", "DEST_RECEIVED"):
+                raise Error("chunk_precondition_failed")
+            if offset != state["offset"] or state["phase"] != "DEST_RECEIVING":
+                raise Error("chunk_offset_conflict")
+            if offset + total > state["package"]["size"]:
+                raise Error("invalid_chunk_range")
+            self._verified_partial(state, short_call=True, observation=observed)
+            partial, ledger = self._ledger_paths(state, observation=observed)
+            if not partial.exists():
+                self._atomic_sidecar(partial, b"", state["request"]["budget"]["max_package_bytes"])
+                self._atomic_sidecar(ledger, b"", state["request"]["budget"]["max_metadata_bytes"])
+            self._budget(state, cancel=True, observation=observed).space(partial.parent, total)
+            records = []
+            for count, data_base64, chunk_sha256 in prepared:
+                self._budget(state, cancel=True, observation=observed).check()
+                try:
+                    data = base64.b64decode(data_base64, validate=True)
+                except (ValueError, binascii.Error) as exc:
+                    raise Error("invalid_chunk") from exc
+                if len(data) != count or hashlib.sha256(data).hexdigest() != chunk_sha256:
+                    raise Error("chunk_hash_mismatch")
+                records.append(canonical_json(
+                    {"offset": state["offset"], "count": count, "sha256": chunk_sha256}) + b"\n")
+                with partial.open("r+b") as output:
+                    output.seek(state["offset"])
+                    output.write(data)
+                state["offset"] += count
+                state["chunk_count"] += 1
+            if state["offset"] == state["package"]["size"]:
+                state["phase"] = "DEST_RECEIVED"
+                state["terminal"] = GuestTerminal(self._protocol_binding(state["request"], state["package"]),
+                    state["request"]["expected_destination"]).snapshot()
+            with partial.open("rb+") as output:
+                output.flush()
+                os.fsync(output.fileno())
+            if ledger.stat().st_size + sum(len(r) for r in records) > state["request"]["budget"]["max_metadata_bytes"]:
+                raise Error("metadata_budget_exceeded")
+            with ledger.open("ab") as output:
+                for record in records:
+                    output.write(record)
+                output.flush()
+                os.fsync(output.fileno())
+            pinfo, linfo = _no_link(partial), _no_link(ledger)
+            state["partial_identity"] = self._partial_fingerprint(state, pinfo, linfo)
+            self._save(store, fresh, state)
+            return {"schema": "velo.transfer.guest.response.v1",
+                    "verified_offset": state["offset"], "accepted": len(records)}
 
     def transfer_finish(self, transfer_id: str, request_digest: str, action: str,
                         *, prepare_receipt: dict | None = None,

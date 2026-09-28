@@ -24,7 +24,7 @@ from . import windows_commands as wc
 from .errors import TransferContentError
 
 NAMES = ("transfer_capabilities", "transfer_begin", "transfer_status", "transfer_chunk",
-         "transfer_finish", "transfer_abort")
+         "transfer_chunks", "transfer_finish", "transfer_abort")
 READ_ONLY = frozenset(("transfer_capabilities", "transfer_status"))
 SCHEMAS = json.loads(files("velo_transfer").joinpath("transfer_tools_schema.json").read_text())
 
@@ -165,6 +165,7 @@ class TransportAdapter:
         self.deadline_monotonic = deadline
         self.request_timeout_seconds = request_timeout
         self.raw_chunk_bytes = 1 << 20
+        self.batch_chunks = 1
         self._instances = instances
         self.observations: dict[str, Any] = {"endpoint": endpoint, "instance": instances[-1] if instances else None,
                                               "instance_changed": len(set(instances)) > 1}
@@ -216,7 +217,7 @@ class TransportAdapter:
                 # acknowledged offset is verified against the stored bytes and
                 # answered as a replay, so transient transport failures may be
                 # retried safely instead of failing the whole transfer.
-                error.retryable = name == "transfer_chunk"
+                error.retryable = name in ("transfer_chunk", "transfer_chunks")
             raise error from None
 
     async def call(self, operation: str, arguments: dict) -> dict:
@@ -226,7 +227,7 @@ class TransportAdapter:
             raise AdapterError("invalid_arguments")
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
-        attempts = 3 if operation in READ_ONLY or operation == "transfer_chunk" else 1
+        attempts = 3 if operation in READ_ONLY or operation in ("transfer_chunk", "transfer_chunks") else 1
         for i in range(attempts):
             try:
                 result = await self._invoke(operation, arguments)
@@ -236,6 +237,8 @@ class TransportAdapter:
                     limit = result.get("limits", {}).get("max_chunk_bytes") if isinstance(result.get("limits"), dict) else None
                     if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
                         self.raw_chunk_bytes = min(1 << 20, limit)
+                    batch = result.get("max_batch_chunks")
+                    self.batch_chunks = batch if isinstance(batch, int) and 1 <= batch <= 64 else 1
                 self._last_result = result
                 return result
             except AdapterError as exc:

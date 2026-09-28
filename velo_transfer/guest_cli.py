@@ -17,6 +17,8 @@ _OPERATIONS = {
     "transfer_capabilities": frozenset(),
     "transfer_begin": frozenset(("request",)),
     "transfer_status": frozenset(("transfer_id", "request_digest")),
+    "transfer_chunks": frozenset(("transfer_id", "request_digest", "offset",
+                                  "chunks", "count_per_chunk", "chunk_count")),
     "transfer_chunk": frozenset(("transfer_id", "request_digest", "offset", "count",
                                   "data_base64", "chunk_sha256")),
     "transfer_finish": frozenset(("transfer_id", "request_digest", "action",

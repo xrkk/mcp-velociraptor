@@ -1,4 +1,4 @@
-"""Local MCP SDK boundary and owned service lifecycle for six guest tools."""
+"""Local MCP SDK boundary and owned service lifecycle for guest transfer tools."""
 
 import asyncio
 import base64
@@ -49,7 +49,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
         manager = register_transfer_tools(server, factory=lambda: object())
         self.addCleanup(manager.shutdown)
         validate_combined_registry(server, specs, transfer_names=TRANSFER_TOOL_NAMES)
-        self.assertEqual(len(server._tool_manager._tools), 136)
+        self.assertEqual(len(server._tool_manager._tools), 137)
         self.assertEqual(set(server._tool_manager._tools), set(before) | set(TRANSFER_TOOL_NAMES))
         for name, (input_schema, output_schema) in before.items():
             tool = server._tool_manager.get_tool(name)
@@ -216,7 +216,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
                 mock.patch.object(bridge, "target_context", TargetContext(FakeBackend())), \
                 mock.patch.dict(os.environ, {"VELOCIRAPTOR_TRANSFER_POLICY": ""}):
             server = bridge.create_server()
-        self.assertEqual(len(server._tool_manager._tools), 136)
+        self.assertEqual(len(server._tool_manager._tools), 137)
         self.assertIsNone(server._guest_transfer_tools._service)
         server._guest_transfer_tools.shutdown()
 
@@ -298,7 +298,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
                 stderr_file.seek(0)
                 return tools, caps, disabled, malformed, stderr_file.read()
         tools, caps, disabled, malformed, stderr = asyncio.run(session())
-        self.assertEqual(len(tools), 136)
+        self.assertEqual(len(tools), 137)
         self.assertEqual({tool.name for tool in tools},
             set(TRANSFER_TOOL_NAMES) | set(FIXED_TOOL_NAMES) |
             set(APPROVED_WINDOWS_ARTIFACTS))
