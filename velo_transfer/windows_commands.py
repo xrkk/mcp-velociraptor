@@ -154,7 +154,7 @@ def invoke_script(path: str, python_path: str, project_root: str, policy_path: s
         "$err=[IO.Path]::GetTempFileName();"
         "try{$resp = & " + literal(python_path) + " -m velo_transfer.guest_cli --request-file " + literal(path) +
         " 2>$err | Where-Object {$null -ne $_};$rc=$LASTEXITCODE}finally{Pop-Location};"
-        "$resp;if($rc -ne 0){Get-Content -LiteralPath $err | Write-Error;exit $rc};" +
+        "$resp;if($rc -ne 0){exit $rc};" +
         "Remove-Item -LiteralPath $err -ErrorAction SilentlyContinue")
 
 
