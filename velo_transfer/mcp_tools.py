@@ -10,6 +10,7 @@ from typing import Annotated, Any, Literal
 
 from jsonschema import Draft202012Validator
 from mcp.server.mcpserver import MCPServer
+from mcp.types import CallToolResult
 from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, model_serializer, model_validator
 
@@ -237,7 +238,13 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
     manager = TransferToolService(factory)
 
     async def call(name, **args):
-        return await asyncio.to_thread(manager.invoke, name, **args)
+        envelope = await asyncio.to_thread(manager.invoke, name, **args)
+        # Publish only the structured payload. The SDK would otherwise also
+        # serialize the same envelope into a text block, doubling every
+        # response body; large chunk payloads are exactly where the client
+        # SSE reader is least reliable, so halving the wire size matters.
+        return CallToolResult(content=[], structured_content=envelope.model_dump(
+            mode="json", by_alias=True, exclude_none=True))
 
     async def transfer_capabilities() -> TransferEnvelope:
         return await call("transfer_capabilities")
