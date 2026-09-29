@@ -224,9 +224,118 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
         ),
         host=config.host,
     )
+    service = getattr(server, "_guest_transfer_tools", None)
+    if service is not None:
+        from starlette.routing import Route
+        app.router.routes.append(Route("/chunkbin", _chunkbin_endpoint(service), methods=["POST"]))
     app.add_middleware(ServerInstanceHeader, instance_id=new_server_instance_id())
     app.add_middleware(BearerAuthGate, token=config.bearer_token or "")
     return app
+
+
+_VBT_MAGIC = b"VBT1"
+
+
+def _vbt_frame(header: dict, payload: bytes) -> bytes:
+    import json as _json
+    raw = _json.dumps(header, separators=(",", ":")).encode("utf-8")
+    return _VBT_MAGIC + len(raw).to_bytes(4, "little") + raw + payload
+
+
+def _vbt_parse(body: bytes) -> tuple[dict, bytes]:
+    if len(body) < 8 or body[:4] != _VBT_MAGIC:
+        raise ValueError("bad_magic")
+    header_len = int.from_bytes(body[4:8], "little")
+    if header_len > 1 << 20 or 8 + header_len > len(body):
+        raise ValueError("bad_header")
+    import json as _json
+    header = _json.loads(body[8:8 + header_len])
+    if not isinstance(header, dict):
+        raise ValueError("bad_header")
+    return header, body[8 + header_len:]
+
+
+def _chunkbin_endpoint(service):
+    """Binary chunk batches over the authenticated formal app.
+
+    Envelope rules, budgets, hashes and ledger writes are exactly the
+    transfer_chunks tool's; only the wire form differs: a small JSON header
+    plus raw payload bytes, so multi-hundred-MiB batches stop paying
+    base64+JSON text encoding twice.
+    """
+    import asyncio
+    import base64
+
+    async def endpoint(request):
+        from starlette.responses import Response
+
+        tid = request.headers.get("x-velo-transfer-id", "")
+        digest = request.headers.get("x-velo-request-digest", "")
+        offset = request.headers.get("x-velo-offset", "")
+        if not tid or not digest or not offset.isdigit():
+            return Response(_vbt_frame({"status": "error", "error": {"code": "invalid_arguments"}}, b""),
+                            media_type="application/octet-stream", status_code=200)
+        try:
+            body = await request.body()
+        except Exception:
+            return Response(_vbt_frame({"status": "error", "error": {"code": "connection_failed"}}, b""),
+                            media_type="application/octet-stream")
+        push_header = None
+        arguments = None
+        direction = request.headers.get("x-velo-direction", "pull")
+        try:
+            if direction == "push":
+                header, payload = _vbt_parse(body)
+                push_header = header
+                items_meta = header.get("chunks")
+                if not isinstance(items_meta, list) or not items_meta:
+                    raise ValueError("chunks")
+                chunks = []
+                cursor = 0
+                for item in items_meta:
+                    count = item["count"]
+                    if not isinstance(count, int) or count <= 0 or cursor + count > len(payload):
+                        raise ValueError("count")
+                    chunks.append({"count": count,
+                                   "data_base64": base64.b64encode(payload[cursor:cursor + count]).decode("ascii"),
+                                   "chunk_sha256": item["chunk_sha256"]})
+                    cursor += count
+                if cursor != len(payload):
+                    raise ValueError("length")
+                arguments = {"transfer_id": tid, "request_digest": digest, "offset": int(offset),
+                             "chunks": chunks}
+            else:
+                per = request.headers.get("x-velo-count-per-chunk", "")
+                total = request.headers.get("x-velo-chunk-count", "")
+                if not per.isdigit() or not total.isdigit():
+                    raise ValueError("range")
+                arguments = {"transfer_id": tid, "request_digest": digest, "offset": int(offset),
+                             "count_per_chunk": int(per), "chunk_count": int(total)}
+        except (ValueError, KeyError, TypeError):
+            return Response(_vbt_frame({"status": "error", "error": {"code": "invalid_arguments"}}, b""),
+                            media_type="application/octet-stream")
+        try:
+            envelope = await asyncio.to_thread(service.invoke, "transfer_chunks", **arguments)
+        except Exception:
+            envelope = service._failure("internal_error")
+        result = envelope.result if envelope.status == "success" else None
+        if result is None:
+            return Response(_vbt_frame({"status": "error", "error": {"code": envelope.error["code"]}}, b""),
+                            media_type="application/octet-stream")
+        if direction == "push":
+            return Response(_vbt_frame({"status": "success",
+                                        "result": {"verified_offset": result["verified_offset"],
+                                                   "accepted": result.get("accepted", 0)}}, b""),
+                            media_type="application/octet-stream")
+        items = result.get("chunks", [])
+        meta = [{"offset": c["offset"], "count": c["count"], "chunk_sha256": c["chunk_sha256"]} for c in items]
+        payload = b"".join(base64.b64decode(c["data_base64"]) for c in items)
+        return Response(_vbt_frame({"status": "success",
+                                    "result": {"verified_offset": result["verified_offset"], "chunks": meta}},
+                                   payload),
+                        media_type="application/octet-stream")
+
+    return endpoint
 
 
 def run_formal_http(

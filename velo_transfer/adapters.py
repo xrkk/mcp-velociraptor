@@ -156,6 +156,25 @@ def _group_leaves(group: BaseExceptionGroup) -> list[BaseException]:
     return leaves
 
 
+_VBT_MAGIC = b"VBT1"
+
+
+def _header_bytes(header: dict) -> bytes:
+    return json.dumps(header, separators=(",", ":")).encode("utf-8")
+
+
+def _parse_vbt(body: bytes):
+    if len(body) < 8 or body[:4] != _VBT_MAGIC:
+        raise AdapterError("malformed_response")
+    header_len = int.from_bytes(body[4:8], "little")
+    if header_len > 1 << 20 or 8 + header_len > len(body):
+        raise AdapterError("malformed_response")
+    header = json.loads(body[8:8 + header_len])
+    if not isinstance(header, dict):
+        raise AdapterError("malformed_response")
+    return header, body[8 + header_len:]
+
+
 class _DirectChunkChannel:
     """Bypasses the mcp SDK's SSE reader for chunk payloads only.
 
@@ -174,12 +193,77 @@ class _DirectChunkChannel:
         self._timeout = timeout
         self._session_id: str | None = None
         self._http: httpx2.AsyncClient | None = None
+        self._binary_tried = False
+        self._binary_ok = False
 
     async def close(self):
         if self._http is not None:
             await self._http.aclose()
             self._http = None
         self._session_id = None
+        self._binary_tried = False
+        self._binary_ok = False
+
+    async def _binary_pull(self, arguments: dict):
+        headers = dict(self._headers)
+        headers.update({
+            "x-velo-direction": "pull",
+            "x-velo-transfer-id": arguments["transfer_id"],
+            "x-velo-request-digest": arguments["request_digest"],
+            "x-velo-offset": str(arguments["offset"]),
+            "x-velo-count-per-chunk": str(arguments["count_per_chunk"]),
+            "x-velo-chunk-count": str(arguments["chunk_count"]),
+        })
+        response = await self._http.post(self._url.rsplit("/", 1)[0] + "/chunkbin", headers=headers)
+        if response.status_code != 200:
+            raise AdapterError("connection_failed")
+        self._binary_ok = True
+        header, payload = _parse_vbt(response.content)
+        if header.get("status") != "success":
+            raise AdapterError((header.get("error") or {}).get("code", "protocol_error"))
+        result = header.get("result") or {}
+        meta = result.get("chunks") or []
+        chunks = []
+        cursor = 0
+        for item in meta:
+            count = item["count"]
+            data = payload[cursor:cursor + count]
+            if len(data) != count:
+                raise AdapterError("malformed_response")
+            chunks.append({"offset": item["offset"], "count": count, "data_base64":
+                           base64.b64encode(data).decode("ascii"),
+                           "chunk_sha256": item["chunk_sha256"]})
+            cursor += count
+        return {"schema": "velo.transfer.guest.response.v1", "chunks": chunks,
+                "verified_offset": result.get("verified_offset")}
+
+    async def _binary_push(self, name: str, arguments: dict):
+        items = arguments["chunks"]
+        payload = bytearray()
+        meta = []
+        for item in items:
+            raw = base64.b64decode(item["data_base64"])
+            payload.extend(raw)
+            meta.append({"count": item["count"], "chunk_sha256": item["chunk_sha256"]})
+        headers = dict(self._headers)
+        headers.update({
+            "x-velo-direction": "push",
+            "x-velo-transfer-id": arguments["transfer_id"],
+            "x-velo-request-digest": arguments["request_digest"],
+            "x-velo-offset": str(arguments["offset"]),
+            "Content-Type": "application/octet-stream",
+        })
+        body = _VBT_MAGIC + _header_bytes({"chunks": meta}) + bytes(payload)
+        response = await self._http.post(self._url.rsplit("/", 1)[0] + "/chunkbin", headers=headers, content=body)
+        if response.status_code != 200:
+            raise AdapterError("connection_failed")
+        self._binary_ok = True
+        header, _ = _parse_vbt(response.content)
+        if header.get("status") != "success":
+            raise AdapterError((header.get("error") or {}).get("code", "protocol_error"))
+        result = header.get("result") or {}
+        return {"schema": "velo.transfer.guest.response.v1",
+                "verified_offset": result.get("verified_offset"), "accepted": result.get("accepted", 0)}
 
     async def _ensure(self):
         if self._http is None:
@@ -202,6 +286,25 @@ class _DirectChunkChannel:
                               json={"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     async def call(self, name: str, arguments: dict) -> dict:
+        if not getattr(self, "_binary_tried", False) or self._binary_ok:
+            self._binary_tried = True
+            try:
+                if self._http is None:
+                    import httpx2 as _h
+                    self._http = _h.AsyncClient(headers=self._headers, timeout=self._timeout,
+                                                follow_redirects=False, trust_env=False)
+                if name == "transfer_chunks" and "chunks" in arguments:
+                    return await self._binary_push(name, arguments)
+                if name == "transfer_chunks":
+                    return await self._binary_pull(arguments)
+            except AdapterError as exc:
+                if exc.code in ("connection_failed", "protocol_error", "malformed_response"):
+                    self._binary_ok = False
+                    # fall through to the MCP JSON path below
+                else:
+                    raise
+            except Exception as exc:
+                raise _classify(exc, name) from None
         try:
             await self._ensure()
         except AdapterError:
