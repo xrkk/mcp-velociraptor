@@ -412,17 +412,26 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([op for op, _ in self.peer.trace[index + 1:index + 4]],
                          ["transfer_status"] * 3)
 
-    async def test_c2_begin_retry_cap_persists_across_instances(self):
+    async def test_c2_begin_retry_cap_bounded_per_run(self):
+        """The retry cap bounds attempts within one run, not the task lifetime.
+
+        Historical failures (possibly from different, fixed causes) must not
+        permanently block re-begin; each new coordinator run gets a fresh
+        budget while begin_attempted keeps channel stickiness.
+        """
         self.setup_request()
         for nth in (1, 2, 3):
             self.peer.fail("transfer_begin", nth=nth,
                            error=AdapterError("outcome_unknown", may_have_committed=True))
-        for attempt in range(4):
-            summary = await self.run_transfer(resume=attempt > 0)
-            self.assertEqual(summary["outcome"], "incomplete")
-            self.assertEqual(self.journal_data()["begin_attempts"], min(attempt + 1, 3))
+        summary = await self.run_transfer()
+        self.assertEqual(summary["outcome"], "incomplete")
         self.assertEqual(self.peer.counts[("transfer_begin", None)], 3)
+        self.assertEqual(self.journal_data()["begin_attempts"], 3)
         self.assertIn("begin_retry_exhausted", self.result(summary)["warnings"])
+        # A later run (cause fixed) must be able to begin again.
+        summary2 = await self.run_transfer(resume=True)
+        self.assertEqual(self.peer.counts[("transfer_begin", None)], 4)
+        self.assertEqual(self.journal_data()["begin_attempts"], 0)
 
     async def test_c2_prepare_retry_cap_no_unbounded_mutation(self):
         self.setup_request()
