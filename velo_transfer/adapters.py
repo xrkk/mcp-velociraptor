@@ -219,10 +219,17 @@ class _DirectChunkChannel:
                         raise AdapterError("authentication_denied")
                     raise AdapterError("connection_failed")
                 data_lines = []
+                buffer = ""
                 async for text in response.aiter_text():
-                    for line in text.splitlines():
+                    buffer += text
+                    *complete, buffer = buffer.split("\n")
+                    for line in complete:
+                        line = line[:-1] if line.endswith("\r") else line
                         if line.startswith("data: "):
                             data_lines.append(line[6:])
+                for line in buffer.splitlines():
+                    if line.startswith("data: "):
+                        data_lines.append(line[6:])
                 if not data_lines:
                     raise AdapterError("protocol_error")
                 payload = json.loads("\n".join(data_lines))
