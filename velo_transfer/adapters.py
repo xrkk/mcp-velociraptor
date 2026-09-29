@@ -435,8 +435,11 @@ class TransportAdapter:
     async def call(self, operation: str, arguments: dict) -> dict:
         if operation not in NAMES or not isinstance(arguments, dict):
             raise AdapterError("invalid_operation")
-        if not Draft202012Validator(SCHEMAS[operation]["inputSchema"]).is_valid(arguments):
-            raise AdapterError("invalid_arguments")
+        validator = Draft202012Validator(SCHEMAS[operation]["inputSchema"])
+        errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
+        if errors:
+            first = errors[0]
+            raise AdapterError("invalid_arguments:" + first.message[:120])
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
         attempts = 3 if operation in READ_ONLY or operation in ("transfer_chunk", "transfer_chunks") else 1
@@ -542,8 +545,11 @@ class WindowsAdapter(TransportAdapter):
     async def call(self, operation: str, arguments: dict) -> dict:
         if operation not in NAMES or not isinstance(arguments, dict):
             raise AdapterError("invalid_operation")
-        if not Draft202012Validator(SCHEMAS[operation]["inputSchema"]).is_valid(arguments):
-            raise AdapterError("invalid_arguments")
+        validator = Draft202012Validator(SCHEMAS[operation]["inputSchema"])
+        errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
+        if errors:
+            first = errors[0]
+            raise AdapterError("invalid_arguments:" + first.message[:120])
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
         raw = json.dumps({"operation": operation, "arguments": arguments}, ensure_ascii=False,

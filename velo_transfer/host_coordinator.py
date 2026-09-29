@@ -217,6 +217,10 @@ class TransferCoordinator:
             if not exc.may_have_committed:
                 raise
             status = await self._status()  # unknown stays incomplete if status is unavailable
+        else:
+            # The cap guards against runaway retries within one recovery, not
+            # against the task's whole history; a successful begin re-arms it.
+            self._save(begin_attempts=0)
         return status
 
     async def _ready(self, status):
