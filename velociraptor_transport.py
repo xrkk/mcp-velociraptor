@@ -311,8 +311,9 @@ def _chunkbin_endpoint(service):
                     raise ValueError("range")
                 arguments = {"transfer_id": tid, "request_digest": digest, "offset": int(offset),
                              "count_per_chunk": int(per), "chunk_count": int(total)}
-        except (ValueError, KeyError, TypeError):
-            return Response(_vbt_frame({"status": "error", "error": {"code": "invalid_arguments"}}, b""),
+        except (ValueError, KeyError, TypeError) as exc:
+            return Response(_vbt_frame({"status": "error", "error": {
+                "code": "invalid_arguments", "detail": f"{type(exc).__name__}: {exc}"[:160]}}, b""),
                             media_type="application/octet-stream")
         try:
             envelope = await asyncio.to_thread(service.invoke, "transfer_chunks", **arguments)
