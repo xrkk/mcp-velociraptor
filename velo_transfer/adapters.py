@@ -221,7 +221,9 @@ class _DirectChunkChannel:
         self._binary_ok = True
         header, payload = _parse_vbt(response.content)
         if header.get("status") != "success":
-            raise AdapterError((header.get("error") or {}).get("code", "protocol_error"))
+            _err = header.get("error") or {}
+            raise AdapterError(str(_err.get("code", "protocol_error")) +
+                               (":" + str(_err.get("detail")) if _err.get("detail") else ""))
         result = header.get("result") or {}
         meta = result.get("chunks") or []
         chunks = []
@@ -254,14 +256,17 @@ class _DirectChunkChannel:
             "x-velo-offset": str(arguments["offset"]),
             "Content-Type": "application/octet-stream",
         })
-        body = _VBT_MAGIC + _header_bytes({"chunks": meta}) + bytes(payload)
+        header = _header_bytes({"chunks": meta})
+        body = _VBT_MAGIC + len(header).to_bytes(4, "little") + header + bytes(payload)
         response = await self._http.post(self._url.rsplit("/", 1)[0] + "/chunkbin", headers=headers, content=body)
         if response.status_code != 200:
             raise AdapterError("connection_failed")
         self._binary_ok = True
         header, _ = _parse_vbt(response.content)
         if header.get("status") != "success":
-            raise AdapterError((header.get("error") or {}).get("code", "protocol_error"))
+            _err = header.get("error") or {}
+            raise AdapterError(str(_err.get("code", "protocol_error")) +
+                               (":" + str(_err.get("detail")) if _err.get("detail") else ""))
         result = header.get("result") or {}
         return {"schema": "velo.transfer.guest.response.v1",
                 "verified_offset": result.get("verified_offset"), "accepted": result.get("accepted", 0)}
