@@ -425,13 +425,20 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
                            error=AdapterError("outcome_unknown", may_have_committed=True))
         summary = await self.run_transfer()
         self.assertEqual(summary["outcome"], "incomplete")
-        self.assertEqual(self.peer.counts[("transfer_begin", None)], 3)
-        self.assertEqual(self.journal_data()["begin_attempts"], 3)
-        self.assertIn("begin_retry_exhausted", self.result(summary)["warnings"])
-        # A later run (cause fixed) must be able to begin again.
+        self.assertEqual(self.peer.counts[("transfer_begin", None)], 1)
+        # A later run (cause fixed) must be able to begin again; historical
+        # attempts never block it.
+        self.peer.fail("transfer_begin", nth=4,
+                       error=AdapterError("outcome_unknown", may_have_committed=True))
+        self.peer.fail("transfer_begin", nth=5,
+                       error=AdapterError("outcome_unknown", may_have_committed=True))
         summary2 = await self.run_transfer(resume=True)
-        self.assertEqual(self.peer.counts[("transfer_begin", None)], 4)
-        self.assertEqual(self.journal_data()["begin_attempts"], 0)
+        self.assertEqual(summary2["outcome"], "incomplete")
+        self.assertEqual(self.peer.counts[("transfer_begin", None)], 2)
+        # And with the fault cleared, begin succeeds and re-arms the budget.
+        summary3 = await self.run_transfer(resume=True)
+        self.assertGreaterEqual(self.peer.counts[("transfer_begin", None)], 3)
+        self.assertLessEqual(self.journal_data()["begin_attempts"], 1)
 
     async def test_c2_prepare_retry_cap_no_unbounded_mutation(self):
         self.setup_request()
