@@ -156,6 +156,98 @@ def _group_leaves(group: BaseExceptionGroup) -> list[BaseException]:
     return leaves
 
 
+class _DirectChunkChannel:
+    """Bypasses the mcp SDK's SSE reader for chunk payloads only.
+
+    Measured on .149: the SDK intermittently drops multi-hundred-KiB SSE
+    responses ("SSE stream ended without a response") while the same bodies
+    stream perfectly through plain httpx. This channel speaks the same
+    Streamable HTTP protocol (initialize, notifications/initialized, then
+    tools/call) over one dedicated session and validates responses with the
+    exact same schema rules the SDK path uses.
+    """
+
+    def __init__(self, url: str, headers: dict, deadline: float, timeout: float):
+        self._url = url
+        self._headers = headers
+        self._deadline = deadline
+        self._timeout = timeout
+        self._session_id: str | None = None
+        self._http: httpx2.AsyncClient | None = None
+
+    async def close(self):
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
+        self._session_id = None
+
+    async def _ensure(self):
+        if self._http is None:
+            self._http = httpx2.AsyncClient(headers=self._headers, timeout=self._timeout,
+                                            follow_redirects=False, trust_env=False)
+        if self._session_id is not None:
+            return
+        base = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        response = await self._http.post(self._url, headers=base, json={
+            "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+                "protocolVersion": "2024-11-05", "capabilities": {},
+                "clientInfo": {"name": "velo-transfer-direct", "version": "0"}}})
+        if response.status_code != 200:
+            raise AdapterError("connection_failed")
+        self._session_id = response.headers.get("mcp-session-id")
+        if not self._session_id:
+            raise AdapterError("protocol_error")
+        base["Mcp-Session-Id"] = self._session_id
+        await self._http.post(self._url, headers=base,
+                              json={"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    async def call(self, name: str, arguments: dict) -> dict:
+        try:
+            await self._ensure()
+        except AdapterError:
+            await self.close()
+            raise
+        base = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+                "Mcp-Session-Id": self._session_id}
+        try:
+            async with self._http.stream("POST", self._url, headers=base, json={
+                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": {"name": name, "arguments": arguments}}) as response:
+                if response.status_code != 200:
+                    await response.aread()
+                    if response.status_code in (400, 401, 403, 421):
+                        raise AdapterError("authentication_denied")
+                    raise AdapterError("connection_failed")
+                data_lines = []
+                async for text in response.aiter_text():
+                    for line in text.splitlines():
+                        if line.startswith("data: "):
+                            data_lines.append(line[6:])
+                if not data_lines:
+                    raise AdapterError("protocol_error")
+                payload = json.loads("\n".join(data_lines))
+        except AdapterError:
+            raise
+        except (httpx2.HTTPError, ValueError) as exc:
+            raise _classify(exc, name) from None
+        error = payload.get("error")
+        if isinstance(error, dict):
+            raise AdapterError("host_rejected")
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            raise AdapterError("protocol_error")
+        envelope = result.get("structuredContent")
+        if not isinstance(envelope, dict):
+            raise AdapterError("malformed_response")
+        if result.get("isError") is True:
+            raise AdapterError("tool_error")
+        if not Draft202012Validator(SCHEMAS[name]["outputSchema"]).is_valid(envelope):
+            raise AdapterError("malformed_response")
+        if result.get("content"):
+            raise AdapterError("malformed_response")
+        return _guest_result(envelope)
+
+
 class TransportAdapter:
     def __init__(self, session: ClientSession, channel: str, endpoint: str, deadline: float,
                  request_timeout: float, instances: list[str]):
@@ -167,6 +259,7 @@ class TransportAdapter:
         self.raw_chunk_bytes = 1 << 20
         self.batch_chunks = 1
         self._instances = instances
+        self._direct = None
         self.observations: dict[str, Any] = {"endpoint": endpoint, "instance": instances[-1] if instances else None,
                                               "instance_changed": len(set(instances)) > 1}
         self.fallback_reason: str | None = None
@@ -181,6 +274,14 @@ class TransportAdapter:
 
     async def _invoke(self, name: str, arguments: dict):
         attempted = False
+        if name in ("transfer_chunk", "transfer_chunks") and self._direct is not None:
+            attempted = True
+            try:
+                return await self._direct.call(name, arguments)
+            except AdapterError:
+                raise
+            except Exception as exc:
+                raise _classify(exc, name) from None
         try:
             timeout = _remaining(self.deadline_monotonic, self.request_timeout_seconds)
             attempted = True
@@ -468,6 +569,10 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
                     else:
                         adapter = TransportAdapter(session, channel, endpoint.url, deadline_monotonic,
                                                    request_timeout_seconds, instances)
+                        if endpoint.token is not None:
+                            adapter._direct = _DirectChunkChannel(
+                                endpoint.url, {"Authorization": "Bearer " + endpoint.token.read()},
+                                deadline_monotonic, request_timeout_seconds)
                         opened = True
                         yield adapter
                     body_completed = True
