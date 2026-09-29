@@ -93,7 +93,7 @@ def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict
     fd = os.open(temp, flags, 0o600)
     try:
         with os.fdopen(fd, "wb") as outer:
-            with zipfile.ZipFile(_BoundedOutput(outer, bundle_path.parent, budget), "w", compression=zipfile.ZIP_DEFLATED,
+            with zipfile.ZipFile(_BoundedOutput(outer, bundle_path.parent, budget), "w", compression=zipfile.ZIP_STORED,
                                  allowZip64=True) as archive:
                 archive.writestr(MANIFEST_MEMBER, payload, compress_type=zipfile.ZIP_DEFLATED)
                 for entry in manifest["entries"]:
@@ -108,7 +108,11 @@ def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict
                     if file_identity(before) != entry["identity"] or not stat.S_ISREG(before.st_mode):
                         raise Error("source_changed")
                     info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-                    info.compress_type = zipfile.ZIP_DEFLATED
+                    # Stored members: measured .149 packaging spent 8 of 9
+                    # minutes in DEFLATE on incompressible payloads at ~9 MB/s;
+                    # stored members stream at disk speed with identical
+                    # integrity guarantees (per-member SHA-256 in the manifest).
+                    info.compress_type = zipfile.ZIP_STORED
                     info.external_attr = 0o100600 << 16
                     hasher = hashlib.sha256()
                     count = 0
@@ -313,7 +317,7 @@ def _members(archive: zipfile.ZipFile, manifest: dict, budget: Budget) -> dict[s
             raise Error("zip_member_collision")
         if name not in expected:
             raise Error("unexpected_zip_member")
-        if info.flag_bits & 0x1 or info.compress_type != zipfile.ZIP_DEFLATED:
+        if info.flag_bits & 0x1 or info.compress_type not in (zipfile.ZIP_DEFLATED, zipfile.ZIP_STORED):
             raise Error("unsupported_zip_member")
         mode = (info.external_attr >> 16) & 0xF000
         if mode not in (0, 0x8000, 0x4000):

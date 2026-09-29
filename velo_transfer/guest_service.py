@@ -1023,10 +1023,11 @@ class GuestTransferService:
             if not partial.exists():
                 self._atomic_sidecar(partial, b"", state["request"]["budget"]["max_package_bytes"])
                 self._atomic_sidecar(ledger, b"", state["request"]["budget"]["max_metadata_bytes"])
-            self._budget(state, cancel=True, observation=observed).space(partial.parent, total)
+            batch_budget = self._budget(state, cancel=True, observation=observed, throttle=True)
+            batch_budget.space(partial.parent, total)
             records = []
             for count, data_base64, chunk_sha256 in prepared:
-                self._budget(state, cancel=True, observation=observed).check()
+                batch_budget.check()
                 try:
                     data = base64.b64decode(data_base64, validate=True)
                 except (ValueError, binascii.Error) as exc:

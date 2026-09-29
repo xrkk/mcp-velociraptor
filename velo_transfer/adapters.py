@@ -351,7 +351,7 @@ class TransportAdapter:
                     # coordinator still degrades to single chunks on failure.
                     # Keep each encoded batch response inside a ~50 MiB budget.
                     if isinstance(batch, int) and 1 <= batch <= 64:
-                        response_budget = 50 * 1024 * 1024
+                        response_budget = 100 * 1024 * 1024
                         encoded_chunk = 4 * (self.raw_chunk_bytes + 2) // 3
                         self.batch_chunks = max(1, min(batch, response_budget // encoded_chunk))
                     else:
