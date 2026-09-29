@@ -113,3 +113,86 @@ class ChunkRetryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ThrottledWorkerCancelTests(unittest.TestCase):
+    """Worker-job budgets re-read protected state at most 64 checks or 1/s."""
+
+    def setUp(self):
+        import json as _json
+        import tempfile as _tf
+        self.temp = _tf.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        for name in ("read", "write", "work"):
+            (self.root / name).mkdir(mode=0o700)
+        self.uuid = str(uuid.uuid4())
+        self.observation = WindowsObservation("Windows", self.uuid, "boot-fixture")
+        self.limits = {"max_files": 100, "max_metadata_bytes": 100000,
+                       "max_logical_bytes": 12 * 1024 * 1024,
+                       "max_package_bytes": 14 * 1024 * 1024,
+                       "min_free_bytes": 0, "max_chunk_bytes": 1 << 20,
+                       "max_state_bytes": 65536, "max_duration_seconds": 60}
+        policy = self.root / "policy.json"
+        policy.write_text(_json.dumps({"schema": "velo.transfer.policy.v1",
+            "policy_id": "fixture", "expected_vm_uuid": self.uuid,
+            "read_roots": [str(self.root / "read")],
+            "write_roots": [str(self.root / "write")],
+            "work_root": [str(self.root / "work")], "limits": self.limits}))
+        policy.chmod(0o600)
+        # fix work_root type (string not list)
+        policy.write_text(_json.dumps({"schema": "velo.transfer.policy.v1",
+            "policy_id": "fixture", "expected_vm_uuid": self.uuid,
+            "read_roots": [str(self.root / "read")],
+            "write_roots": [str(self.root / "write")],
+            "work_root": str(self.root / "work"), "limits": self.limits}))
+        self.loads = []
+        self.service = GuestTransferService(policy, _observation=self.observation,
+                                            _acl_verifier=lambda path, kind: True)
+        self.addCleanup(self.service.shutdown)
+        original_load = self.service._load
+        def counting_load(tid, digest, store=None, observation=None):
+            self.loads.append(time.monotonic())
+            return original_load(tid, digest, store=store, observation=observation)
+        self.service._load = counting_load
+
+    def _state(self):
+        request = {"protocol_version": "velo.transfer.v1", "transfer_id": "trial",
+            "direction": "push",
+            "sources": [{"absolute_path": "x", "relative_path": "x"}],
+            "expected_destination": {"endpoint": "guest", "identity": {},
+                                     "canonical_path": "E:\\d"},
+            "expected_vm_identity": {"vm_uuid": self.uuid, "boot_identity": "boot-fixture",
+                                     "vm_epoch": "e"},
+            "evidence_context": {"producer_complete": True, "producer_quiescent": True,
+                                 "references": ["r"]},
+            "budget": {k: self.limits[k] for k in ("max_files", "max_metadata_bytes",
+                "max_logical_bytes", "max_package_bytes", "min_free_bytes",
+                "max_chunk_bytes", "max_duration_seconds")},
+            "package": {"size": 1, "sha256": "0" * 64, "manifest_sha256": "1" * 64}}
+        request["request_digest"] = request_digest(request)
+        return {"request": request, "deadline_monotonic": time.monotonic() + 60}
+
+    def test_throttled_budget_coalesces_state_reads(self):
+        state = self._state()
+        budget = self.service._budget(state, cancel=True, throttle=True, observation=self.observation)
+        before = len(self.loads)
+        for _ in range(50):
+            budget.check()
+        self.assertLessEqual(len(self.loads) - before, 2,
+                             "50 throttled checks in the same second must re-read state at most twice")
+
+    def test_throttled_budget_still_detects_cancel_after_window(self):
+        state = self._state()
+        budget = self.service._budget(state, cancel=True, throttle=True, observation=self.observation)
+        budget.check()
+        # Advance past the throttle window, then simulate a cancellation read.
+        original = self.service._load
+        def cancelled(tid, digest, store=None, observation=None):
+            raise Error("transfer_cancelled")
+        time.sleep(1.05)
+        self.service._load = cancelled
+        with self.assertRaises(Error) as caught:
+            budget.check()
+        self.assertEqual(caught.exception.code, "transfer_cancelled")
+        self.service._load = original

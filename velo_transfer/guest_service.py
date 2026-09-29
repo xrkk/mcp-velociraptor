@@ -242,14 +242,30 @@ class GuestTransferService:
                 "package_sha256": package["sha256"],
                 "manifest_sha256": package["manifest_sha256"]}
 
-    def _budget(self, state, *, cancel=False, observation=None):
+    def _budget(self, state, *, cancel=False, observation=None, throttle=False):
         values = state["request"]["budget"]
         # One full identity observation opens a cancellable worker operation, the
         # cancel closure reuses only that observation while still re-reading the
         # protected task state (and its ACL/revision checks) on every check.
+        # Throttled mode is for single sequential worker jobs (package/verify/
+        # prepare/commit/release): the deadline is still enforced in memory on
+        # every Budget.check, while the protected-state re-read for
+        # cancellation runs at most once per 64 MiB of checks or once per
+        # second, whichever comes first. Chunk transport keeps an unthrottled
+        # per-chunk check.
         observation = self._identity(observation) if cancel else None
+        last_probe = [time.monotonic()]
+        probes = [0]
         def check_cancel():
-            if cancel and self._load(state["request"]["transfer_id"], state["request"]["request_digest"], observation=observation)["state"]["cancelled"]:
+            if not cancel:
+                return
+            now = time.monotonic()
+            if throttle and probes[0] < 64 and now - last_probe[0] < 1.0:
+                probes[0] += 1
+                return
+            probes[0] = 0
+            last_probe[0] = now
+            if self._load(state["request"]["transfer_id"], state["request"]["request_digest"], observation=observation)["state"]["cancelled"]:
                 raise Error("transfer_cancelled")
         return Budget(values["max_files"], values["max_metadata_bytes"],
                       values["max_logical_bytes"], values["max_package_bytes"],
@@ -639,7 +655,7 @@ class GuestTransferService:
     def _execute(self, transfer_id, digest, job):
         envelope = self._load(transfer_id, digest)
         state = envelope["state"]
-        budget = self._budget(state, cancel=True)
+        budget = self._budget(state, cancel=True, throttle=True)
         budget.check()
         if state["cancelled"]:
             raise Error("transfer_cancelled")
