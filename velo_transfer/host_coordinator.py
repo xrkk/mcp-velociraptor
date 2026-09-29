@@ -568,7 +568,10 @@ class TransferCoordinator:
         if data.get("peer") is not None and not _same(data["peer"], peer):
             raise Error("guest_identity_changed")
         self._save(channel=adapter.channel, peer=peer,
-                   fallback_reason=data.get("fallback_reason") or adapter.fallback_reason)
+                   fallback_reason=data.get("fallback_reason") or adapter.fallback_reason,
+                   # The retry cap is a per-run guard; each new process run starts
+                   # a fresh budget while begin_attempted keeps channel stickiness.
+                   begin_attempts=0)
         self._evidence("peer", {**peer, "channel": adapter.channel})
         data = self._data()
         if abort:
