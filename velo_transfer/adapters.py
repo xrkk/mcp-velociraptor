@@ -349,7 +349,13 @@ class TransportAdapter:
                     # Chunk traffic rides the direct Streamable HTTP channel,
                     # whose plain-httpx SSE reader has shown no size limit; the
                     # coordinator still degrades to single chunks on failure.
-                    self.batch_chunks = batch if isinstance(batch, int) and 1 <= batch <= 64 else 1
+                    # Keep each encoded batch response inside a ~50 MiB budget.
+                    if isinstance(batch, int) and 1 <= batch <= 64:
+                        response_budget = 50 * 1024 * 1024
+                        encoded_chunk = 4 * (self.raw_chunk_bytes + 2) // 3
+                        self.batch_chunks = max(1, min(batch, response_budget // encoded_chunk))
+                    else:
+                        self.batch_chunks = 1
                 self._last_result = result
                 return result
             except AdapterError as exc:
