@@ -1,0 +1,3241 @@
+{
+ "schema_version": 1,
+ "record": "R13-需求与实现最终追溯",
+ "created_at": "2026-10-01T07:39:43",
+ "goal_ref": "PLAN/2026.09.28/2026.09.28-01-任务清单-剩余实施步骤与验收条件.md R13",
+ "freeze": {
+  "base_head": "e2903e234309f0ba206d66431bf500d55130d720",
+  "head_rule": "冻结对象为本记录所在提交(父提交 e2903e23); R14 以该提交为核验基线, 其后任何写入需重新冻结",
+  "deployment": {
+   "target": "192.168.204.232 (DESKTOP-3FI41GR, VM UUID 55804D56-262E-33B0-9E8F-FA0BB583B865)",
+   "state": "E2 窗口保留部署: mcp-velociraptor 服务 Running/Auto, 四正式文件已换为 E2 批准版, mcp-service.env 追加 VELOCIRAPTOR_TRANSFER_POLICY=T:\\policy.json",
+   "acceptance": "C:\\Program Files\\VeloMCP2-State\\transfer-recovery-e2\\ (receipt-e.json, transaction-state-e2.json=ACCEPTED, business-acceptance-e2.json), Disarm 已执行",
+   "tools_face": "137 (130 DFIR + 7 transfer), tools-list-232-137.json sha256=a6a4f5197abd67e65299316b555fe0028a0390576c9c95d432ae674ad63ea3a8",
+   "known_deviation": "e274b2b (lease 死占位清理) 已入 HEAD 未部署到 .232, 搭下个 E 窗口; .232 velociraptor client 为手动启动, 机器不得重启"
+  },
+  "dependencies": {
+   "requirements.lock_sha256": "9ed31ace273ba3ba54696ec6f63e64b26ff40daa274ddef789f531d897165b67",
+   "vm_env_ref": "E2 窗口记录与 deployed-tree-hashes.txt"
+  },
+  "sources": {
+   "requirements_blob": "2e728474bbcaedf6283ebb8d929cbf10dfe90b5e",
+   "master_blob": "bcc534f710c1216c2c3e40044a2a1cf3b4a4ea97",
+   "transfer_fidelity_ledger_blob": "9079bec6b088d5273e31955071b53af02c2dad90",
+   "increment_ledger_blob": "eff51a3f5d6479f2018ced0a7948bcc4e1d9e4cb",
+   "p07_final_traceability_sha256": "c581e036600f1eef912fe0de8a7f95da0ef74369adc9c91da61abb3c3a628100",
+   "p07_chk_ledger_sha256": "eb3c7c3d6b4c00fdb46313a46aab4201f9aaf0f3b5a999f1bd2892afa1685f32"
+  }
+ },
+ "denominator": {
+  "formal": {
+   "REQ": 28,
+   "CON": 16,
+   "NON": 14,
+   "RACC": 29,
+   "total": 87
+  },
+  "cumulative": {
+   "base": 67,
+   "pc024": 1,
+   "total": 68
+  },
+  "total": 155
+ },
+ "formal_items": [
+  {
+   "id": "REQ-001",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 142,
+    "text_sha256": "0c8731403484d0456724ba9788da96d7a9eb36447d3c1d98ef1a48ee2bbb50a9",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-001"
+   ],
+   "acc_ids": [
+    "ACC-001",
+    "ACC-018",
+    "ACC-026"
+   ],
+   "owners": [
+    "P01",
+    "P02",
+    "P05"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-002",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 143,
+    "text_sha256": "2443984f4ed73d71a3acd7a21b7a738cb72eac91fc54ba1b20316975e2dca89d",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-002"
+   ],
+   "acc_ids": [
+    "ACC-002"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-003",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 144,
+    "text_sha256": "38670edf65f8e5c6f7f1560a9eebf152b4fb1d161ac075c7c53e75502759d4f5",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-003"
+   ],
+   "acc_ids": [
+    "ACC-003"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-004",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 145,
+    "text_sha256": "800f05dd0fa2c5a6584fb0215869e353197a46b4a4e4b4dec7e0828e54332b58",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-004"
+   ],
+   "acc_ids": [
+    "ACC-004"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-005",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 146,
+    "text_sha256": "09c5d611aa172f437d3012b221bf3ece60e3f6fe21c2e6d9629bac1d6c199320",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-005"
+   ],
+   "acc_ids": [
+    "ACC-005"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-006",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 147,
+    "text_sha256": "d9e135e834698cc2bf30f62a78ce910d4e305c45575d26e634b7335615877b74",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-006"
+   ],
+   "acc_ids": [
+    "ACC-006"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-007",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 148,
+    "text_sha256": "9691ad4cb06a16574be5e8c46a423cb65713d7bb11d592f5b46f139032c6b399",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-007"
+   ],
+   "acc_ids": [
+    "ACC-007"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-008",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 149,
+    "text_sha256": "e3207322ece8de4acd7cee1e0d0d53fde1b103394e498a3ed65bb15069c2ea84",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-008"
+   ],
+   "acc_ids": [
+    "ACC-008"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-009",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 150,
+    "text_sha256": "fa1355be32e597f082c30aa44f529affcdaaa8047c843b2545a1b487f468c6e6",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-009"
+   ],
+   "acc_ids": [
+    "ACC-009"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-010",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 151,
+    "text_sha256": "f48f9d4f80b26fb0f0fe3700057ab63173dd62e9b4b7869d5d0be303b1e3c245",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-010"
+   ],
+   "acc_ids": [
+    "ACC-010"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-011",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 152,
+    "text_sha256": "40b9452136b9deb050d04e31193018e5775d6393a5e622b52590743eac03cea0",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-011"
+   ],
+   "acc_ids": [
+    "ACC-011"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-012",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 153,
+    "text_sha256": "b205f58db45e6cf53d26775da9d511e4b69e2e4a5cdbb488d4c6b1009824e720",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-012"
+   ],
+   "acc_ids": [
+    "ACC-012"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-013",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 154,
+    "text_sha256": "4303cdb9799e9530fc108eb5606aab6d365a034259003b3bb95532848849ae65",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-013"
+   ],
+   "acc_ids": [
+    "ACC-013"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-014",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 155,
+    "text_sha256": "f59d693cf292390479c485741742ecd217640533567103e77732cb17c25c40da",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-014"
+   ],
+   "acc_ids": [
+    "ACC-014"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-015",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 158,
+    "text_sha256": "e8c722cb62b95f58faa59ed8e5c765acc44b17422a17675b0ccb37cfa9682499",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-015"
+   ],
+   "acc_ids": [
+    "ACC-015"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-016",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 159,
+    "text_sha256": "76d881883205dac52ca1660510f2895c102a4e8192e6a73f9ba4ab79a295f855",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-016"
+   ],
+   "acc_ids": [
+    "ACC-016"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-017",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 160,
+    "text_sha256": "ef46fb998ad76425951391b8b3821e448a41aa9c618149105e9cd031bb0c69d7",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-017"
+   ],
+   "acc_ids": [
+    "ACC-017"
+   ],
+   "owners": [
+    "P01"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-018",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 161,
+    "text_sha256": "bdc635e1144d663c9421d77d4269f237bdeb2bb08480d4025d3869be00a3b004",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-018"
+   ],
+   "acc_ids": [
+    "ACC-018"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-019",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 162,
+    "text_sha256": "4f30e6a7cf4680ac9749c63b1b373fe56c8394458fdd362695e5b96863783376",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-019"
+   ],
+   "acc_ids": [
+    "ACC-019"
+   ],
+   "owners": [
+    "P03",
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-020",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 163,
+    "text_sha256": "32dc9ac59c9c5982f53ef6945a4f29935ed261cfed5d3920376fb2ccd42a39fa",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-020"
+   ],
+   "acc_ids": [
+    "ACC-020"
+   ],
+   "owners": [
+    "P05"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-021",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 164,
+    "text_sha256": "b90a0c92c7fc171ca63a033731a92c9b4a40a445c16b79b2adf360e367e19ad3",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-021"
+   ],
+   "acc_ids": [
+    "ACC-021"
+   ],
+   "owners": [
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-022",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 165,
+    "text_sha256": "b7578933eb728579c9bae516a90ad748376d42c9d0c0f4bb3d2d5008865c9f0a",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-022"
+   ],
+   "acc_ids": [
+    "ACC-022"
+   ],
+   "owners": [
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-023",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 166,
+    "text_sha256": "886cce0eae942f1805dbb5ad87e1eb602b2975014f2411b3385ff7b31090fb7d",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-023"
+   ],
+   "acc_ids": [
+    "ACC-023"
+   ],
+   "owners": [
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-024",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 167,
+    "text_sha256": "0dbe1cd59eef87b7b2434c17d52cabd8cb782e7df2b3dfea91c02d9f1ecb33de",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-024"
+   ],
+   "acc_ids": [
+    "ACC-024"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-025",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 168,
+    "text_sha256": "f064084587d2c55ee3093567ff08d93ae771122774c9b3698c871e57e609d1ed",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-025"
+   ],
+   "acc_ids": [
+    "ACC-025"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-026",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 169,
+    "text_sha256": "f2c068235a9778a428bd478ea534a9050e29071cdc8cbf41e948179d42284f4e",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-053"
+   ],
+   "acc_ids": [
+    "ACC-018",
+    "ACC-023",
+    "ACC-026"
+   ],
+   "owners": [
+    "P02",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "REQ-027",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 18,
+    "text_sha256": "835e088bfd6183d51c2919e75988498aa1f6323f0e9d04710282dff1bd5eb6ec",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-055"
+   ],
+   "acc_ids": [
+    "ACC-027"
+   ],
+   "owners": [
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "REQ-028",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 19,
+    "text_sha256": "cc9564f2bb5252d2a2aafdedef748bcbf9c12f9d6d5d7f9cf7a26db2175d68de",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-056"
+   ],
+   "acc_ids": [
+    "ACC-028"
+   ],
+   "owners": [
+    "P05",
+    "P06",
+    "P07"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "CON-001",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 173,
+    "text_sha256": "439d02f57695feb3f2d15d4a64cad5665179e1f95069f1a965a9cefcf108d6a0",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-026"
+   ],
+   "acc_ids": [
+    "ACC-017"
+   ],
+   "owners": [
+    "P01"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-002",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 174,
+    "text_sha256": "72c4cfbe62086317588fda600c650e30f363c635e8d080bb8315e53f03d94d8f",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-027"
+   ],
+   "acc_ids": [
+    "ACC-021",
+    "ACC-022",
+    "ACC-026"
+   ],
+   "owners": [
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-003",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 175,
+    "text_sha256": "86d90a7147f730e57c3ab4d5258225be41c77a5086eafad36312b6278d3f8d80",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-028"
+   ],
+   "acc_ids": [
+    "ACC-003"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-004",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 176,
+    "text_sha256": "f3305cf29770856c14d144f2ae28359e70a0be2d1911fb75c7a17bd47cfc1b15",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-029"
+   ],
+   "acc_ids": [
+    "ACC-006",
+    "ACC-023",
+    "ACC-026"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-005",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 177,
+    "text_sha256": "c3692f043c46411ca7cf03104b70a9dc2680304b9611c86ff6509a7f9bedda98",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-030"
+   ],
+   "acc_ids": [
+    "ACC-008"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-006",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 178,
+    "text_sha256": "71a234b050e91e6dd6e4f167a53e3e1eda58b579802942c1e99cc109ebdaa745",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-031"
+   ],
+   "acc_ids": [
+    "ACC-010"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-007",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 179,
+    "text_sha256": "9c7847c5e08c30f4fadf229bec2787e6fd37a701ab6420a8e712d1c1af5b4398",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-032"
+   ],
+   "acc_ids": [
+    "ACC-020"
+   ],
+   "owners": [
+    "P05"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-008",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 180,
+    "text_sha256": "d6cba9bfd750898d1e034d076e35cefa04a71e081de52ba5e6bd1d4079290b38",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-033"
+   ],
+   "acc_ids": [
+    "ACC-021",
+    "ACC-022"
+   ],
+   "owners": [
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-009",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 181,
+    "text_sha256": "1fb8e5f3c8d7683ad99adaaf974c00e74bd24c5cf7d9ff349c2273b058ea37f6",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-034"
+   ],
+   "acc_ids": [
+    "ACC-017"
+   ],
+   "owners": [
+    "P01"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-010",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 182,
+    "text_sha256": "6c8cb0db9b41c0a6afaa79da33aa47e5b27101214a5e517094bd0e6b2787e6cf",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-035"
+   ],
+   "acc_ids": [
+    "ACC-016"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-011",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 183,
+    "text_sha256": "07bcbbd8dbc65bd8af8f60cab23439d5a39d44f1508497b57732006143498c64",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-036"
+   ],
+   "acc_ids": [
+    "ACC-013"
+   ],
+   "owners": [
+    "P01",
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-012",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 184,
+    "text_sha256": "594ef0f230c1a398c21598f8073064222bfe33d9af755b1092cf8588a9123c34",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-037"
+   ],
+   "acc_ids": [
+    "ACC-010"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-013",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 185,
+    "text_sha256": "5419fa1e44c249634e9a96cc8212aeac49074fb2f854c37dd7cf459b287225c3",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-038"
+   ],
+   "acc_ids": [
+    "ACC-008",
+    "ACC-015"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-014",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 186,
+    "text_sha256": "0ed45776c88bdad344f90ce76a0a00a2e35a15faa59c3f6eeec44c1c686343f1",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-039"
+   ],
+   "acc_ids": [
+    "ACC-016"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-015",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 187,
+    "text_sha256": "962b8d193f61c0caf8d3613828ef0540b352763d6a8e7300cef25e2e0184f10b",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-054"
+   ],
+   "acc_ids": [
+    "ACC-018",
+    "ACC-026"
+   ],
+   "owners": [
+    "P02",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "CON-016",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 20,
+    "text_sha256": "49f17f0d42c0c4bd51c302d8f1820af872a92991a84025c342ade0fca91d5e71",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-057"
+   ],
+   "acc_ids": [
+    "ACC-029"
+   ],
+   "owners": [
+    "P02",
+    "P05",
+    "P06",
+    "P07"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "NON-001",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 191,
+    "text_sha256": "16ae7cb0b2c6efb5c079d512d849cf5999c1336ab4d4ece0591ee2224388f6d2",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-040"
+   ],
+   "acc_ids": [
+    "ACC-003",
+    "ACC-025"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-002",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 192,
+    "text_sha256": "50c1f9e5fc445a2cf87ac46a4ae6fd5e2d75f447f3d8e3eb7c256a557359f67f",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-041"
+   ],
+   "acc_ids": [
+    "ACC-002"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-003",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 193,
+    "text_sha256": "783bfb5a2ca7c49a98b492408de7bb5d9d5d0d0a9d425ffe176172106e0e571f",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-042"
+   ],
+   "acc_ids": [
+    "ACC-012",
+    "ACC-015",
+    "ACC-016",
+    "ACC-025",
+    "ACC-026"
+   ],
+   "owners": [
+    "P02",
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-004",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 194,
+    "text_sha256": "30c7fc071df8fd095c8a5e0648f62845c6b66fe6cae18e3f1fdc5b983383776b",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-043"
+   ],
+   "acc_ids": [
+    "ACC-014"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-005",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 195,
+    "text_sha256": "8a2658b1ada42b59d7417ee33c81ce425cbd4daa4fbfa2d0e963763a0330b985",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-044"
+   ],
+   "acc_ids": [
+    "ACC-004"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-006",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 196,
+    "text_sha256": "6bddf014262dbcb5366510853e056854893676ae50cf906831b81ade1815d776",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-045"
+   ],
+   "acc_ids": [
+    "ACC-004"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-007",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 197,
+    "text_sha256": "69e5de8d6a81348aab229f43ddbc1b3cb593a50d2800dc9a7edb4426803d0bdf",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-046"
+   ],
+   "acc_ids": [
+    "ACC-005"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-008",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 198,
+    "text_sha256": "55639e2b04d7331674bfffa0fe7caa8cff243a0a70d6f59e5d6bd25ebe8f6979",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-047"
+   ],
+   "acc_ids": [
+    "ACC-010"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-009",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 199,
+    "text_sha256": "4fb75bdf2928f48548a2862f2df7303befb7eb44f1de66d1057d56f320649037",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-048"
+   ],
+   "acc_ids": [
+    "ACC-023"
+   ],
+   "owners": [
+    "P05"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-010",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 200,
+    "text_sha256": "a906acfc6a286462e59c64851e7825d3dd4c9aec7969e4d383231dcee793a1f7",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-049"
+   ],
+   "acc_ids": [
+    "ACC-001",
+    "ACC-006",
+    "ACC-018"
+   ],
+   "owners": [
+    "P01",
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-011",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 201,
+    "text_sha256": "55ec8c9cc916e4197171dcbf3f692f9bf1fd11ce7d1188a92fdae1ea5ba76314",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-050"
+   ],
+   "acc_ids": [
+    "ACC-015"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-012",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 202,
+    "text_sha256": "38b7591f130cd7b036b2aa3f49731f81edeccd9b324c9b635a9d11df8cd47ea6",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-051"
+   ],
+   "acc_ids": [
+    "ACC-018"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-013",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 203,
+    "text_sha256": "f9649b8d4d4db49ba566d6e6152fef6447bbbea1cdf2467d38421bcc8ca740d0",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-052"
+   ],
+   "acc_ids": [
+    "ACC-016"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "NON-014",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 21,
+    "text_sha256": "77c0ecb2ab10fd3df2dd11dbdeb7f2da77e1010fff49f1963b2aa2106f3d785a",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-055"
+   ],
+   "acc_ids": [
+    "ACC-027"
+   ],
+   "owners": [
+    "P02",
+    "P03",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "RACC-001",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 240,
+    "text_sha256": "1a99fc97af242a460e34079737e02120c44bb4ad735e202ca96f01c77ebbc844",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-001",
+    "OUT-017"
+   ],
+   "acc_ids": [
+    "ACC-001"
+   ],
+   "owners": [
+    "P01"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-002",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 241,
+    "text_sha256": "5abe9921d0b7e8c5c568c470e016f9cb57b71c46e0ada23dfed02197335b3e61",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-002",
+    "OUT-041"
+   ],
+   "acc_ids": [
+    "ACC-002"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-003",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 242,
+    "text_sha256": "88820876c17103808b59ff33479d11f893ff469c6528a541993c0d6fb34c2b44",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-003",
+    "OUT-028"
+   ],
+   "acc_ids": [
+    "ACC-003"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-004",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 243,
+    "text_sha256": "4a65fb9330afa02b03751bc696fdea288f161261d739cea45500e5d70cd4c2d6",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-004",
+    "OUT-044",
+    "OUT-045"
+   ],
+   "acc_ids": [
+    "ACC-004"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-005",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 244,
+    "text_sha256": "4417015c88ac7c10af67c5aff231a377538ea7c54f9994ca8305db24ba0d225f",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-005",
+    "OUT-046"
+   ],
+   "acc_ids": [
+    "ACC-005"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-006",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 245,
+    "text_sha256": "0188c5238a3ecbe6c0a81c69980e52639485701e7a1bdd2365676f43ea999449",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-006",
+    "OUT-029"
+   ],
+   "acc_ids": [
+    "ACC-006"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-007",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 246,
+    "text_sha256": "c0841606ec9c93ac73d0bfd4b3262df5d6a733fe83a0ed13a01d52037b583ab5",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-007",
+    "OUT-030"
+   ],
+   "acc_ids": [
+    "ACC-007"
+   ],
+   "owners": [
+    "P03"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-008",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 247,
+    "text_sha256": "3e6abf8b9cd0c8a26b30468390bd98d3331d2ee9b7cb40af6b2ea427d826edbb",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-008",
+    "OUT-030",
+    "OUT-038"
+   ],
+   "acc_ids": [
+    "ACC-008"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-009",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 248,
+    "text_sha256": "8865260f0ec45089e816768d118fe9c699796c660c858f112cd58ee313b54b81",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-009"
+   ],
+   "acc_ids": [
+    "ACC-009"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-010",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 249,
+    "text_sha256": "086285c9c013eb69fe873b17095044ba24b5e95d58da4e3e09849384b1b14e12",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-010",
+    "OUT-031",
+    "OUT-037",
+    "OUT-047"
+   ],
+   "acc_ids": [
+    "ACC-010"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-011",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 250,
+    "text_sha256": "8070f7b4e1e8ec44af3974de209c0e9a1f0655644f8426f63a96df6f9df4c865",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-011"
+   ],
+   "acc_ids": [
+    "ACC-011"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-012",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 251,
+    "text_sha256": "25ee9cf9ac49c40b4500cae946526184728c5c4237b1608298c16b7e22680829",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-012",
+    "OUT-042"
+   ],
+   "acc_ids": [
+    "ACC-012"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-013",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 252,
+    "text_sha256": "ce3110b6f71b4a880cd150801cc91fb23980dea7a8371dff9a14389f0b6ef792",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-013",
+    "OUT-036"
+   ],
+   "acc_ids": [
+    "ACC-013"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-014",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 253,
+    "text_sha256": "87a64e65e4efc068bd0da827155f4883bf8f83f0037c0b1bee5dcca5e9262355",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-014",
+    "OUT-043"
+   ],
+   "acc_ids": [
+    "ACC-014"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-015",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 256,
+    "text_sha256": "e4fbaef774a9640d8f44ac323c9b6b2a0719e4860cc6e50cc4b9f9bb116096e9",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-015",
+    "OUT-038",
+    "OUT-042",
+    "OUT-050"
+   ],
+   "acc_ids": [
+    "ACC-015"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-016",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 257,
+    "text_sha256": "e6ed4cf3560fcac289dfae2714dd293d88850c423010778f5fccd97af61beda1",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-016",
+    "OUT-035",
+    "OUT-039",
+    "OUT-052"
+   ],
+   "acc_ids": [
+    "ACC-016"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-017",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 258,
+    "text_sha256": "ec8904f1faa83c9676a67f92083d1b78a92632733c97b176dea9fcb22306c5a4",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-017",
+    "OUT-026",
+    "OUT-027",
+    "OUT-034"
+   ],
+   "acc_ids": [
+    "ACC-017"
+   ],
+   "owners": [
+    "P01"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-018",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 259,
+    "text_sha256": "ffb0d4d4383eae500b365ba6d7d9cebbb9e96f38868a74409b8d1f042ef8d338",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-018",
+    "OUT-051",
+    "OUT-053",
+    "OUT-054"
+   ],
+   "acc_ids": [
+    "ACC-018"
+   ],
+   "owners": [
+    "P02"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-019",
+   "kind": "formal",
+   "change_class": "unchanged",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 260,
+    "text_sha256": "17898f261a6d878cc4512d7de2b0ab47bbe82e811077467adfec59b82b8f1175",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-019"
+   ],
+   "acc_ids": [
+    "ACC-019"
+   ],
+   "owners": [
+    "P04"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-020",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 261,
+    "text_sha256": "ad3960bc50df63b4f76298f71e467171fc13bc310e603d69207163146344615e",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-020",
+    "OUT-032"
+   ],
+   "acc_ids": [
+    "ACC-020"
+   ],
+   "owners": [
+    "P05"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-021",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 262,
+    "text_sha256": "b377d3e6718cedff7dbfb53036869147ed60d7af394afe0f82c076fc1163d94e",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-021",
+    "OUT-027",
+    "OUT-033"
+   ],
+   "acc_ids": [
+    "ACC-021"
+   ],
+   "owners": [
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-022",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 263,
+    "text_sha256": "3d87263ec2cf44657cdfad9fcfb6068153602bbe9f31779d45d0bda723f52693",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-022",
+    "OUT-027",
+    "OUT-033"
+   ],
+   "acc_ids": [
+    "ACC-022"
+   ],
+   "owners": [
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-023",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 264,
+    "text_sha256": "0a556a288be79eeb2e2c1d19ba77376f67be1ec1e77bcd1b745d3b87dec8123d",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-023",
+    "OUT-029",
+    "OUT-048"
+   ],
+   "acc_ids": [
+    "ACC-023"
+   ],
+   "owners": [
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-024",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 265,
+    "text_sha256": "e8591d2ab63e609f4c94bfeefe71f3a7d95715f69e4f44e40acfd48c58312933",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-024"
+   ],
+   "acc_ids": [
+    "ACC-024"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-025",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 266,
+    "text_sha256": "ab5745908837eb572a4eb80771551e7e4e77c7497b285cab0c79a7b6b90fbf86",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-025"
+   ],
+   "acc_ids": [
+    "ACC-025"
+   ],
+   "owners": [
+    "P07"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-026",
+   "kind": "formal",
+   "change_class": "scope_interaction",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 267,
+    "text_sha256": "15ae66e196a2c742e3df57bf27233c899d78b1f4770161de6eb059e1803fe757",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-027",
+    "OUT-029",
+    "OUT-053",
+    "OUT-054"
+   ],
+   "acc_ids": [
+    "ACC-026"
+   ],
+   "owners": [
+    "P02",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": "Logs/P07/final-traceability.json",
+   "increment": false
+  },
+  {
+   "id": "RACC-027",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 22,
+    "text_sha256": "8175e9480475a13aaacecabb4ddbcf1d31ecd88245c1ef768c51cffab97c370a",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-055"
+   ],
+   "acc_ids": [
+    "ACC-027"
+   ],
+   "owners": [
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "RACC-028",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 23,
+    "text_sha256": "4c7a5bcac8a41fda44561e7a333371048500646c4660f0d7c29ab4b89536395e",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-056"
+   ],
+   "acc_ids": [
+    "ACC-028"
+   ],
+   "owners": [
+    "P05",
+    "P06",
+    "P07"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  },
+  {
+   "id": "RACC-029",
+   "kind": "formal",
+   "change_class": "new",
+   "anchor": {
+    "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "line": 24,
+    "text_sha256": "d27269170a28068df73292c47ec6ac3e00e4587ab931b46002f3c3fcc6cf7a15",
+    "verified_now": true
+   },
+   "out_ids": [
+    "OUT-057"
+   ],
+   "acc_ids": [
+    "ACC-029"
+   ],
+   "owners": [
+    "P02",
+    "P05",
+    "P06",
+    "P07"
+   ],
+   "base_detail_ref": null,
+   "increment": true
+  }
+ ],
+ "cumulative_items": [
+  {
+   "id": "C001",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "RACC-001"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C002",
+   "kind": "cumulative",
+   "formal_ids": [
+    "CON-001",
+    "CON-002",
+    "RACC-017"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C003",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-017",
+    "REQ-025",
+    "RACC-017"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C004",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "REQ-008",
+    "REQ-017",
+    "REQ-025",
+    "NON-003",
+    "NON-012"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C005",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-017",
+    "RACC-001",
+    "RACC-004"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C006",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "REQ-015",
+    "REQ-017",
+    "RACC-004"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C007",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "REQ-005",
+    "RACC-004",
+    "RACC-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C008",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-007",
+    "REQ-009",
+    "RACC-007",
+    "RACC-009"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C009",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-008",
+    "CON-005",
+    "RACC-008"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C010",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "NON-001",
+    "NON-012"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C011",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "REQ-018",
+    "NON-012"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C012",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002",
+    "RACC-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C013",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002",
+    "RACC-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C014",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "NON-001",
+    "RACC-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C015",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "CON-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C016",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "RACC-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C017",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "NON-001"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C018",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "CON-003",
+    "RACC-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C019",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-003",
+    "RACC-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C020",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-011",
+    "RACC-011"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C021",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-011",
+    "CON-003",
+    "RACC-011"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C022",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-011",
+    "NON-003"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C023",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-009",
+    "REQ-011",
+    "RACC-011"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C024",
+   "kind": "cumulative",
+   "formal_ids": [
+    "NON-003",
+    "RACC-012"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C025",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-012",
+    "RACC-012"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C026",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C027",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C028",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-017",
+    "RACC-001"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C029",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002",
+    "RACC-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C030",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-002",
+    "NON-002",
+    "RACC-002"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C031",
+   "kind": "cumulative",
+   "formal_ids": [
+    "CON-014"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C032",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-014",
+    "NON-004",
+    "RACC-014"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C033",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "REQ-015",
+    "NON-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C034",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-010",
+    "CON-006",
+    "RACC-010"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C035",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-013",
+    "RACC-013"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C036",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-010",
+    "RACC-010"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C037",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-009",
+    "RACC-009"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C038",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-010",
+    "RACC-010"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C039",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-011",
+    "RACC-011"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C040",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-024",
+    "NON-003",
+    "RACC-024"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C041",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-010",
+    "CON-012",
+    "NON-008",
+    "RACC-010"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C042",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-007",
+    "REQ-011",
+    "RACC-007"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C043",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "NON-006",
+    "RACC-004"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C044",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "RACC-004"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C045",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-015",
+    "CON-013",
+    "RACC-015"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C046",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "NON-010",
+    "RACC-001"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C047",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-005",
+    "RACC-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C048",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-005",
+    "RACC-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C049",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-005",
+    "NON-007",
+    "RACC-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C050",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "NON-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C051",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "RACC-004"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C052",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-004",
+    "REQ-015",
+    "NON-005"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C053",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-006",
+    "RACC-006"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C054",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-015",
+    "RACC-015"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C055",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-008",
+    "CON-013",
+    "RACC-008"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C056",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-013",
+    "CON-011",
+    "RACC-013"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C057",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-016",
+    "NON-009",
+    "NON-013",
+    "RACC-016"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C058",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-015",
+    "RACC-015"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C059",
+   "kind": "cumulative",
+   "formal_ids": [
+    "CON-004",
+    "REQ-017",
+    "REQ-023",
+    "RACC-006",
+    "RACC-023"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C060",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-021",
+    "REQ-022",
+    "RACC-021",
+    "RACC-022"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C061",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-022",
+    "RACC-022"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C062",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-023",
+    "NON-009",
+    "RACC-023"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C063",
+   "kind": "cumulative",
+   "formal_ids": [
+    "CON-008",
+    "RACC-021",
+    "RACC-022"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C064",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-020",
+    "CON-007",
+    "RACC-020"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C065",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-017",
+    "REQ-025",
+    "CON-010",
+    "RACC-017",
+    "RACC-025"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C066",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "REQ-025",
+    "CON-001",
+    "CON-014",
+    "NON-001",
+    "NON-013",
+    "RACC-001",
+    "RACC-025"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C067",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-001",
+    "REQ-006",
+    "REQ-017",
+    "REQ-018",
+    "REQ-022",
+    "REQ-023",
+    "REQ-026",
+    "CON-002",
+    "CON-004",
+    "CON-015",
+    "NON-003",
+    "NON-010",
+    "RACC-006",
+    "RACC-017",
+    "RACC-018",
+    "RACC-022",
+    "RACC-023",
+    "RACC-026"
+   ],
+   "out_ids": [],
+   "acc_ids": [],
+   "owner_pxx": "P07",
+   "status": "complete",
+   "commits": 2,
+   "evidence": 7,
+   "detail_ref": "Logs/P07/final-traceability.json"
+  },
+  {
+   "id": "C068",
+   "kind": "cumulative",
+   "formal_ids": [
+    "REQ-027",
+    "REQ-028",
+    "CON-016",
+    "NON-014",
+    "RACC-027",
+    "RACC-028",
+    "RACC-029"
+   ],
+   "out_ids": [
+    "OUT-055",
+    "OUT-056",
+    "OUT-057"
+   ],
+   "acc_ids": [
+    "ACC-027",
+    "ACC-028",
+    "ACC-029"
+   ],
+   "owner_pxx": "P02/P03/P04/P05/P06/P07",
+   "status": "complete",
+   "commits": 0,
+   "evidence": 0,
+   "detail_ref": "PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json + 传输现场记录"
+  }
+ ],
+ "layer_verification": {
+  "L1_requirements": "87 正式条款源锚点(path+line+text_sha256)对当前文件逐条复核, 87/87 字节一致; 分母含 PC024 新增 7 项(REQ-027/REQ-028/CON-016/NON-014/RACC-027..029), 不维持 147 假全过",
+  "L1_note": "P07 final-traceability 的条目级 source_text_sha256 为多行整段哈希(非行级), 其中 15 项不与单行匹配属哈希单位差异, 行级锚点(source_anchor)与 transfer-fidelity-ledger 两套行级锚点全部通过",
+  "L2_out_acc": "总纲§6/§9 解析+PC024 台账合并: OUT-001..057 全部有正式来源; ACC-001..029 全部被正式条款可达; 台账与总纲映射零冲突",
+  "L3_pxx": "P01..P07 职责边来自总纲§12.1/12.2; PC024 增量 owner 与增量台账一致",
+  "L4_code_tests": "git ls-files 427 项全部归类(5 项手工映射: fixtures/artifacts→P04, p05_current_136_tools_schema→P05, test_bridge_service_diagnostics→P02, test_triage_parameter_encoding→P04, transfer_mcp_stdio_fixture→PC024); 悬空 0",
+  "L5_commits": "全部 183 提交映射到 Pxx/PC 区域; 仅上游根提交 9dc8054(P01 上游基底)与 4 个继承 merge 无文件级映射, 均属 REQ-001 同仓库继承范围; 悬空 0",
+  "L6_acceptance_originals": "三层: (a)P01-P07 原始验收链 PLAN/2026.09.04-16 记录系列+Logs/P07; (b)恢复期 PC011-PC023 记录+T016 轮次 .tmp 原件; (c)现行态重验=.232 E2 窗口+R06-C 矩阵+R10 五场+R09 实测 host 证据(哈希见 evidence_bind)"
+ },
+ "evidence_bind": {
+  "aggregate_recompute": {
+   "path": "~/.velo-transfer-149-20260928/t232/p232-scenarios/aggregate-recompute.json",
+   "sha256": "072a5bab3c1572bf3d166eeb6c30347f75029f244344fbab6e0977cca79f4819"
+  },
+  "final_selection": {
+   "path": "~/.velo-transfer-149-20260928/t232/p232-scenarios/final-selection.json",
+   "sha256": "5c39c4e51dcb13ece0b43b7b21115a90fb718fe9799bd775965d7d5c34c8befc"
+  },
+  "cost_observation": {
+   "path": "~/.velo-transfer-149-20260928/t232/p232-scenarios/cost-observation.json",
+   "sha256": "e71715ed3491b2ee6e7accbd24b4fb964576dbdb066153db680d33dcc817c9da"
+  },
+  "e2_window_record": {
+   "path": "~/.velo-transfer-149-20260928/t232/e2-window-20260930-record.md",
+   "sha256": "8c37c53598a87146297480fde1072608d3c74b734a5d771476fe63c7eb95aae2"
+  },
+  "tools_list_232": {
+   "path": "~/.velo-transfer-149-20260928/t232/tools-list-232-137.json",
+   "sha256": "a6a4f5197abd67e65299316b555fe0028a0390576c9c95d432ae674ad63ea3a8"
+  },
+  "matrix_raw": "~/.velo-transfer-149-20260928/t232/matrix/ (R06-C 重跑原件, 目录级引用, 汇总记录 PLAN/2026.09.30/2026.09.30-05)"
+ },
+ "classification": {
+  "method": "分类对象=87 正式+68 累计; 依据=transfer-fidelity-ledger(2026-09-26 主方采纳完整保真自评, status=complete×87)+本次独立机械复核(锚点/映射/下游闭环)+P07 final-traceability(67 累计 complete, 行级锚点复核通过)+PC024 台账(#68)+恢复期与现行态重验记录",
+  "counts": {
+   "应承接数": 155,
+   "完整数": 155,
+   "未落点数": 0,
+   "语义弱化数": 0,
+   "不可验收数": 0,
+   "失效或复核条件缺失数": 0
+  },
+  "participant_io_lifecycle": "参与者/输入输出/触发顺序/状态生命周期/不变量/异常边界结束/方向适用重裁/可观察验收: 正式条款文本由需求 v2+PC024 同步承载(87 条字节锚定), 累计结论由 P07 ft+PC024 台账承载, 均可由稳定来源恢复"
+ },
+ "chk_ledger": {
+  "source": "Logs/P07/chk-ledger.jsonl (sha256 eb3c7c3d...1685f32, 本机未跟踪证据)",
+  "state": "27 条 CHK 全部为 author-fixed-pending-independent-verification; 台账文件内无闭合标记",
+  "carry_forward": "按 R13 要求作者不自行关闭 CHK; 27 条连同 R14 新核验统一由合格独立核验方裁决; P07 期定向核验记录(2026.09.12-24, 2026.09.13-06)为历史闭合证据, 以 R14 对冻结 HEAD 的重跑为准",
+  "new_chk_from_r13": []
+ },
+ "open_work_items": [
+  {
+   "item": "R12 残余-上游成本重跑",
+   "binding": "Logs/P07/cost-measurement.json 五对双边方案, 上游基线 9dc8054, 对比当前 selected 子链",
+   "condition": "按 R12 通过条件执行, 不以五场总量对一次上游"
+  },
+  {
+   "item": "R12 残余-清理审查",
+   "binding": "证明旧 wrapper/helper/危险开关无独有能力且替代验证通过后清理",
+   "condition": "Windows 回归后执行"
+  },
+  {
+   "item": "R12 残余-Windows 回归",
+   "binding": "e274b2b 部署到 .232 后的回归",
+   "condition": "需下个 E 窗口授权"
+  },
+  {
+   "item": ".232 client 持久化",
+   "binding": "velociraptor client 手动启动, 无自启机制",
+   "condition": "机器不得重启; 持久化方案待裁决"
+  },
+  {
+   "item": "R14 独立核验",
+   "binding": "需用户指定符合原角色约束的独立核验方(Codex)",
+   "condition": "R13 冻结 HEAD 之后进行; GLM 自检不能替代"
+  },
+  {
+   "item": "R15 压缩复查",
+   "binding": "总纲通过后重开需求文档找被压缩项",
+   "condition": "R14 通过后"
+  }
+ ]
+}
