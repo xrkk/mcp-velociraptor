@@ -310,16 +310,26 @@ class GuestTransferService:
     def _lease(self, store):
         return store.create(_LEASE_ID, self._lease_binding(), {"active": None})
 
-    def _check_idle(self, store, *, recovering=None):
+    def _check_idle(self, store):
         lease = self._lease(store)
         active = lease["state"]["active"]
         if active is not None:
             if same_process(active["pid"], active["birth"]):
                 raise Error("worker_busy")
-            if recovering != (active["transfer_id"], active["job"]):
-                raise Error("worker_result_unknown")
+            # The recorded owner is provably dead. A dead owner must never
+            # block unrelated tasks: after a service restart nothing queries
+            # the old task, so a lingering lease pointer would fail every new
+            # begin with worker_result_unknown. The OS-level root lock is the
+            # authority on liveness: when it is free the pointer is stale and
+            # is cleared for any caller. The old task keeps its durable owner
+            # record for its own status-driven reconcile.
             probe = RootLease(self.policy.work_root)
-            probe.acquire()
+            try:
+                probe.acquire()
+            except Error as exc:
+                if exc.code == "worker_busy":
+                    raise Error("worker_busy") from None
+                raise
             probe.release()
             return store.save(_LEASE_ID, lease["binding"], lease["revision"], {"active": None})
         return lease
@@ -490,7 +500,7 @@ class GuestTransferService:
             state = envelope["state"]
             if state["cancelled"] or time.monotonic() >= state["deadline_monotonic"]:
                 raise Error("deadline_or_cancelled")
-            lease = self._check_idle(store, recovering=(transfer_id, job))
+            lease = self._check_idle(store)
             if os.name == "posix":
                 read_fd, write_fd = os.pipe()
                 pid = os.fork()

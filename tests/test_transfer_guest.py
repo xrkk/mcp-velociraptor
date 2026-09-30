@@ -4,6 +4,8 @@ import base64
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -585,6 +587,92 @@ class GuestTests(unittest.TestCase):
         stage = self.write / (".velo-stage-" + hashlib.sha256(b"trial").hexdigest()[:32])
         self.assertFalse((stage / "partial.txt").exists())
         self.assertEqual((stage / "source.txt").read_bytes(), b"retry-stage")
+
+    def _set_lease_owner(self, owner):
+        store = self.service._store()
+        with store.writer():
+            lease = self.service._lease(store)
+            store.save(guest_module._LEASE_ID, lease["binding"], lease["revision"],
+                       {"active": owner})
+
+    def _dead_owner(self):
+        # A real exited PID: kernel-provable absence, never PID-reuse ambiguity.
+        # Birth must be captured while the process still exists.
+        child = subprocess.Popen([sys.executable, "-c", "pass"])
+        birth = guest_module.process_birth(child.pid)
+        child.wait()
+        return {"transfer_id": "old-task", "job": "verify_partial", "nonce": "gone",
+                "pid": child.pid, "birth": birth,
+                "deadline_monotonic": time.monotonic() + 60, "stopped": False}
+
+    def test_stale_dead_lease_owner_does_not_block_new_tasks(self):
+        # After a service restart nothing queries the abandoned task anymore;
+        # a lingering dead lease pointer must not fail unrelated begins.
+        owner = self._dead_owner()
+        self._set_lease_owner(owner)
+        srcdir = self.host / "lease-src1"
+        srcdir.mkdir()
+        (srcdir / "seed.bin").write_bytes(os.urandom(64))
+        specs = [{"absolute_path": str(srcdir), "relative_path": "batch"}]
+        manifest = capture_sources(srcdir, specs, self.budget(), ["fixture"])
+        bundle = self.host / "lease-b1.zip"
+        package = create_bundle(srcdir, specs, manifest, bundle, self.host, self.budget())
+        metadata = {key: package[key] for key in ("size", "sha256", "manifest_sha256")}
+        req = self.request("push", specs, self.write / "fresh", metadata)
+        self.assertEqual(self.service.transfer_begin(req)["local_phase"], "DEST_RECEIVING")
+        store = self.service._store()
+        with store.writer():
+            lease = self.service._lease(store)
+        self.assertIsNone(lease["state"]["active"])
+
+    def test_live_lease_owner_still_blocks_new_tasks(self):
+        owner = {"transfer_id": "old-task", "job": "verify_partial", "nonce": "live",
+                 "pid": os.getpid(), "birth": guest_module.process_birth(os.getpid()),
+                 "deadline_monotonic": time.monotonic() + 60, "stopped": False}
+        self._set_lease_owner(owner)
+        srcdir = self.host / "lease-src2"
+        srcdir.mkdir()
+        (srcdir / "seed2.bin").write_bytes(b"x")
+        specs = [{"absolute_path": str(srcdir), "relative_path": "batch"}]
+        manifest = capture_sources(srcdir, specs, self.budget(), ["fixture"])
+        bundle = self.host / "lease-b2.zip"
+        package = create_bundle(srcdir, specs, manifest, bundle, self.host, self.budget())
+        metadata = {key: package[key] for key in ("size", "sha256", "manifest_sha256")}
+        req = self.request("push", specs, self.write / "fresh2", metadata)
+        with self.assertRaises(Error) as caught:
+            self.service.transfer_begin(req)
+        self.assertEqual(str(caught.exception), "worker_busy")
+        store = self.service._store()
+        with store.writer():
+            lease = self.service._lease(store)
+        self.assertEqual(lease["state"]["active"]["nonce"], "live")
+
+    def test_dead_owner_with_held_root_lock_stays_worker_busy(self):
+        # Dead recorded owner but the OS root lock is held (a live worker the
+        # identity check could not see, or a racing start): stay conservative.
+        from velo_transfer.guest_worker import RootLease
+        self._set_lease_owner(self._dead_owner())
+        lease_handle = RootLease(self.service.policy.work_root)
+        lease_handle.acquire()
+        try:
+            srcdir = self.host / "lease-src3"
+            srcdir.mkdir()
+            (srcdir / "seed3.bin").write_bytes(b"x")
+            specs = [{"absolute_path": str(srcdir), "relative_path": "batch"}]
+            manifest = capture_sources(srcdir, specs, self.budget(), ["fixture"])
+            bundle = self.host / "lease-b3.zip"
+            package = create_bundle(srcdir, specs, manifest, bundle, self.host, self.budget())
+            metadata = {key: package[key] for key in ("size", "sha256", "manifest_sha256")}
+            req = self.request("push", specs, self.write / "fresh3", metadata)
+            with self.assertRaises(Error) as caught:
+                self.service.transfer_begin(req)
+            self.assertEqual(str(caught.exception), "worker_busy")
+        finally:
+            lease_handle.release()
+        store = self.service._store()
+        with store.writer():
+            lease = self.service._lease(store)
+        self.assertEqual(lease["state"]["active"]["transfer_id"], "old-task")
 
 
 if __name__ == "__main__":
