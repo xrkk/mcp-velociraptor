@@ -97,7 +97,13 @@ class TransferCoordinator:
         try:
             result = await self.adapter.call(operation, arguments)
         except AdapterError as exc:
-            detail = {"code": exc.code, "intent": intent,
+            # The evidence file keeps only per-call-class fields. The volatile
+            # intent (sequence, arguments digest) is journalled per call as
+            # io_intent; putting it here would give every retry of one outage
+            # a distinct immutable name and exhaust the evidence file budget
+            # before connectivity returns.
+            detail = {"code": exc.code, "operation": operation,
+                      "channel": intent["channel"],
                       "may_have_committed": exc.may_have_committed}
             if exc.cleanup_path is not None:
                 detail["cleanup_path"] = exc.cleanup_path
@@ -400,7 +406,10 @@ class TransferCoordinator:
                             # Large batched responses hit the client transport
                             # intermittently; degrade to single chunks instead of
                             # failing the transfer. Chunks are idempotent replays.
+                            # Drop the loop-local batch as well, or this branch
+                            # would keep retrying the same failing batch forever.
                             self.adapter.batch_chunks = 1
+                            batch = 1
                             continue
                         if not exc.may_have_committed:
                             raise
@@ -471,7 +480,11 @@ class TransferCoordinator:
                             raise
                         # Same response-size transport instability as push;
                         # degrade to single-chunk pulls for the remainder.
+                        # The local batch must drop too: it is captured before
+                        # the loop, so only touching the adapter attribute
+                        # would retry the same oversized batch forever.
                         self.adapter.batch_chunks = 1
+                        batch = 1
                         continue
                     items = response.get("chunks")
                     if not isinstance(items, list) or not items:

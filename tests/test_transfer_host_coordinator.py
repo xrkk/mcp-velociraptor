@@ -40,6 +40,7 @@ class LocalPeer:
         self.channel = "velo"
         self.fallback_reason = None
         self.raw_chunk_bytes = 128
+        self.batch_chunks = 1
         self.observations = {**fixture.vm, "policy_id": "fixture-policy",
                              "build": "guest-engine-v1", "protocol_version": "velo.transfer.v1"}
         self.trace = []
@@ -137,6 +138,33 @@ class LocalPeer:
                         "offset": arguments["offset"], "count": len(raw),
                         "data_base64": base64.b64encode(raw).decode("ascii"),
                         "chunk_sha256": hashlib.sha256(raw).hexdigest()}
+        elif operation == "transfer_chunks" and self.direction == "pull":
+            items = []
+            pos = arguments["offset"]
+            payload = self.package_path.read_bytes()
+            for _ in range(arguments["chunk_count"]):
+                raw = payload[pos:pos + arguments["count_per_chunk"]]
+                items.append({"offset": pos, "count": len(raw),
+                              "data_base64": base64.b64encode(raw).decode("ascii"),
+                              "chunk_sha256": hashlib.sha256(raw).hexdigest()})
+                pos += len(raw)
+                self.offset = pos
+            response = {"schema": "velo.transfer.guest.response.v1", "chunks": items}
+        elif operation == "transfer_chunks" and self.direction == "push":
+            pos = arguments["offset"]
+            for item in arguments["chunks"]:
+                raw = base64.b64decode(item["data_base64"], validate=True)
+                assert pos == self.offset
+                assert item["count"] == len(raw)
+                assert hashlib.sha256(raw).hexdigest() == item["chunk_sha256"]
+                self.received.extend(raw)
+                self.offset += len(raw)
+                pos += len(raw)
+            if self.offset == self.package["size"]:
+                assert hashlib.sha256(self.received).hexdigest() == self.package["sha256"]
+                self.terminal = GuestTerminal(self.binding, self.request["expected_destination"])
+            response = {"schema": "velo.transfer.guest.response.v1",
+                        "verified_offset": self.offset, "replayed": False}
         elif operation == "transfer_finish":
             inputs = {k: v for k, v in arguments.items()
                       if k not in ("transfer_id", "request_digest", "action")}
@@ -384,6 +412,51 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((self.destination / "payload" / "子" / "文件.txt").read_bytes(),
                          b"benign bytes")
         self.assertEqual(self.result(resumed)["resumed_bytes"], boundary)
+
+    async def test_c2_batch_degrade_switches_to_single_chunks_for_the_rest_of_the_run(self):
+        self.setup_request("pull")
+        self.peer.batch_chunks = 4
+        self.peer.fail("transfer_chunks", nth=1,
+                       error=AdapterError("transport_timeout", may_have_committed=False))
+        summary = await self.run_transfer("pull")
+        self.assertEqual((summary["outcome"], summary["exit_code"]), ("complete", 0))
+        names = [name for name, _ in self.peer.trace]
+        first = names.index("transfer_chunks")
+        # The degraded run must actually use single-chunk pulls afterwards,
+        # not retry the same failing batch for the rest of the transfer.
+        self.assertEqual(names[first], "transfer_chunks")
+        singles = [name for name in names[first + 1:] if name.startswith("transfer_chunk")]
+        self.assertGreater(len(singles), 1)
+        self.assertNotIn("transfer_chunks", names[first + 1:])
+
+    async def test_c2_outage_storm_ends_incomplete_with_one_shared_error_file(self):
+        # A service outage mid-transfer produced one distinct immutable
+        # adapter_error evidence file per retry (intent sequence differs per
+        # call) and exhausted the evidence file budget before connectivity
+        # returned, turning a recoverable outage into a command error. Same-
+        # shape retries must share one file and the run must stop at the first
+        # single-chunk failure so a later resume can recover.
+        self.setup_request("pull")
+        self.peer.batch_chunks = 4
+        for nth in range(1, 60):
+            self.peer.fail("transfer_chunks", nth=nth,
+                           error=AdapterError("outcome_unknown", may_have_committed=True))
+        self.peer.fail("transfer_chunk", nth=1,
+                       error=AdapterError("transport_timeout", may_have_committed=False))
+        first = await self.run_transfer("pull")
+        self.assertEqual(first["outcome"], "incomplete")
+        evidence_dir = Path(first["result_path"]).parent
+        adapter_files = [name for name in os.listdir(evidence_dir) if name.startswith("adapter_error")]
+        # One shared file per error shape: the batched outcome_unknown retries
+        # collapse into one file, plus one for the single-chunk transport_timeout.
+        self.assertEqual(len(adapter_files), 2)
+        faulted = sum(1 for name, _ in self.peer.trace if name == "transfer_chunks")
+        self.assertLess(faulted, 60)
+        self.peer.faults.clear()
+        resumed = await self.run_transfer("pull", resume=True)
+        self.assertEqual((resumed["outcome"], resumed["exit_code"]), ("complete", 0))
+        self.assertEqual((self.destination / "payload" / "子" / "文件.txt").read_bytes(),
+                         b"benign bytes")
 
     async def test_c2_worker_in_progress_only_queries_until_stopped(self):
         self.setup_request()
