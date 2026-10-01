@@ -172,6 +172,61 @@ class BearerAuthGate:
         await self.app(scope, receive, send)
 
 
+class HostOriginGate:
+    """DNS-rebinding gate that covers every formal path, not only the SDK's.
+
+    The SDK enforces ``TransportSecuritySettings`` inside its streamable-HTTP
+    route handler; any route appended to the same router (the binary chunk
+    channel) would otherwise skip Host/Origin validation entirely. This
+    middleware applies the SDK's own rules - same status codes, same wildcard
+    handling, absent Origin still allowed - to every HTTP request before any
+    handler runs or any body is read.
+    """
+
+    def __init__(
+        self,
+        app: Any,
+        allowed_hosts: tuple[str, ...],
+        allowed_origins: tuple[str, ...],
+    ) -> None:
+        self.app = app
+        self._hosts = allowed_hosts
+        self._origins = allowed_origins
+
+    async def __call__(
+        self,
+        scope: dict[str, Any],
+        receive: Callable[[], Awaitable[dict[str, Any]]],
+        send: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        host = b""
+        origin = b""
+        for name, value in scope.get("headers", []):
+            if name == b"host" and not host:
+                host = value
+            elif name == b"origin" and not origin:
+                origin = value
+        if not self._match(host.decode("latin-1"), self._hosts):
+            await _send_plain_response(send, 421, b"Invalid Host header")
+            return
+        if origin and not self._match(origin.decode("latin-1"), self._origins):
+            await _send_plain_response(send, 403, b"Invalid Origin header")
+            return
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    def _match(value: str, allowed: tuple[str, ...]) -> bool:
+        if value in allowed:
+            return True
+        for pattern in allowed:
+            if pattern.endswith(":*") and value.startswith(pattern[:-2] + ":"):
+                return True
+        return False
+
+
 class ServerInstanceHeader:
     """Stamp the process-scoped instance header on every proxied response."""
 
@@ -228,6 +283,15 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
     if service is not None:
         from starlette.routing import Route
         app.router.routes.append(Route("/chunkbin", _chunkbin_endpoint(service), methods=["POST"]))
+    # Registered first so it wraps closest to the router: the bearer gate stays
+    # the outermost rejection point on /mcp, while every appended route (the
+    # binary chunk channel) passes the same Host/Origin rules as the SDK's own
+    # route before its handler runs.
+    app.add_middleware(
+        HostOriginGate,
+        allowed_hosts=(f"{config.host}:{config.port}",),
+        allowed_origins=tuple(config.allowed_origins),
+    )
     app.add_middleware(ServerInstanceHeader, instance_id=new_server_instance_id())
     app.add_middleware(BearerAuthGate, token=config.bearer_token or "")
     return app
