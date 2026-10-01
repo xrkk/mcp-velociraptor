@@ -30,6 +30,7 @@ from p07_cost_measurement import SCENARIOS, COST_PAIR_GROUPS, UPSTREAM_CAPTURE, 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PAIRS_ROOT = REPO_ROOT / "Logs" / "P07" / "cost-pairs-232"
+TRANSCRIPTS_ROOT = REPO_ROOT / "Logs" / "P07" / "transcripts-232"
 OUTPUT = REPO_ROOT / "Logs" / "P07" / "cost-measurement-232.json"
 
 
@@ -134,14 +135,49 @@ def current_task_rows(evidence_root: Path, runs: dict[str, str]) -> list[dict]:
 
 
 def upstream_group_rows() -> list[dict]:
+    """Upstream metrics from the task record plus the full response transcripts.
+
+    CHK-R14-005: the v1 report compared the upstream raw ``content[0].text``
+    byte lengths against canonicalized current-side structured payloads - two
+    different field domains. The transcripts are now the source of truth and
+    every upstream response is measured twice: ``text_bytes`` (raw UTF-8 wire
+    text, upstream-only observation) and ``canonical_bytes`` (canonical JSON
+    of the parsed response, the same serialization and field domain as the
+    current side, and therefore the only comparable metric).
+    """
     rows = []
     for scenario, group in COST_PAIR_GROUPS.items():
         path = PAIRS_ROOT / group / "upstream-task.json"
+        transcript_path = TRANSCRIPTS_ROOT / f"upstream-task-{group}-transcript.jsonl"
         task = json.loads(path.read_text(encoding="utf-8"))
         if task.get("status") != "success":
             raise ValueError(f"upstream group {group} did not succeed: {task.get('failure')}")
         if task.get("upstream_tool_count") != 78:
             raise ValueError(f"upstream group {group} did not render the 78-tool face")
+        transcripts = [json.loads(line) for line in transcript_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        payloads = [entry["payload"] for entry in transcripts if "payload" in entry and entry.get("row")]
+        calls = task["calls"]
+        if len(payloads) != len(calls):
+            raise ValueError(f"upstream group {group}: transcript does not cover every call")
+        canonical_calls = []
+        text_total = 0
+        canonical_total = 0
+        for call, payload in zip(calls, payloads):
+            text_bytes = len(payload.encode("utf-8"))
+            canonical = len(canonical_text(json.loads(payload)).encode("utf-8"))
+            if text_bytes != call["payload_bytes"]:
+                raise ValueError(f"upstream group {group}: transcript disagrees with the task record")
+            text_total += text_bytes
+            canonical_total += canonical
+            canonical_calls.append(
+                {
+                    "tool": call["tool"],
+                    "is_error": call["is_error"],
+                    "elapsed_seconds": call["elapsed_seconds"],
+                    "text_bytes": text_bytes,
+                    "canonical_bytes": canonical,
+                }
+            )
         rows.append(
             {
                 "scenario": scenario,
@@ -150,19 +186,13 @@ def upstream_group_rows() -> list[dict]:
                 "tool_calls": task["call_count"],
                 "results_rounds": task["results_rounds"],
                 "retry_rounds": task["retry_rounds"],
-                "structured_output_bytes": sum(call["payload_bytes"] for call in task["calls"]),
-                "elapsed_seconds": sum(call["elapsed_seconds"] for call in task["calls"]),
+                "text_bytes_sum_upstream_only": text_total,
+                "structured_output_bytes": canonical_total,
+                "transcript_sha256": sha256_file(transcript_path),
+                "elapsed_seconds": sum(call["elapsed_seconds"] for call in calls),
                 "results_rows": task["results_rows"],
                 "file_rows": task["file_list_rows"] or 0,
-                "calls": [
-                    {
-                        "tool": call["tool"],
-                        "is_error": call["is_error"],
-                        "elapsed_seconds": call["elapsed_seconds"],
-                        "payload_bytes": call["payload_bytes"],
-                    }
-                    for call in task["calls"]
-                ],
+                "calls": canonical_calls,
             }
         )
     return rows
@@ -178,6 +208,7 @@ def cost_pair_rows(upstream: list[dict], current: list[dict]) -> list[dict]:
                 "scenario": up["scenario"],
                 "upstream": up,
                 "current": cur,
+                "metric": "structured_output_bytes = canonical JSON on both sides (see methodology.output_metrics)",
                 "deltas_current_minus_upstream": {
                     "tool_calls": cur["tool_calls"] - up["tool_calls"],
                     "retry_rounds": cur["retry_rounds"] - up["retry_rounds"],
@@ -238,7 +269,7 @@ def main() -> int:
     task_rows = current_task_rows(evidence_root, runs)
 
     report = {
-        "schema": "p07-cost-measurement-232-v1",
+        "schema": "p07-cost-measurement-232-v2",
         "measured_at": datetime.now(timezone.utc).isoformat(),
         "methodology": {
             "canonical_serialization": "json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))",
@@ -258,6 +289,14 @@ def main() -> int:
                 f"({face_document.get('captured_from')} at {face_document.get('captured_at')})"
             ),
             "current_task_source": "runner-recorded structured outputs of the five R11 final-selection .232 runs",
+            "output_metrics": (
+                "structured_output_bytes is canonical JSON of the parsed response on BOTH sides "
+                "(upstream: canonical of each transcript payload; current: canonical of structuredContent) "
+                "and is the only cross-side comparable byte metric; text_bytes_sum_upstream_only is the raw "
+                "content[0].text UTF-8 length, an upstream-only wire observation (the .232 driver records "
+                "structuredContent with an empty content list, so no symmetric current-side text metric exists); "
+                "the v1 report mixed raw upstream bytes with canonical current bytes in pairs - corrected here"
+            ),
             "denominator_rule": "130-tool DFIR slice compared against the upstream 78 face; the 7 transfer tools are a disclosed increment slice, denominators are not mixed",
         },
         "tool_face": {
@@ -308,9 +347,10 @@ def main() -> int:
             "Raw measured quantities with the stated methodology; no preset smaller/better direction. "
             "The 130-tool DFIR slice remains larger than the upstream 78-tool face on every schema "
             "dimension; the 7 transfer tools add a separately disclosed increment. The five fixed-task "
-            "pairs stay comparable per group on call counts, retry rounds, structured-output bytes, "
-            "result rows and file rows; elapsed times cross transports (stdio vs formal HTTP) and are "
-            "disclosed as such rather than claimed equivalent."
+            "pairs compare call counts, retry rounds, canonical structured bytes, result rows and file "
+            "rows per group; upstream raw text bytes are disclosed as an upstream-only observation. "
+            "Elapsed times cross transports (stdio vs formal HTTP) and are disclosed as such rather "
+            "than claimed equivalent."
         ),
     }
 
