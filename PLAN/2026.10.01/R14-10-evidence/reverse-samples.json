@@ -1,0 +1,57 @@
+[
+  {
+    "path": "mcp_velociraptor_bridge.py",
+    "last_commit": "5a50fec56f5a09abe5ef50e2dadf4c5f04763dc5",
+    "sha256": "0f4e2a3930857ab7311151b9ac386962893713bb1ed1a414c3ebac2e239f47a2"
+  },
+  {
+    "path": "velociraptor_transport.py",
+    "last_commit": "ed7940e13499fc7d8b81e797e09ecd2b09f4ebb0",
+    "sha256": "9fe3767248bcf55aac3564f8842e184104f6eefca13e2b6f184130739393f438"
+  },
+  {
+    "path": "velo_transfer/mcp_tools.py",
+    "last_commit": "1b59ff4a9aeb1944ea4d674e5e8452e5e998ba37",
+    "sha256": "6527e618e134414a1acd88cadfad41c995d19ba324f9db1f47f1a155b19569a2"
+  },
+  {
+    "path": "velo_transfer/host_coordinator.py",
+    "last_commit": "2a8f08e6b4367d71b8935744b5b79950d009a308",
+    "sha256": "c89147e126b26a2d362ccff7010933690a2bed1c98b801d03e0c981f4f386e61"
+  },
+  {
+    "path": "velo_transfer/guest_service.py",
+    "last_commit": "e274b2bd4cdd5f39255f86e7e2f0bae7ee7ac358",
+    "sha256": "b5e2ba5f4ad2c535d4803a6e4ea243d61296e7b13ea11277508a5d498a525909"
+  },
+  {
+    "path": "velo_transfer/policy.py",
+    "last_commit": "025777fb818e141ceffa60a78561ba3e7867a6e5",
+    "sha256": "5e099107f45518217a7c99d92a779d8eeccc3327c9e7a07c2d8018dd9d1619c4"
+  },
+  {
+    "path": "velo_transfer/connection.py",
+    "last_commit": "99292f6cfd6d9b72ee7564d5f4533e089ab1a27a",
+    "sha256": "8bb3a78ce5e946d2e2985f5483a890204d881cffc0ada9a84519ec38c9642324"
+  },
+  {
+    "path": "tests/test_transfer_worker.py",
+    "last_commit": "cb22f45ac740e258469ff064f0ae2c6c779c90c2",
+    "sha256": "c82b0dedd569a418075c56e2d3e81ee94bb533f26d50954ea36dc8a7fda6c405"
+  },
+  {
+    "path": "tests/test_transfer_windows_platform.py",
+    "last_commit": "10c06e8db72edb7d8521787c3e862925e6a4df3a",
+    "sha256": "d1a335a70caa15b3d38bcc335d72e827dfc2af7254b98b0f3d6670f4872d90bb"
+  },
+  {
+    "path": "tests/p149_scenario_driver.py",
+    "last_commit": "cbdeed528db3d05d7489ec7843e8048ec4a0e2fb",
+    "sha256": "62218881fb8411123c53cfbd018029c42e3ae3ab031421f7581a5c14782e2f24"
+  },
+  {
+    "path": "tests/p07_cost_measurement_r232.py",
+    "last_commit": "f34c95da71769d035ead938de930739c00b5d054",
+    "sha256": "82f89a0fcdece49f04b301a161d2c7620e1950b4633a4241a60a937c1962d1cb"
+  }
+]

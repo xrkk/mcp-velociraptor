@@ -1,0 +1,94 @@
+{
+  "frozen_head": "c52638147a424519e9458fa1d58190a11fe78d9e",
+  "denominator": {
+    "formal": {
+      "REQ": 28,
+      "CON": 16,
+      "NON": 14,
+      "RACC": 29,
+      "total": 87
+    },
+    "cumulative": {
+      "base": 67,
+      "pc024": 1,
+      "total": 68
+    },
+    "total": 155
+  },
+  "formal_anchor_matches": 87,
+  "normative_hash_matches": {
+    "requirement": true,
+    "master": true,
+    "P01": true,
+    "P02": true,
+    "P03": true,
+    "P04": true,
+    "P05": true,
+    "P06": true,
+    "P07": true
+  },
+  "requirements_lock_sha256": "9ed31ace273ba3ba54696ec6f63e64b26ff40daa274ddef789f531d897165b67",
+  "identity": {
+    "host": "DESKTOP-3FI41GR",
+    "uuid": "55804D56-262E-33B0-9E8F-FA0BB583B865",
+    "ips": [
+      "192.168.204.232",
+      "127.0.0.1"
+    ]
+  },
+  "tool_count": 137,
+  "cost_recompute_equal_except_measured_at": true,
+  "deployment": {
+    "service": {
+      "Name": "mcp-velociraptor",
+      "State": "Running",
+      "StartMode": "Auto",
+      "ProcessId": 1896,
+      "PathName": "\"C:\\Program Files\\VeloMCP2\\.venv\\Scripts\\python.exe\" \"C:\\Program Files\\VeloMCP2\\tests\\p05_service_host.py\""
+    },
+    "guest_sha": "B5E2BA5F4AD2C535D4803A6E4EA243D61296E7B13EA11277508A5D498A525909",
+    "task_state": 4,
+    "records": [
+      {
+        "name": "business-acceptance-e3.json",
+        "sha256": "6E280F3B4ADBF6EAEF7A9524885EB7982328549436532F2409630E4C4169B8E8",
+        "host_bytes_match": true
+      },
+      {
+        "name": "receipt-e3.json",
+        "sha256": "6A3E5E23ABC49456AED9C11F105C0FFC41F2A70CBC912A6D9813420FC9E087A9",
+        "host_bytes_match": true
+      },
+      {
+        "name": "stop-trace-e3.json",
+        "sha256": "129BA038BD3417A7275D706280C7BA2957EE5F0831EFAD0DFF7298DCD91A420F",
+        "host_bytes_match": true
+      },
+      {
+        "name": "transaction-state-e3.json",
+        "sha256": "844637FD928ADC88F7D0D0157C4FCA402992FE8E3C6556189ADEE39BFAE9C75E",
+        "host_bytes_match": true
+      }
+    ]
+  },
+  "transfers": [
+    {
+      "id": "r14-pull-e2922203",
+      "phase": "COMPLETE",
+      "published_ever": true,
+      "destination_verified": true,
+      "host_cleanup_complete": true,
+      "guest_cleanup_complete": true,
+      "result_sha256": "d076eca9fd13566d774bb637d57a118988680fa0cfbbe521fdf0d4b014b2a8f3"
+    },
+    {
+      "id": "r14-push-cba65e4a",
+      "phase": "COMPLETE",
+      "published_ever": true,
+      "destination_verified": true,
+      "host_cleanup_complete": true,
+      "guest_cleanup_complete": true,
+      "result_sha256": "7250c9963d39d541d89362265e3548a95dd33c2c8d3a165614e077a66a49863c"
+    }
+  ]
+}

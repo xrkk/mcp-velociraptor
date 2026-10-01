@@ -1,0 +1,26 @@
+[
+  {
+    "path": "/mcp",
+    "case": "bad_host",
+    "status": 421,
+    "body": "Invalid Host header"
+  },
+  {
+    "path": "/mcp",
+    "case": "bad_origin",
+    "status": 403,
+    "body": "Invalid Origin header"
+  },
+  {
+    "path": "/chunkbin",
+    "case": "bad_host",
+    "status": 200,
+    "body": "VBT17\u0000\u0000\u0000{\"status\":\"error\",\"error\":{\"code\":\"invalid_arguments\"}}"
+  },
+  {
+    "path": "/chunkbin",
+    "case": "bad_origin",
+    "status": 200,
+    "body": "VBT17\u0000\u0000\u0000{\"status\":\"error\",\"error\":{\"code\":\"invalid_arguments\"}}"
+  }
+]

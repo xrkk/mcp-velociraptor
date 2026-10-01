@@ -1,0 +1,856 @@
+...................................................................F..................sssssss... [ 11%]
+......F.................... [ 14%]
+...sssss......sssssssssss................sssssss.sssssssssssssss [ 22%]
+ssssssssssssssssssssssssss.EEEEEEEEEEEEEEEEsssssssEEEEEEEEEsssssssssssss [ 30%]
+........F..........ssssssss....... [ 34%]
+..........................ssssssss..........sssssss [ 41%]
+ssssssssssssssssss.......................ssss.........................................ssssssss.............. [ 53%]
+..............................ssss..... [ 58%]
+..........s....s........................... [ 63%]
+.........................FE....................sss.................... [ 71%]
+................... [ 74%]
+................................................................ [ 81%]
+........................................ [ 86%]
+................................................................. [ 94%]
+..............s..........s........s........s....                                                       [100%]
+==================================== ERRORS ====================================
+_ ERROR at setup of Pc020EvidenceTests.test_actual_sender_writes_frozen_bytes_and_only_reports_completed_receipt _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_bundle_namespace_link_is_not_hidden_by_resolution _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_complete_preparation_and_migration_graphs_are_accepted_read_only _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_exact_root_identity_time_uuid_and_nonfinite_json_boundaries _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_link_or_reparse_is_rejected_when_windows_can_create_one _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_migration_targeted_negative_matrix _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_preparation_targeted_negative_matrix _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_real_frozen_source_copy_is_accepted _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_receiver_observation_seams_execute_and_feed_the_real_parser _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_ref_spelling_identity_and_conflict_boundaries _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_schema6_fixed_namespaces_uuid_and_strict_rfc3339 _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_schema6_shapes_do_not_claim_activation_validation _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_source_exact_set_duplicate_and_blob_boundaries _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_synthetic_disclosure_never_changes_validator_acceptance _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_transfer_builder_quotes_valid_path_and_rejects_invalid_typed_inputs _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020EvidenceTests.test_wrong_policy_cannot_redefine_normative_source_set _
+
+cls = <class 'tests.test_p05_pc020_evidence.Pc020EvidenceTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        global _TRANSFER_SERVER
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required historical byte fixtures missing: {missing}")
+E           RuntimeError: required historical byte fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_evidence.py:445: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_duplicate_run_is_stably_rejected_without_new_next_or_package _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_late_failure_scene_changes_remain_in_place_without_cleanup_replace _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_path_object_and_collision_guards_fail_closed_without_overwrite _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_pre_replace_fault_matrix_preserves_failure_scene_in_place _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_predecessor_shape_helper_rejects_wrong_schema_and_root_keys _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_preflight_refusals_preserve_canonical_sources_unknown_next_and_sentinel _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_replace_and_post_replace_uncertainty_never_rolls_back_or_claims_commit _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_success_derives_exact_epoch7_and_durable_independent_records _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_ ERROR at setup of Pc020TransitionTests.test_true_o_excl_race_allows_at_most_one_replace_and_preserves_loser_files _
+
+cls = <class 'tests.test_p05_pc020_transition.Pc020TransitionTests'>
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        required = {
+            "predecessor": os.environ.get("PC020_PREDECESSOR_FIXTURE"),
+            "baseline": os.environ.get("PC020_BASELINE_DIR_FIXTURE"),
+            "activation": os.environ.get("PC020_ACTIVATION_DIR_FIXTURE"),
+            "real_sources": os.environ.get("PC020_REAL_SOURCE_ROOT"),
+        }
+        missing = [name for name, value in required.items() if not value or not Path(value).exists()]
+        if missing:
+>           raise RuntimeError(f"required PC020 fixtures missing: {missing}")
+E           RuntimeError: required PC020 fixtures missing: ['predecessor', 'baseline', 'activation', 'real_sources']
+
+tests/test_p05_pc020_transition.py:44: RuntimeError
+_______ ERROR at teardown of EndpointTests.test_endpoint_pull_roundtrip ________
+
+self = <velo_transfer.storage.TaskStore object at 0x74ab90f75c50>
+
+    @contextmanager
+    def writer(self):
+        if self._lock_fd is not None:
+            raise Error("writer_lock_held")
+        self._check()
+        path = self.root / ".transfer-writer.lock"
+        safe_chain(path, self.root, allow_missing_leaf=True)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(path, flags, 0o600)
+        except OSError as exc:
+            raise Error("writer_lock_unavailable") from exc
+        acquired = False
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise Error("writer_lock_unavailable")
+            self._private(path, "lock")
+            if os.name == "posix":
+                import fcntl
+                try:
+>                   fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+E                   BlockingIOError: [Errno 11] Resource temporarily unavailable
+
+velo_transfer/storage.py:241: BlockingIOError
+
+The above exception was the direct cause of the following exception:
+velo_transfer/guest_service.py:1616: in shutdown
+    with store.writer():
+         ^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/lib/python3.13/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <velo_transfer.storage.TaskStore object at 0x74ab90f75c50>
+
+    @contextmanager
+    def writer(self):
+        if self._lock_fd is not None:
+            raise Error("writer_lock_held")
+        self._check()
+        path = self.root / ".transfer-writer.lock"
+        safe_chain(path, self.root, allow_missing_leaf=True)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(path, flags, 0o600)
+        except OSError as exc:
+            raise Error("writer_lock_unavailable") from exc
+        acquired = False
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise Error("writer_lock_unavailable")
+            self._private(path, "lock")
+            if os.name == "posix":
+                import fcntl
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError as exc:
+>                   raise Error("writer_busy") from exc
+E                   velo_transfer.errors.TransferContentError: writer_busy
+
+velo_transfer/storage.py:243: TransferContentError
+=================================== FAILURES ===================================
+_______ RealBridgeStdioTests.test_real_bridge_server_and_endpoint_calls ________
+
+self = <tests.test_p02_stdio.RealBridgeStdioTests testMethod=test_real_bridge_server_and_endpoint_calls>
+
+    def test_real_bridge_server_and_endpoint_calls(self):
+        config = os.environ.get("VELOCIRAPTOR_API_CONFIG", "").strip()
+>       self.assertTrue(config, "VELOCIRAPTOR_API_CONFIG is required for Win10 acceptance")
+E       AssertionError: '' is not true : VELOCIRAPTOR_API_CONFIG is required for Win10 acceptance
+
+tests/test_p02_stdio.py:75: AssertionError
+_ RealBridgeDynamicTests.test_real_metadata_schema_inventory_stability_and_flow _
+
+self = <tests.test_p03_stdio.RealBridgeDynamicTests testMethod=test_real_metadata_schema_inventory_stability_and_flow>
+
+    def test_real_metadata_schema_inventory_stability_and_flow(self):
+        config = os.environ.get("VELOCIRAPTOR_API_CONFIG", "").strip()
+>       self.assertTrue(config, "VELOCIRAPTOR_API_CONFIG is required for Win10 acceptance")
+E       AssertionError: '' is not true : VELOCIRAPTOR_API_CONFIG is required for Win10 acceptance
+
+tests/test_p03_stdio.py:167: AssertionError
+_ ProtectedProcessTests.test_child_binding_rejects_wrong_parent_command_executable_and_reused_pid _
+
+self = <tests.test_p05_process_guard.ProtectedProcessTests testMethod=test_child_binding_rejects_wrong_parent_command_executable_and_reused_pid>
+
+    def test_child_binding_rejects_wrong_parent_command_executable_and_reused_pid(self):
+        from tests import p05_process_parent as parent
+        argv=parent.command('frontend')
+        owner={'ProcessId':100,'CreationDate':'2026-09-13T00:00:00Z'}
+        child={'ProcessId':101,'ParentProcessId':100,'CreationDate':'2026-09-13T00:00:01Z',
+               'CommandLine':parent.subprocess.list2cmdline(argv),'ExecutablePath':argv[0]}
+        with patch.object(parent.os,'getpid',return_value=100):
+>           parent.verify_child_binding(owner,child,101,argv)
+
+tests/test_p05_process_guard.py:19: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/p05_process_parent.py:130: in verify_child_binding
+    expected=Path(os.environ['SYSTEMROOT'])/'System32/WindowsPowerShell/v1.0/powershell.exe'
+                  ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = environ({'SHELL': '/bin/bash', 'SESSION_MANAGER': 'local/adminn-predatorphn1671:@/tmp/.ICE-unix/3372,unix/adminn-preda...ss_guard.py::ProtectedProcessTests::test_child_binding_rejects_wrong_parent_command_executable_and_reused_pid (call)'})
+key = 'SYSTEMROOT'
+
+>   ???
+E   KeyError: 'SYSTEMROOT'
+
+<frozen os>:717: KeyError
+__________________ EndpointTests.test_endpoint_pull_roundtrip __________________
+
+source_root = ['/tmp/tmpmiz66q7q/read']
+sources = [{'absolute_path': '/tmp/tmpmiz66q7q/read/payload.bin', 'relative_path': 'payload.bin'}]
+manifest = {'entries': [{'identity': {'device': 39, 'inode': 2117880, 'mtime_ns': 1790817251472405437, 'size': 8192}, 'path': 'pa...6b933caa5250299ba7d094377a51caa46', 'size': 8192, ...}], 'evidence_refs': ['r'], 'schema': 'velo.transfer.manifest.v1'}
+bundle_path = PosixPath('/tmp/tmpmiz66q7q/work/tasks/trial/bundle.zip')
+work_root = PosixPath('/tmp/tmpmiz66q7q/work')
+budget = Budget(max_files=100, max_metadata_bytes=100000, max_logical_bytes=12582912, max_package_bytes=14680064, min_free_byte..._expansion_ratio=1000000, check_cancel=<function GuestTransferService._budget.<locals>.check_cancel at 0x74ab910e8ea0>)
+
+    def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict[str, str]], manifest: dict,
+                      bundle_path: str | Path, work_root: str | Path, budget: Budget) -> dict:
+        """Build a fresh ZIP64 package with one manifest and exact payload members."""
+        bundle_path, work_root = map(Path, (bundle_path, work_root))
+        safe_chain(bundle_path.parent, work_root)
+        safe_chain(bundle_path, work_root, allow_missing_leaf=True)
+        if bundle_path.exists() or bundle_path.is_symlink():
+            raise Error("bundle_exists")
+        validate_sources(source_root, sources, manifest, budget)
+        payload = canonical_json(manifest)
+        if len(payload) > budget.max_metadata_bytes:
+            raise Error("metadata_budget_exceeded")
+        logical_size = sum(entry.get("size", 0) for entry in manifest["entries"])
+        estimated = logical_size + len(payload) + 1024 * (len(manifest["entries"]) + 1)
+        estimated += 8 * (logical_size // 16384 + 1)
+        budget.space(bundle_path.parent, min(budget.max_package_bytes, estimated))
+        temp = bundle_path.parent / ("." + bundle_path.name + "." + os.urandom(8).hex() + ".part")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        fd = os.open(temp, flags, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as outer:
+                with zipfile.ZipFile(_BoundedOutput(outer, bundle_path.parent, budget), "w", compression=zipfile.ZIP_STORED,
+                                     allowZip64=True) as archive:
+                    archive.writestr(MANIFEST_MEMBER, payload, compress_type=zipfile.ZIP_DEFLATED)
+                    for entry in manifest["entries"]:
+                        budget.check()
+                        name = PAYLOAD_PREFIX + entry["path"]
+                        if entry["type"] == "directory":
+                            archive.writestr(name + "/", b"")
+                            continue
+                        source = _source_path(entry, sources)
+                        safe_chain(source, source_root_for(source, source_root))
+                        before = _no_link(source)
+                        if file_identity(before) != entry["identity"] or not stat.S_ISREG(before.st_mode):
+                            raise Error("source_changed")
+                        info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                        # Stored members: measured .149 packaging spent 8 of 9
+                        # minutes in DEFLATE on incompressible payloads at ~9 MB/s;
+                        # stored members stream at disk speed with identical
+                        # integrity guarantees (per-member SHA-256 in the manifest).
+                        info.compress_type = zipfile.ZIP_STORED
+                        info.external_attr = 0o100600 << 16
+                        hasher = hashlib.sha256()
+                        count = 0
+                        flags_in = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+                        source_fd = os.open(source, flags_in)
+                        try:
+                            if file_identity(os.fstat(source_fd)) != entry["identity"]:
+                                raise Error("source_changed")
+                            with os.fdopen(source_fd, "rb", closefd=False) as incoming:
+                                with archive.open(info, "w", force_zip64=True) as outgoing:
+                                    while True:
+                                        budget.check()
+                                        chunk = incoming.read(BLOCK_SIZE)
+                                        if not chunk:
+                                            break
+                                        count += len(chunk)
+                                        if count > entry["size"]:
+                                            raise Error("source_changed")
+                                        outgoing.write(chunk)
+                                        hasher.update(chunk)
+                            if (count != entry["size"] or hasher.hexdigest() != entry["sha256"] or
+                                    file_identity(os.fstat(source_fd)) != entry["identity"] or
+                                    file_identity(_no_link(source)) != entry["identity"]):
+                                raise Error("source_changed")
+                        finally:
+                            os.close(source_fd)
+                        if outer.tell() > budget.max_package_bytes:
+                            raise Error("package_budget_exceeded")
+                outer.flush()
+                os.fsync(outer.fileno())
+            size, digest = _hash_path(temp, budget)
+            validate_sources(source_root, sources, manifest, budget)
+            if size > budget.max_package_bytes:
+                raise Error("package_budget_exceeded")
+            try:
+>               os.link(temp, bundle_path, follow_symlinks=False)
+E               FileExistsError: [Errno 17] File exists: '/tmp/tmpmiz66q7q/work/tasks/trial/.bundle.zip.90386e96be9fe73e.part' -> '/tmp/tmpmiz66q7q/work/tasks/trial/bundle.zip'
+
+velo_transfer/bundle.py:151: FileExistsError
+
+The above exception was the direct cause of the following exception:
+
+self = <tests.test_transfer_binary_channel.EndpointTests testMethod=test_endpoint_pull_roundtrip>
+
+    def test_endpoint_pull_roundtrip(self):
+        import asyncio
+        from starlette.testclient import TestClient
+        from velociraptor_transport import _chunkbin_endpoint, _vbt_frame
+        service = self._service()
+        payload = bytes(range(256)) * 32  # 8 KiB
+>       req = self._pull_task(service, payload)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_transfer_binary_channel.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_transfer_binary_channel.py:69: in _pull_task
+    service._execute("trial", value["request_digest"], "package")
+velo_transfer/guest_service.py:673: in _execute
+    self._package(envelope, budget)
+velo_transfer/guest_service.py:768: in _package
+    package = create_bundle(state["source_roots"], request["sources"], manifest,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+source_root = ['/tmp/tmpmiz66q7q/read']
+sources = [{'absolute_path': '/tmp/tmpmiz66q7q/read/payload.bin', 'relative_path': 'payload.bin'}]
+manifest = {'entries': [{'identity': {'device': 39, 'inode': 2117880, 'mtime_ns': 1790817251472405437, 'size': 8192}, 'path': 'pa...6b933caa5250299ba7d094377a51caa46', 'size': 8192, ...}], 'evidence_refs': ['r'], 'schema': 'velo.transfer.manifest.v1'}
+bundle_path = PosixPath('/tmp/tmpmiz66q7q/work/tasks/trial/bundle.zip')
+work_root = PosixPath('/tmp/tmpmiz66q7q/work')
+budget = Budget(max_files=100, max_metadata_bytes=100000, max_logical_bytes=12582912, max_package_bytes=14680064, min_free_byte..._expansion_ratio=1000000, check_cancel=<function GuestTransferService._budget.<locals>.check_cancel at 0x74ab910e8ea0>)
+
+    def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict[str, str]], manifest: dict,
+                      bundle_path: str | Path, work_root: str | Path, budget: Budget) -> dict:
+        """Build a fresh ZIP64 package with one manifest and exact payload members."""
+        bundle_path, work_root = map(Path, (bundle_path, work_root))
+        safe_chain(bundle_path.parent, work_root)
+        safe_chain(bundle_path, work_root, allow_missing_leaf=True)
+        if bundle_path.exists() or bundle_path.is_symlink():
+            raise Error("bundle_exists")
+        validate_sources(source_root, sources, manifest, budget)
+        payload = canonical_json(manifest)
+        if len(payload) > budget.max_metadata_bytes:
+            raise Error("metadata_budget_exceeded")
+        logical_size = sum(entry.get("size", 0) for entry in manifest["entries"])
+        estimated = logical_size + len(payload) + 1024 * (len(manifest["entries"]) + 1)
+        estimated += 8 * (logical_size // 16384 + 1)
+        budget.space(bundle_path.parent, min(budget.max_package_bytes, estimated))
+        temp = bundle_path.parent / ("." + bundle_path.name + "." + os.urandom(8).hex() + ".part")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        fd = os.open(temp, flags, 0o600)
+        try:
+            with os.fdopen(fd, "wb") as outer:
+                with zipfile.ZipFile(_BoundedOutput(outer, bundle_path.parent, budget), "w", compression=zipfile.ZIP_STORED,
+                                     allowZip64=True) as archive:
+                    archive.writestr(MANIFEST_MEMBER, payload, compress_type=zipfile.ZIP_DEFLATED)
+                    for entry in manifest["entries"]:
+                        budget.check()
+                        name = PAYLOAD_PREFIX + entry["path"]
+                        if entry["type"] == "directory":
+                            archive.writestr(name + "/", b"")
+                            continue
+                        source = _source_path(entry, sources)
+                        safe_chain(source, source_root_for(source, source_root))
+                        before = _no_link(source)
+                        if file_identity(before) != entry["identity"] or not stat.S_ISREG(before.st_mode):
+                            raise Error("source_changed")
+                        info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                        # Stored members: measured .149 packaging spent 8 of 9
+                        # minutes in DEFLATE on incompressible payloads at ~9 MB/s;
+                        # stored members stream at disk speed with identical
+                        # integrity guarantees (per-member SHA-256 in the manifest).
+                        info.compress_type = zipfile.ZIP_STORED
+                        info.external_attr = 0o100600 << 16
+                        hasher = hashlib.sha256()
+                        count = 0
+                        flags_in = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+                        source_fd = os.open(source, flags_in)
+                        try:
+                            if file_identity(os.fstat(source_fd)) != entry["identity"]:
+                                raise Error("source_changed")
+                            with os.fdopen(source_fd, "rb", closefd=False) as incoming:
+                                with archive.open(info, "w", force_zip64=True) as outgoing:
+                                    while True:
+                                        budget.check()
+                                        chunk = incoming.read(BLOCK_SIZE)
+                                        if not chunk:
+                                            break
+                                        count += len(chunk)
+                                        if count > entry["size"]:
+                                            raise Error("source_changed")
+                                        outgoing.write(chunk)
+                                        hasher.update(chunk)
+                            if (count != entry["size"] or hasher.hexdigest() != entry["sha256"] or
+                                    file_identity(os.fstat(source_fd)) != entry["identity"] or
+                                    file_identity(_no_link(source)) != entry["identity"]):
+                                raise Error("source_changed")
+                        finally:
+                            os.close(source_fd)
+                        if outer.tell() > budget.max_package_bytes:
+                            raise Error("package_budget_exceeded")
+                outer.flush()
+                os.fsync(outer.fileno())
+            size, digest = _hash_path(temp, budget)
+            validate_sources(source_root, sources, manifest, budget)
+            if size > budget.max_package_bytes:
+                raise Error("package_budget_exceeded")
+            try:
+                os.link(temp, bundle_path, follow_symlinks=False)
+            except FileExistsError as exc:
+>               raise Error("bundle_exists") from exc
+E               velo_transfer.errors.TransferContentError: bundle_exists
+
+velo_transfer/bundle.py:153: TransferContentError
+=============================== warnings summary ===============================
+tests/test_p05_pc020_evidence.py::test_environment
+  <repo>/.venv/lib/python3.13/site-packages/_pytest/python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/test_p05_pc020_evidence.py::test_environment returned <class 'dict'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/test_transfer_binary_channel.py::EndpointTests::test_endpoint_invalid_arguments
+  <repo>/.venv/lib/python3.13/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_transfer_content.py::ContentTests::test_zip_negative_public_unpack
+  <host-home>/.local/share/uv/python/cpython-3.13.15-linux-x86_64-gnu/lib/python3.13/zipfile/__init__.py:1661: UserWarning: Duplicate name: 'payload/a'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_manager_shutdown_stops_only_its_registered_worker
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+tests/test_transfer_mcp.py::TransferMcpGuestTests::test_real_local_pull_and_push_through_mcp_calls
+  <repo>/velo_transfer/guest_service.py:506: DeprecationWarning: This process (pid=4049765) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_p02_stdio.py::RealBridgeStdioTests::test_real_bridge_server_and_endpoint_calls
+FAILED tests/test_p03_stdio.py::RealBridgeDynamicTests::test_real_metadata_schema_inventory_stability_and_flow
+FAILED tests/test_p05_process_guard.py::ProtectedProcessTests::test_child_binding_rejects_wrong_parent_command_executable_and_reused_pid
+FAILED tests/test_transfer_binary_channel.py::EndpointTests::test_endpoint_pull_roundtrip
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_actual_sender_writes_frozen_bytes_and_only_reports_completed_receipt
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_bundle_namespace_link_is_not_hidden_by_resolution
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_complete_preparation_and_migration_graphs_are_accepted_read_only
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_exact_root_identity_time_uuid_and_nonfinite_json_boundaries
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_link_or_reparse_is_rejected_when_windows_can_create_one
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_migration_targeted_negative_matrix
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_preparation_targeted_negative_matrix
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_real_frozen_source_copy_is_accepted
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_receiver_observation_seams_execute_and_feed_the_real_parser
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_ref_spelling_identity_and_conflict_boundaries
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_schema6_fixed_namespaces_uuid_and_strict_rfc3339
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_schema6_shapes_do_not_claim_activation_validation
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_source_exact_set_duplicate_and_blob_boundaries
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_synthetic_disclosure_never_changes_validator_acceptance
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_transfer_builder_quotes_valid_path_and_rejects_invalid_typed_inputs
+ERROR tests/test_p05_pc020_evidence.py::Pc020EvidenceTests::test_wrong_policy_cannot_redefine_normative_source_set
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_duplicate_run_is_stably_rejected_without_new_next_or_package
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_late_failure_scene_changes_remain_in_place_without_cleanup_replace
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_path_object_and_collision_guards_fail_closed_without_overwrite
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_pre_replace_fault_matrix_preserves_failure_scene_in_place
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_predecessor_shape_helper_rejects_wrong_schema_and_root_keys
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_preflight_refusals_preserve_canonical_sources_unknown_next_and_sentinel
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_replace_and_post_replace_uncertainty_never_rolls_back_or_claims_commit
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_success_derives_exact_epoch7_and_durable_independent_records
+ERROR tests/test_p05_pc020_transition.py::Pc020TransitionTests::test_true_o_excl_race_allows_at_most_one_replace_and_preserves_loser_files
+ERROR tests/test_transfer_binary_channel.py::EndpointTests::test_endpoint_pull_roundtrip
+4 failed, 653 passed, 157 skipped, 10 warnings, 26 errors, 618 subtests passed in 145.70s (0:02:25)

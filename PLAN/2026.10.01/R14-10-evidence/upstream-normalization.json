@@ -1,0 +1,22 @@
+[
+  {
+    "tool": "collect_artifact",
+    "raw_bytes": 295,
+    "canonical_bytes": 271
+  },
+  {
+    "tool": "get_collection_results",
+    "raw_bytes": 93,
+    "canonical_bytes": 90
+  },
+  {
+    "tool": "get_collection_results",
+    "raw_bytes": 392,
+    "canonical_bytes": 376
+  },
+  {
+    "tool": "run_vql",
+    "raw_bytes": 24,
+    "canonical_bytes": 21
+  }
+]

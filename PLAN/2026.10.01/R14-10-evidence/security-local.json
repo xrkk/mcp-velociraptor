@@ -1,0 +1,22 @@
+[
+  {
+    "path": "/mcp",
+    "case": "bad_host",
+    "status": 421
+  },
+  {
+    "path": "/mcp",
+    "case": "bad_origin",
+    "status": 403
+  },
+  {
+    "path": "/chunkbin",
+    "case": "bad_host",
+    "status": 200
+  },
+  {
+    "path": "/chunkbin",
+    "case": "bad_origin",
+    "status": 200
+  }
+]

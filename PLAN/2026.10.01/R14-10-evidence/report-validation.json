@@ -1,0 +1,67 @@
+[
+  {
+    "scenario": "p06-compromise-scope",
+    "result": "report root keys do not match schema2",
+    "files": [
+      "report.json",
+      "steps.jsonl"
+    ],
+    "baseline": {
+      "adoption": "2026-09-30 working assumption (.149 deployment replaces Snapshot-189 restore chain)",
+      "endpoint": "http://192.168.204.232:28790/mcp",
+      "snapshot_gate": "not-applicable-on-149; recorded, not fabricated"
+    }
+  },
+  {
+    "scenario": "p06-credential-lateral-movement",
+    "result": "report root keys do not match schema2",
+    "files": [
+      "report.json",
+      "steps.jsonl"
+    ],
+    "baseline": {
+      "adoption": "2026-09-30 working assumption (.149 deployment replaces Snapshot-189 restore chain)",
+      "endpoint": "http://192.168.204.232:28790/mcp",
+      "snapshot_gate": "not-applicable-on-149; recorded, not fabricated"
+    }
+  },
+  {
+    "scenario": "p06-data-exfiltration",
+    "result": "report root keys do not match schema2",
+    "files": [
+      "report.json",
+      "steps.jsonl"
+    ],
+    "baseline": {
+      "adoption": "2026-09-30 working assumption (.149 deployment replaces Snapshot-189 restore chain)",
+      "endpoint": "http://192.168.204.232:28790/mcp",
+      "snapshot_gate": "not-applicable-on-149; recorded, not fabricated"
+    }
+  },
+  {
+    "scenario": "p06-ransomware-root-cause",
+    "result": "report root keys do not match schema2",
+    "files": [
+      "report.json",
+      "steps.jsonl"
+    ],
+    "baseline": {
+      "adoption": "2026-09-30 working assumption (.149 deployment replaces Snapshot-189 restore chain)",
+      "endpoint": "http://192.168.204.232:28790/mcp",
+      "snapshot_gate": "not-applicable-on-149; recorded, not fabricated"
+    }
+  },
+  {
+    "scenario": "p06-remediation-validation",
+    "result": "report root keys do not match schema2",
+    "files": [
+      "report.json",
+      "steps.jsonl"
+    ],
+    "baseline": {
+      "adoption": "2026-09-30 working assumption (.149 deployment replaces Snapshot-189 restore chain)",
+      "endpoint": "http://192.168.204.232:28790/mcp",
+      "snapshot_gate": "not-applicable-on-149; recorded, not fabricated"
+    }
+  }
+]
