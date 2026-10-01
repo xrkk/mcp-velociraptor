@@ -145,34 +145,62 @@ async def run_flow(session, report, sampler, label, tool, arguments, timeout):
     return results, files, flow_id
 
 
-async def qualify(endpoint, token_env):
+async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_out=None,
+                  server_observation=None, fixture_instance=None):
     from tests import scenario_runner as runner
     from tests.p06_formal_session import formal_session
     from tests.p06_resource_gate import GuestResourceSampler, admit, freeze_measurements, ResourceRejected, require_trace_inactive
     from tests.p06_package import member_inventory, source_for_member, verify_manifest, verify_payload_zip
-    evidence_root = OUT
-    declaration = json.loads((evidence_root/'current-restore.json').read_text(encoding='utf-8'))
-    run_id = declaration['run_id']
-    restore = runner.load_current_restore(evidence_root, run_id)
-    if restore['snapshot_stage'] != 'P06_ACTIVE':
-        raise ValueError('qualification requires activated Snapshot188')
+    schema3 = baseline_binding is not None
+    if schema3:
+        # PLAN-CHANGE-025: the adopted .232 baseline binding replaces the
+        # Snapshot-188 chain; qualification runs in the new evidence root.
+        if evidence_root_out is None:
+            raise ValueError('schema3 qualification requires an explicit evidence root')
+        if server_observation is None:
+            raise ValueError('schema3 qualification requires a server observation path')
+        if fixture_instance is None:
+            raise ValueError('schema3 qualification requires a fixture instance path')
+        evidence_root = Path(evidence_root_out)
+        binding_document = runner.load_baseline_binding(Path(baseline_binding))
+        run_id = str(__import__('uuid').uuid4())
+        restore = None
+    else:
+        evidence_root = OUT
+        declaration = json.loads((evidence_root/'current-restore.json').read_text(encoding='utf-8'))
+        run_id = declaration['run_id']
+        restore = runner.load_current_restore(evidence_root, run_id)
+        if restore['snapshot_stage'] != 'P06_ACTIVE':
+            raise ValueError('qualification requires activated Snapshot188')
+        binding_document = None
     spec_hash = runner.sha256_file(runner.FIXTURE_SPEC_PATH)
-    fixture, fixture_hash = runner.load_fixture({'fixture_spec_sha256': spec_hash}, evidence_root/'fixture-instance.json')
-    run_dir = runner.P06_REPORT_ROOT/'resource-qualification'/run_id
+    fixture_instance_arg = Path(fixture_instance) if schema3 else evidence_root/'fixture-instance.json'
+    fixture, fixture_hash = runner.load_fixture({'fixture_spec_sha256': spec_hash}, fixture_instance_arg)
+    if schema3:
+        run_dir = evidence_root/'resource-qualification'/run_id
+    else:
+        run_dir = runner.P06_REPORT_ROOT/'resource-qualification'/run_id
     run_dir.mkdir(parents=True, exist_ok=False)
-    (run_dir/'fixture-instance.json').write_bytes((evidence_root/'fixture-instance.json').read_bytes())
+    (run_dir/'fixture-instance.json').write_bytes(fixture_instance_arg.read_bytes())
+    if schema3:
+        (run_dir/'baseline-binding.json').write_bytes(Path(baseline_binding).read_bytes())
     source_hash, index_hash = runner.sha256_file(Path(__file__)), runner.sha256_file(INVOCATIONS)
-    report = dict(schema_version=2, scenario='resource-qualification', source_sha256=source_hash,
+    report = dict(schema_version=3 if schema3 else 2, scenario='resource-qualification', source_sha256=source_hash,
                   index_sha256=index_hash, fixture_spec_sha256=spec_hash, fixture_instance_sha256=fixture_hash,
                   run_id=run_id, transport='streamable-http', endpoint=endpoint,
                   authorization_configured=bool(os.environ.get(token_env, '').strip()),
-                  tools_schema_sha256=None, snapshot_evidence_sha256=None,
+                  tools_schema_sha256=None,
                   mcp_session={'id': None, 'initialized_at': None, 'closed_at': None},
                   server_identity=None, server_observation_sha256=None,
                   runner={'pid': os.getpid(), 'process_start_time_utc': runner._runner_start_time_utc(),
                           'executable_sha256': runner._runner_executable_sha256()},
                   started_at=runner.utc_now(), ended_at=None, duration_ms=0, status='running',
                   calls=[], steps=[], cleanup=[], failure=None, unexecuted_step_ids=[], coverage=[])
+    if schema3:
+        report['baseline_binding'] = {**binding_document,
+                                      'observation_sha256': runner.sha256_file(Path(baseline_binding))}
+    else:
+        report['snapshot_evidence_sha256'] = None
     invocations = [row for row in json.loads(INVOCATIONS.read_text(encoding='utf-8'))
                    if row['risk_class']=='resource_sensitive' and row['artifact']!='Windows.Network.PacketCapture']
     started = time.monotonic()
@@ -185,7 +213,9 @@ async def qualify(endpoint, token_env):
     try:
         if len(invocations) != 8:
             raise ValueError('qualification must include all eight in-scope resource-sensitive invocations')
-        async with formal_session(endpoint, token_env, evidence_root/'server-observation.json', run_dir, report) as session:
+        session_observation = Path(server_observation) if schema3 else evidence_root/'server-observation.json'
+        async with formal_session(endpoint, token_env, session_observation, run_dir, report,
+                                  expected_tool_count=137 if schema3 else 130) as session:
             sampler = GuestResourceSampler(endpoint, run_id, report['server_identity'], run_dir/'resources')
             before = await sampler.sample('qualification-start')
             require_trace_inactive(before)
@@ -229,13 +259,14 @@ async def qualify(endpoint, token_env):
         report['failure'] = {'type':type(exc).__name__,'message':str(exc),'chain':runner._exception_chain(exc)}
     finally:
         report['ended_at'], report['duration_ms'] = runner.utc_now(), math.ceil((time.monotonic()-started)*1000)
-        snapshot = {'restore':restore,'scenario_id':report['scenario'],'source_sha256':source_hash,
-                    'index_sha256':index_hash,'mcp_session_id':report['mcp_session']['id'],
-                    'server_instance_id':(report['server_identity'] or {}).get('instance_id'),
-                    'server_observation_sha256':report['server_observation_sha256']}
-        raw = runner.canonical_bytes(snapshot)
-        (run_dir/'snapshot-evidence.json').write_bytes(raw)
-        report['snapshot_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
+        if not schema3:
+            snapshot = {'restore':restore,'scenario_id':report['scenario'],'source_sha256':source_hash,
+                        'index_sha256':index_hash,'mcp_session_id':report['mcp_session']['id'],
+                        'server_instance_id':(report['server_identity'] or {}).get('instance_id'),
+                        'server_observation_sha256':report['server_observation_sha256']}
+            raw = runner.canonical_bytes(snapshot)
+            (run_dir/'snapshot-evidence.json').write_bytes(raw)
+            report['snapshot_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
         (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
     if report['status']=='success':
         # Measured payload precedes the budget, avoiding hash/size self-reference.
@@ -260,8 +291,19 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--endpoint',required=True)
     parser.add_argument('--token-env',default='VELOCIRAPTOR_MCP_BEARER_TOKEN')
+    parser.add_argument('--baseline-binding',default=None,
+                        help='adopted .232 baseline binding (schema3, PLAN-CHANGE-025)')
+    parser.add_argument('--evidence-root',default=None)
+    parser.add_argument('--server-observation',default=None)
+    parser.add_argument('--fixture-instance',default=None)
     args=parser.parse_args()
-    report,path=asyncio.run(qualify(args.endpoint,args.token_env))
+    from pathlib import Path as _Path
+    report,path=asyncio.run(qualify(
+        args.endpoint,args.token_env,
+        baseline_binding=_Path(args.baseline_binding) if args.baseline_binding else None,
+        evidence_root_out=_Path(args.evidence_root) if args.evidence_root else None,
+        server_observation=_Path(args.server_observation) if args.server_observation else None,
+        fixture_instance=_Path(args.fixture_instance) if args.fixture_instance else None))
     print(json.dumps({'status':report['status'],'report':str(path/'report.json')}))
     return 0 if report['status']=='success' else 1
 

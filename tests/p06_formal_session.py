@@ -10,7 +10,8 @@ from urllib.parse import urlsplit
 
 
 @asynccontextmanager
-async def formal_session(endpoint, token_env, observation_path, run_dir, report):
+async def formal_session(endpoint, token_env, observation_path, run_dir, report,
+                         expected_tool_count=130):
     import httpx2
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
@@ -56,8 +57,8 @@ async def formal_session(endpoint, token_env, observation_path, run_dir, report)
                     raw = canonical_bytes(document)
                     (run_dir / 'tools-schema.json').write_bytes(raw)
                     report['tools_schema_sha256'] = hashlib.sha256(raw).hexdigest()
-                    if len(tools) != 130 or len({tool.name for tool in tools}) != 130:
-                        raise ValueError('formal tools/list must contain 130 unique tools')
+                    if len(tools) != expected_tool_count or len({tool.name for tool in tools}) != expected_tool_count:
+                        raise ValueError(f'formal tools/list must contain {expected_tool_count} unique tools')
                     yield session
     finally:
         report['mcp_session']['closed_at'] = utc_now()

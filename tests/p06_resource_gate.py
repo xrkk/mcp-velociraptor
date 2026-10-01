@@ -263,7 +263,11 @@ class ScenarioResourceGate:
                 or report['failure'] or report['coverage'] or any(call.get('is_error') for call in report['calls'])):
             raise ValueError('selected qualification is not a successful formal attempt')
         verify_tools_schema_binding(report,report_path.parent)
-        verify_snapshot_evidence(report,report_path.parent,root)
+        if report.get('schema_version') == 3:
+            from tests.p06_aggregate_reports import verify_baseline_evidence
+            verify_baseline_evidence(report, report_path.parent)
+        else:
+            verify_snapshot_evidence(report,report_path.parent,root)
         verify_qualification_calls(report)
         seen = set()
         initial = next(row['observation'] for row in report['steps'] if row['id']=='static-resource-gate')
