@@ -22,7 +22,6 @@ POSIX fsync equivalence.
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
 import os
 from pathlib import Path
 from typing import Any
@@ -44,33 +43,16 @@ MOVEFILE_REPLACE_EXISTING = 0x00000001
 MOVEFILE_WRITE_THROUGH = 0x00000008
 MOVEFILE_FLAGS_9 = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
 FILE_INFO_BY_HANDLE_CLASS_FILE_ATTRIBUTE_TAG_INFO = 9
+FILE_INFO_BY_HANDLE_CLASS_FILE_ID_INFO = 18
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
 
 class FILE_ATTRIBUTE_TAG_INFO(ctypes.Structure):
-    _fields_ = (
-        ("file_attributes", wintypes.DWORD),
-        ("reparse_tag", wintypes.DWORD),
-    )
+    _fields_ = (("file_attributes", ctypes.c_uint32), ("reparse_tag", ctypes.c_uint32))
 
 
-class _FILETIME(ctypes.Structure):
-    _fields_ = (("low", wintypes.DWORD), ("high", wintypes.DWORD))
-
-
-class BY_HANDLE_FILE_INFORMATION(ctypes.Structure):
-    _fields_ = (
-        ("file_attributes", wintypes.DWORD),
-        ("creation_time", _FILETIME),
-        ("last_access_time", _FILETIME),
-        ("last_write_time", _FILETIME),
-        ("volume_serial_number", wintypes.DWORD),
-        ("file_size_high", wintypes.DWORD),
-        ("file_size_low", wintypes.DWORD),
-        ("number_of_links", wintypes.DWORD),
-        ("file_index_high", wintypes.DWORD),
-        ("file_index_low", wintypes.DWORD),
-    )
+class FILE_ID_INFO(ctypes.Structure):
+    _fields_ = (("volume_serial_number", ctypes.c_uint64), ("file_id", ctypes.c_ubyte * 16))
 
 
 if os.name == "nt":
@@ -78,51 +60,44 @@ if os.name == "nt":
 
     CreateFileW = kernel32.CreateFileW
     CreateFileW.argtypes = (
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
     )
-    CreateFileW.restype = wintypes.HANDLE
+    CreateFileW.restype = ctypes.c_void_p
 
     FlushFileBuffers = kernel32.FlushFileBuffers
-    FlushFileBuffers.argtypes = (wintypes.HANDLE,)
-    FlushFileBuffers.restype = wintypes.BOOL
+    FlushFileBuffers.argtypes = (ctypes.c_void_p,)
+    FlushFileBuffers.restype = ctypes.c_int32
 
     CloseHandle = kernel32.CloseHandle
-    CloseHandle.argtypes = (wintypes.HANDLE,)
-    CloseHandle.restype = wintypes.BOOL
+    CloseHandle.argtypes = (ctypes.c_void_p,)
+    CloseHandle.restype = ctypes.c_int32
 
     GetFileInformationByHandleEx = kernel32.GetFileInformationByHandleEx
     GetFileInformationByHandleEx.argtypes = (
-        wintypes.HANDLE,
-        wintypes.INT,
-        wintypes.LPVOID,
-        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_int32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
     )
-    GetFileInformationByHandleEx.restype = wintypes.BOOL
-
-    GetFileInformationByHandle = kernel32.GetFileInformationByHandle
-    GetFileInformationByHandle.argtypes = (
-        wintypes.HANDLE,
-        ctypes.POINTER(BY_HANDLE_FILE_INFORMATION),
-    )
-    GetFileInformationByHandle.restype = wintypes.BOOL
+    GetFileInformationByHandleEx.restype = ctypes.c_int32
 
     MoveFileExW = kernel32.MoveFileExW
-    MoveFileExW.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD)
-    MoveFileExW.restype = wintypes.BOOL
+    MoveFileExW.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32)
+    MoveFileExW.restype = ctypes.c_int32
 
     CreateDirectoryW = kernel32.CreateDirectoryW
-    CreateDirectoryW.argtypes = (wintypes.LPCWSTR, wintypes.LPVOID)
-    CreateDirectoryW.restype = wintypes.BOOL
+    CreateDirectoryW.argtypes = (ctypes.c_wchar_p, ctypes.c_void_p)
+    CreateDirectoryW.restype = ctypes.c_int32
 
     CreateHardLinkW = kernel32.CreateHardLinkW
-    CreateHardLinkW.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPVOID)
-    CreateHardLinkW.restype = wintypes.BOOL
+    CreateHardLinkW.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_void_p)
+    CreateHardLinkW.restype = ctypes.c_int32
 else:  # static-analysis-only host import; every call fails closed below
     kernel32 = None
 
@@ -169,15 +144,18 @@ def _handle_value(handle: Any) -> int | None:
 def _open_directory_handle(path: Path, desired_access: int) -> int:
     """CreateFileW with the PC022-fixed flags for directory objects."""
     ctypes.set_last_error(0)
-    handle = CreateFileW(
-        str(path),
-        desired_access,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        None,
-        OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-        None,
-    )
+    try:
+        handle = CreateFileW(
+            str(path),
+            desired_access,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            None,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+    except Exception as exc:
+        raise _api_error("open", f"CreateFileW raised {type(exc).__name__}: {exc}", exc)
     value = _handle_value(handle)
     if value is None or value == INVALID_HANDLE_VALUE:
         raise Pc022WindowsRefreshError(
@@ -188,58 +166,90 @@ def _open_directory_handle(path: Path, desired_access: int) -> int:
     return value
 
 
-def _close_once(handle: int, stage: str, aggregated: list[dict[str, Any]]) -> None:
-    """Exactly one close attempt per successfully obtained handle."""
+def _api_error(stage: str, message: str, exc: Exception | None = None) -> Pc022WindowsRefreshError:
+    winerror = getattr(exc, "winerror", None) if exc is not None else None
+    error = Pc022WindowsRefreshError(stage, message, winerror=ctypes.get_last_error() if winerror is None else winerror)
+    if exc is not None:
+        error.__cause__ = exc
+    return error
+
+
+def _close_once(handle: int, stage: str) -> Pc022WindowsRefreshError | None:
+    """One attempt, never retry; the owner decides primary versus cleanup."""
     ctypes.set_last_error(0)
-    closed = bool(CloseHandle(handle))
-    if not closed:
-        aggregated.append(
-            {"stage": stage, "winerror": ctypes.get_last_error(), "message": "CloseHandle returned zero"}
-        )
+    try:
+        closed = bool(CloseHandle(handle))
+    except Exception as exc:
+        return _api_error(stage, f"CloseHandle raised {type(exc).__name__}: {exc}", exc)
+    return None if closed else _api_error(stage, "CloseHandle returned zero")
+
+
+class _Lifetime:
+    """Finite ownership of acquired handles, including uncertain close results."""
+    def __init__(self) -> None:
+        self.pending: list[tuple[int, str]] = []
+        self.primary: BaseException | None = None
+
+    def open(self, path: Path, access: int, close_stage: str) -> int:
+        handle = _open_directory_handle(path, access)
+        self.pending.append((handle, close_stage))
+        return handle
+
+    def close(self, handle: int, stage: str) -> None:
+        # Relinquish the right to attempt a close BEFORE calling the API.
+        self.pending.remove((handle, stage))
+        failure = _close_once(handle, stage)
+        if failure is not None:
+            raise failure
+
+    def finish(self) -> None:
+        aggregated = []
+        for handle, stage in reversed(self.pending):
+            failure = _close_once(handle, stage)
+            if failure is None:
+                continue
+            if self.primary is None:
+                self.primary = failure
+            else:
+                aggregated.append({"stage": failure.stage, "winerror": failure.winerror, "message": str(failure)})
+        self.pending.clear()
+        if self.primary is not None:
+            if isinstance(self.primary, Pc022WindowsRefreshError):
+                self.primary.aggregated.extend(aggregated)
+            elif aggregated:
+                self.primary.add_note("PC022 cleanup close failures: " + repr(aggregated))
+            raise self.primary
+
+
+def _call_bool(stage: str, message: str, function, *args) -> None:
+    ctypes.set_last_error(0)
+    try:
+        ok = bool(function(*args))
+    except Exception as exc:
+        raise _api_error(stage, message + f" ({type(exc).__name__}: {exc})", exc)
+    if not ok:
+        raise _api_error(stage, message)
 
 
 def _query_attribute_tag(handle: int) -> FILE_ATTRIBUTE_TAG_INFO:
     info = FILE_ATTRIBUTE_TAG_INFO()
-    ctypes.set_last_error(0)
-    ok = bool(
-        GetFileInformationByHandleEx(
-            handle,
-            FILE_INFO_BY_HANDLE_CLASS_FILE_ATTRIBUTE_TAG_INFO,
-            ctypes.byref(info),
-            ctypes.sizeof(info),
-        )
-    )
-    if not ok:
-        raise Pc022WindowsRefreshError(
-            "attribute_tag",
-            "GetFileInformationByHandleEx(FileAttributeTagInfo) failed",
-            winerror=ctypes.get_last_error(),
-        )
+    _call_bool("attribute_tag", "GetFileInformationByHandleEx(FileAttributeTagInfo) failed",
+               GetFileInformationByHandleEx, handle, FILE_INFO_BY_HANDLE_CLASS_FILE_ATTRIBUTE_TAG_INFO,
+               ctypes.byref(info), ctypes.sizeof(info))
     return info
 
 
 def _query_file_id(handle: int) -> tuple[int, int]:
-    """Return (volume_serial_number, file_index) for an open handle.
+    """Full FileIdInfo identity (64-bit volume, 128-bit ID); no API fallback.
 
-    Identity source is ``GetFileInformationByHandle`` (BY_HANDLE_FILE_
-    INFORMATION: VolumeSerialNumber plus the 64-bit FileIndex) because the
-    audited target (Windows 10 build 19045) rejects ``GetFileInformationBy-
-    HandleEx(FileIdInfo)`` with ERROR_INVALID_PARAMETER on directory
-    handles; the compared semantics (same-volume, same-object identifier)
-    are identical.  Recorded as a PC022 erratum candidate for the normative
-    text that names the FileIdInfo class.
+    The integer representation preserves existing caller equality/hex behavior
+    without truncating any of the 16 native FileId bytes.
     """
-    info = BY_HANDLE_FILE_INFORMATION()
-    ctypes.set_last_error(0)
-    ok = bool(GetFileInformationByHandle(handle, ctypes.byref(info)))
-    if not ok:
-        raise Pc022WindowsRefreshError(
-            "file_id",
-            "GetFileInformationByHandle failed",
-            winerror=ctypes.get_last_error(),
-        )
-    file_index = (info.file_index_high << 32) | info.file_index_low
-    return info.volume_serial_number, file_index
+    info = FILE_ID_INFO()
+    _call_bool("file_id", "GetFileInformationByHandleEx(FileIdInfo) failed",
+               GetFileInformationByHandleEx, handle, FILE_INFO_BY_HANDLE_CLASS_FILE_ID_INFO,
+               ctypes.byref(info), ctypes.sizeof(info))
+    return info.volume_serial_number, int.from_bytes(bytes(info.file_id), "little")
 
 
 def _verify_directory_object(info: FILE_ATTRIBUTE_TAG_INFO) -> None:
@@ -253,52 +263,36 @@ def _verify_directory_object(info: FILE_ATTRIBUTE_TAG_INFO) -> None:
         )
 
 
-def handle_directory_identity(path: Path, *, desired_access: int = FILE_READ_ATTRIBUTES) -> tuple[int, int]:
-    """Open, verify, and return (volume_serial_number, file_id) for ``path``.
-
-    Lightweight identity probe used by hierarchy verification and same-volume
-    checks; the refresh helper itself uses the GENERIC_WRITE main handle.
-    """
+def _identity(path: Path, desired_access: int, *, directory: bool) -> tuple[int, int]:
     _require_nt()
-    handle = _open_directory_handle(path, desired_access)
-    aggregated: list[dict[str, Any]] = []
+    lifetime = _Lifetime()
     try:
-        _verify_directory_object(_query_attribute_tag(handle))
-        return _query_file_id(handle)
+        handle = lifetime.open(path, desired_access, "identity_probe_close")
+        info = _query_attribute_tag(handle)
+        if directory:
+            _verify_directory_object(info)
+        else:
+            if info.file_attributes & FILE_ATTRIBUTE_DIRECTORY:
+                raise Pc022WindowsRefreshError("type", "file path opened a directory")
+            if info.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT:
+                raise Pc022WindowsRefreshError("reparse", "file path opened a reparse point")
+        identity = _query_file_id(handle)
+        lifetime.close(handle, "identity_probe_close")
+    except BaseException as exc:
+        lifetime.primary = exc
     finally:
-        _close_once(handle, "identity_probe_close", aggregated)
-        if aggregated:
-            raise Pc022WindowsRefreshError(
-                "identity_probe_close", "CloseHandle failed during identity probe",
-                aggregated=aggregated,
-            )
+        lifetime.finish()
+    return identity
+
+
+def handle_directory_identity(path: Path, *, desired_access: int = FILE_READ_ATTRIBUTES) -> tuple[int, int]:
+    """No-follow directory FileIdInfo; probe closes once without masking errors."""
+    return _identity(path, desired_access, directory=True)
 
 
 def handle_file_identity(path: Path) -> tuple[int, int]:
-    """Open, verify, and return (volume_serial_number, file_id) for a plain file."""
-    _require_nt()
-    handle = _open_directory_handle(path, FILE_READ_ATTRIBUTES)
-    aggregated: list[dict[str, Any]] = []
-    try:
-        info = _query_attribute_tag(handle)
-        if not info.file_attributes & FILE_ATTRIBUTE_DIRECTORY:
-            pass  # plain file as required
-        else:
-            raise Pc022WindowsRefreshError(
-                "type", "object opened via the file path is a directory"
-            )
-        if info.file_attributes & FILE_ATTRIBUTE_REPARSE_POINT:
-            raise Pc022WindowsRefreshError(
-                "reparse", "object opened via the file path is a reparse point"
-            )
-        return _query_file_id(handle)
-    finally:
-        _close_once(handle, "identity_probe_close", aggregated)
-        if aggregated:
-            raise Pc022WindowsRefreshError(
-                "identity_probe_close", "CloseHandle failed during identity probe",
-                aggregated=aggregated,
-            )
+    """No-follow ordinary-file FileIdInfo with the same close/error semantics."""
+    return _identity(path, FILE_READ_ATTRIBUTES, directory=False)
 
 
 def windows_refresh_directory(directory: Path) -> dict[str, Any]:
@@ -315,42 +309,25 @@ def windows_refresh_directory(directory: Path) -> dict[str, Any]:
     failures are aggregated without masking the primary failure.
     """
     _require_nt()
-    aggregated: list[dict[str, Any]] = []
-    h_main = _open_directory_handle(directory, GENERIC_WRITE)
+    lifetime = _Lifetime()
     try:
+        h_main = lifetime.open(directory, GENERIC_WRITE, "close_main")
         _verify_directory_object(_query_attribute_tag(h_main))
         main_identity = _query_file_id(h_main)
-        h_pre = _open_directory_handle(directory, GENERIC_WRITE)
-        try:
-            if _query_file_id(h_pre) != main_identity:
-                raise Pc022WindowsRefreshError(
-                    "compare_pre", "path identity changed between H_main and H_pre"
-                )
-        finally:
-            _close_once(h_pre, "close_pre", aggregated)
-        ctypes.set_last_error(0)
-        if not bool(FlushFileBuffers(h_main)):
-            raise Pc022WindowsRefreshError(
-                "flush_main",
-                "FlushFileBuffers(H_main) returned zero",
-                winerror=ctypes.get_last_error(),
-            )
-    finally:
-        _close_once(h_main, "close_main", aggregated)
-    h_post = _open_directory_handle(directory, GENERIC_WRITE)
-    try:
+        h_pre = lifetime.open(directory, GENERIC_WRITE, "close_pre")
+        if _query_file_id(h_pre) != main_identity:
+            raise Pc022WindowsRefreshError("compare_pre", "path identity changed between H_main and H_pre")
+        lifetime.close(h_pre, "close_pre")
+        _call_bool("flush_main", "FlushFileBuffers(H_main) returned zero", FlushFileBuffers, h_main)
+        lifetime.close(h_main, "close_main")
+        h_post = lifetime.open(directory, GENERIC_WRITE, "close_post")
         if _query_file_id(h_post) != main_identity:
-            raise Pc022WindowsRefreshError(
-                "compare_post",
-                "path identity changed after CloseHandle(H_main)",
-                aggregated=aggregated or None,
-            )
+            raise Pc022WindowsRefreshError("compare_post", "path identity changed after CloseHandle(H_main)")
+        lifetime.close(h_post, "close_post")
+    except BaseException as exc:
+        lifetime.primary = exc
     finally:
-        _close_once(h_post, "close_post", aggregated)
-    if aggregated:
-        raise Pc022WindowsRefreshError(
-            "close", "a close attempt failed during refresh", aggregated=aggregated
-        )
+        lifetime.finish()
     return {
         "directory": str(directory),
         "volume_serial_number": main_identity[0],
@@ -360,7 +337,7 @@ def windows_refresh_directory(directory: Path) -> dict[str, Any]:
 
 
 def require_same_volume(
-    first: tuple[int, bytes], second: tuple[int, bytes], *, label: str
+    first: tuple[int, int], second: tuple[int, int], *, label: str
 ) -> None:
     if first[0] != second[0]:
         raise Pc022WindowsRefreshError(
@@ -395,7 +372,7 @@ def windows_replace_file(source: Path, target: Path) -> dict[str, Any]:
 def create_hierarchy_and_refresh(base: Path, parts: tuple[str, ...]) -> Path:
     """Create each missing component under a verified base with per-level refresh.
 
-    For every ``child`` the fixed order is: refresh ``parent``; CreateDirectoryW
+    For every ``child`` the fixed order is: reverify ``parent``; CreateDirectoryW
     accepting only that this call actually created it; open and verify the
     child as a plain non-reparse directory on the same volume;
     ``windows_refresh_directory(child)``; ``windows_refresh_directory(parent)``;
@@ -405,11 +382,13 @@ def create_hierarchy_and_refresh(base: Path, parts: tuple[str, ...]) -> Path:
     _require_nt()
     base_identity = handle_directory_identity(base, desired_access=FILE_READ_ATTRIBUTES)
     current = base
+    current_identity = base_identity
     for part in parts:
         if part in {"", ".", ".."}:
             raise Pc022WindowsRefreshError("component", f"invalid path component {part!r}")
         child = current / part
-        windows_refresh_directory(current)
+        if handle_directory_identity(current) != current_identity:
+            raise Pc022WindowsRefreshError("compare_hierarchy_parent", "parent identity changed before mkdir")
         ctypes.set_last_error(0)
         if not bool(CreateDirectoryW(str(child), None)):
             raise Pc022WindowsRefreshError(
@@ -426,6 +405,7 @@ def create_hierarchy_and_refresh(base: Path, parts: tuple[str, ...]) -> Path:
                 "compare_hierarchy", f"child identity drifted during refresh of {child}"
             )
         current = child
+        current_identity = child_identity
     return current
 
 
@@ -439,6 +419,9 @@ def windows_publish_hard_link(source: Path, target: Path) -> dict[str, Any]:
     same-bytes target.
     """
     _require_nt()
+    source_before = handle_file_identity(source)
+    target_parent = handle_directory_identity(target.parent)
+    require_same_volume(source_before, target_parent, label="hard link")
     ctypes.set_last_error(0)
     created = bool(CreateHardLinkW(str(target), str(source), None))
     if not created:
