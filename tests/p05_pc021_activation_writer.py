@@ -18,6 +18,12 @@ attempted, any uncertainty is ``TRANSITION_INDETERMINATE`` with everything
 preserved in place; nothing is isolated, deleted, rolled back, or used to
 revive the old state, and a fully written receipt whose final refresh
 failed still does not report success.
+
+Admission refusal has only an in-memory error/outcome: it never enters the
+writer's failure-receipt or cleanup path. The issuer's controller lock covers
+origin/type, state, every binding, actual C7/R/S reads and graph validation,
+then consumption. It excludes local threads, not external filesystem writers;
+the existing immediate canonical re-comparison before replace still applies.
 """
 
 from __future__ import annotations
@@ -173,23 +179,17 @@ def transition_to_epoch8(
             status=status, transition_id=transition_id,
             canonical_path=canonical_path, next_path=next_path,
             intent_path=intent_path, receipt_path=receipt_path,
-            from_sha256=capability.epoch7_sha256, to_sha256=target_sha,
+            from_sha256=(getattr(capability, "epoch7_sha256", "")
+                         if type(capability) is issuer.IssuanceCapability else ""), to_sha256=target_sha,
             next_sha256=target_sha, receipt_written=receipt_written,
             canonical_observation=observation,
         )
 
-    try:
-        # Step 1-3: capability admission, byte re-verification, atomic SPENT
-        # strictly before any writer file side effect.
-        if not isinstance(capability, issuer.IssuanceCapability):
-            raise evidence.Pc020EvidenceError("writer admits only the private issuance capability")
-        if capability.operation != issuer.ISSUANCE_OPERATION:
-            raise evidence.Pc020EvidenceError("capability operation differs")
+    def verify_admission():
+        # Invoked only by the controller while holding the minted identity's
+        # lock. All C7/R/S reads (including the complete verifier) are inside.
         if capability.issuance_id != activation_dir.name:
             raise evidence.Pc020EvidenceError("capability is not bound to this activation directory")
-        graph.verify_snapshot189_activation(
-            root_path, policy=policy, epoch7_canonical=_read(canonical_path), root_policy=root_policy,
-        )
         c7 = _read(canonical_path)
         hr = _read(root_path)
         hs = _read(receipt_binding)
@@ -199,8 +199,27 @@ def transition_to_epoch8(
             or _sha(hs) != capability.issuance_receipt_sha256
         ):
             raise evidence.Pc020EvidenceError("capability hashes differ from the actual C7/R/S bytes")
+        graph.verify_snapshot189_activation(
+            root_path, policy=policy, epoch7_canonical=c7, root_policy=root_policy,
+        )
+        if _read(root_path) != hr or _read(receipt_binding) != hs:
+            raise evidence.Pc020EvidenceError("activation bytes drifted during admission")
+        if _read(canonical_path) != c7:
+            raise evidence.Pc020EvidenceError("canonical drifted during admission")
+        return c7, hr, hs
+
+    try:
+        c7, hr, hs = issuer._consume_for_writer(capability, verify_admission)
+    except Exception as exc:
+        # A refusal is not a writer attempt: never enter failure observation,
+        # receipt creation, cleanup or preservation actions for racing losers,
+        # forged/lost capabilities or failed binding/content validation.
+        raise Epoch8TransitionError(
+            f"admission refused: {type(exc).__name__}: {exc}", outcome(FAILED_BEFORE_REPLACE)
+        ) from exc
+
+    try:
         epoch7 = json.loads(c7.decode("utf-8"))
-        capability.spend()
 
         # Step 4-5: derive N8, exclusive .next with durability and readback.
         if _lexists(next_path):
@@ -348,4 +367,3 @@ def _plain_file_recheck(path: Path) -> None:
         or getattr(info, "st_file_attributes", 0) & 0x400
     ):
         raise evidence.Pc020EvidenceError(f"{path.name} is not a plain non-reparse file")
-

@@ -27,7 +27,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import threading
-from dataclasses import dataclass, field
+import weakref
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -57,15 +59,15 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False, init=False)
 class IssuanceCapability:
     """Controller-private, non-serializable one-shot completion capability.
 
-    Binding fields follow P05 v19 0.PC021.2.5.  The lifecycle state lives
-    behind a lock; spending is a single critical section that happens before
-    any writer side effect.  The object cannot be rebuilt from booleans,
-    environment variables, on-disk tokens, or a parseable receipt: the only
-    constructor path is a fully verified issuance.
+    The six fields describe bindings, not authority. Authority and lifecycle
+    live in this controller's private identity registry, populated only after
+    successful issuance. Losing the object/controller loses that authority.
+    This is a trusted Python controller boundary, not a sandbox against code
+    that mutates module internals or uses arbitrary reflection/monkeypatching.
     """
 
     operation: str
@@ -74,8 +76,9 @@ class IssuanceCapability:
     epoch7_sha256: str
     activation_root_sha256: str
     issuance_receipt_sha256: str
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
-    _spent: bool = field(default=False, repr=False, compare=False)
+
+    def __init__(self, *args, **kwargs):
+        raise TypeError("IssuanceCapability is minted only by successful issuance")
 
     def __reduce__(self):  # pragma: no cover - guard by design
         raise TypeError("IssuanceCapability cannot be serialized or rebuilt")
@@ -83,17 +86,70 @@ class IssuanceCapability:
     def __deepcopy__(self, memo):  # pragma: no cover - guard by design
         raise TypeError("IssuanceCapability cannot be copied")
 
+    def __copy__(self):
+        raise TypeError("IssuanceCapability cannot be copied")
+
     @property
     def spent(self) -> bool:
-        with self._lock:
-            return self._spent
+        with _registry_lock:
+            return _lookup_capability(self).spent
 
     def spend(self) -> None:
-        """Atomically UNSPENT -> SPENT exactly once; racing losers fail."""
-        with self._lock:
-            if self._spent:
-                raise IssuerError("capability", "capability already spent")
-            object.__setattr__(self, "_spent", True)
+        """Discard authority once; this does not admit or authorize a writer."""
+        _consume_for_writer(self, lambda: None)
+
+
+_BINDING_FIELDS = (
+    "operation", "workflow_id", "issuance_id", "epoch7_sha256",
+    "activation_root_sha256", "issuance_receipt_sha256",
+)
+
+
+@dataclass
+class _CapabilityState:
+    bindings: tuple[str, ...]
+    lock: threading.Lock
+    spent: bool = False
+
+
+_registry_lock = threading.Lock()
+_minted: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _capability_state(capability: IssuanceCapability) -> _CapabilityState:
+    with _registry_lock:
+        return _lookup_capability(capability)
+
+
+def _lookup_capability(capability: IssuanceCapability) -> _CapabilityState:
+    """Caller holds the controller lock, including for type/origin checks."""
+    # Identity, not equal public fields or a caller-controlled token/boolean.
+    if type(capability) is not IssuanceCapability:
+        raise IssuerError("capability", "writer admits only the private issuance capability")
+    state = _minted.get(capability)
+    if state is None:
+        raise IssuerError("capability", "capability was not minted by this controller")
+    return state
+
+
+def _consume_for_writer(capability: IssuanceCapability, verify: Callable[[], Any]) -> Any:
+    """Controller-internal admission: all writer reads/checks run under lock.
+
+    Failed validation leaves authority unspent. Successful validation consumes
+    before returning, including when the next file action will fail. This is
+    process-local exclusion; the writer still rechecks canonical before replace.
+    """
+    with _registry_lock:
+        state = _lookup_capability(capability)
+        if state.spent:
+            raise IssuerError("capability", "capability already spent")
+        if tuple(getattr(capability, name) for name in _BINDING_FIELDS) != state.bindings:
+            raise IssuerError("capability", "capability bindings differ from issuance")
+        if capability.operation != ISSUANCE_OPERATION or capability.workflow_id != evidence.WORKFLOW_ID:
+            raise IssuerError("capability", "capability operation/workflow differs")
+        verified = verify()
+        state.spent = True
+        return verified
 
 
 @dataclass(frozen=True)
@@ -258,14 +314,17 @@ def issue_activation(
     )
 
     # Step 5: mint the private capability in this controller only.
-    capability = IssuanceCapability(
-        operation=ISSUANCE_OPERATION,
-        workflow_id=evidence.WORKFLOW_ID,
-        issuance_id=activation_dir.name,
-        epoch7_sha256=_sha(epoch7_canonical),
-        activation_root_sha256=_sha(root_payload),
-        issuance_receipt_sha256=_sha(receipt_payload),
+    # No callable constructor/mint helper accepts these six public values.
+    # Authority is registered only at this successful controller boundary.
+    capability = object.__new__(IssuanceCapability)
+    values = (
+        ISSUANCE_OPERATION, evidence.WORKFLOW_ID, activation_dir.name,
+        _sha(epoch7_canonical), _sha(root_payload), _sha(receipt_payload),
     )
+    for name, value in zip(_BINDING_FIELDS, values):
+        object.__setattr__(capability, name, value)
+    with _registry_lock:
+        _minted[capability] = _CapabilityState(values, _registry_lock)
     return IssuanceOutcome(
         root_path=root_path,
         receipt_path=receipt_path,

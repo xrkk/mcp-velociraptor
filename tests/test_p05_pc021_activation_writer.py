@@ -112,17 +112,13 @@ class Epoch8WriterTests(unittest.TestCase):
         with self.assertRaises(writer.Epoch8TransitionError) as raised:
             self.run_writer(case, canonical, capability)
         self.assertEqual(raised.exception.outcome.status, writer.FAILED_BEFORE_REPLACE)
-        self.assertIn("external_drift", raised.exception.outcome.canonical_observation or "")
+        self.assertFalse(raised.exception.outcome.receipt_written)
+        self.assertFalse(raised.exception.outcome.receipt_path.exists())
         self.assertFalse(capability.spent)
         self.assertFalse(Path(str(canonical) + ".next").exists())
 
         case, canonical, capability = self.scene()
-        wrong_dir_capability = issuer.IssuanceCapability(
-            operation=capability.operation, workflow_id=capability.workflow_id,
-            issuance_id=str(uuid.uuid4()), epoch7_sha256=capability.epoch7_sha256,
-            activation_root_sha256=capability.activation_root_sha256,
-            issuance_receipt_sha256=capability.issuance_receipt_sha256,
-        )
+        _, _, wrong_dir_capability = self.scene()
         with self.assertRaisesRegex(Exception, "not bound to this activation"):
             self.run_writer(case, canonical, wrong_dir_capability)
         self.assertFalse(Path(str(canonical) + ".next").exists())
@@ -229,12 +225,15 @@ class Epoch8WriterTests(unittest.TestCase):
         case, canonical, capability = self.scene()
         first = self.run_writer(case, canonical, capability)
         self.assertEqual(first.status, writer.COMMITTED)
-        # the second run is refused before the capability is consulted again:
-        # the canonical is now epoch8 (illegal predecessor), nothing is
-        # rewritten, and the spent capability is never reused.
+        before = {p: p.read_bytes() for p in canonical.parent.glob(canonical.name + '*')}
+        # A spent identity is rejected before content verification and before
+        # the failure-receipt path, preserving the winner's exact artifacts.
         with self.assertRaises(writer.Epoch8TransitionError) as raised:
             self.run_writer(case, canonical, capability)
         self.assertEqual(raised.exception.outcome.status, writer.FAILED_BEFORE_REPLACE)
+        self.assertFalse(raised.exception.outcome.receipt_written)
+        self.assertFalse(raised.exception.outcome.receipt_path.exists())
+        self.assertEqual({p: p.read_bytes() for p in canonical.parent.glob(canonical.name + '*')}, before)
         committed = canonical.read_bytes()
         evidence.verify_schema6_shape(committed, expected_epoch=8)
         with self.assertRaises(issuer.IssuerError):

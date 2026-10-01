@@ -213,16 +213,14 @@ class IssuerTests(unittest.TestCase):
         case, draft = self.case()
         outcome = self.issue(case, draft)
         receipt = json.loads((case / "issuance-receipt.json").read_bytes())
-        reconstructed = issuer.IssuanceCapability(
-            operation=receipt["operation"], workflow_id=receipt["workflow_id"],
-            issuance_id=receipt["issuance_id"], epoch7_sha256=receipt["epoch7"]["canonical_sha256"],
-            activation_root_sha256=receipt["activation_root"]["sha256"],
-            issuance_receipt_sha256=evidence._sha((case / "issuance-receipt.json").read_bytes()),
-        )
-        # a separately constructed object is a different, unrelated token:
-        # the controller only honors the capability returned by issuance
-        self.assertIsNot(reconstructed, outcome.capability)
-        self.assertTrue(outcome.capability.spent is False)
+        with self.assertRaisesRegex(TypeError, "minted only"):
+            issuer.IssuanceCapability(
+                operation=receipt["operation"], workflow_id=receipt["workflow_id"],
+                issuance_id=receipt["issuance_id"], epoch7_sha256=receipt["epoch7"]["canonical_sha256"],
+                activation_root_sha256=receipt["activation_root"]["sha256"],
+                issuance_receipt_sha256=evidence._sha((case / "issuance-receipt.json").read_bytes()),
+            )
+        self.assertFalse(outcome.capability.spent)
 
 
 def _try_spend(capability) -> str:
