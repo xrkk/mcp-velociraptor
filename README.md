@@ -167,6 +167,14 @@ This fix has Linux-host regression coverage with the actual service and SDK
 validation paths plus a fake backend. Windows deployment and real Hunt/Flow
 acceptance remain pending.
 
+`run_vql` executes in the root organization through
+`SELECT * FROM query(query=<encoded query string>) LIMIT 251`. The API quotes
+the complete query as a string, preserving quotes, backslashes, newlines and
+Unicode without rewriting its VQL. Client reads remain bounded at 251 rows;
+responses retain the 250-row / 245554-byte limits and accurate `truncated`.
+Linux-host tests inspect real protobuf requests with a gRPC stub; deployed
+Windows parser and server-side execution acceptance remain pending.
+
 This contract implementation and its isolated fixtures do not constitute a
 formal service deployment. PC017 logical-file download support is implemented
 in the local source tree but is not deployed by this slice. The local fixed

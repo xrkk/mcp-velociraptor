@@ -329,6 +329,14 @@ creating any Hunt or Flow. Explicit `null`, unknown/hidden/upload parameters,
 wrong types and invalid choices fail; omitted parameters retain backend
 defaults. Linux-host service/SDK tests use a fake backend, and Windows real
 Hunt/Flow acceptance remains pending. This does not qualify the historical agent.
+`run_vql` executes in the root organization through
+`SELECT * FROM query(query=<encoded query string>) LIMIT 251`. The API quotes
+the complete query as a string, preserving quotes, backslashes, newlines and
+Unicode without rewriting its VQL. Client reads remain bounded at 251 rows;
+responses retain the 250-row / 245554-byte limits and accurate `truncated`.
+Linux-host tests inspect real protobuf requests with a gRPC stub; deployed
+Windows parser and server-side execution acceptance remain pending.
+
 For `get_flow_results`, `v1:<offset>` is interpreted only in the explicitly
 supplied `flow_id`/`source` context. A paged response always carries
 `pagination.next_cursor`: a string for another page or JSON `null` at the end;

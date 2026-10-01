@@ -348,12 +348,13 @@ def run_vql_query_bounded(
     org_id: str | None = None,
     root_org: bool = False,
 ) -> list[dict]:
-    """Read no more than ``max_rows`` from a root or selected-org VQL stream."""
+    """Limit execution and reading to ``max_rows`` in root or the selected org."""
     if stub is None:
         raise RuntimeError("Stub not initialized. Call init_stub() first.")
     if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows < 1:
         raise ValueError("max_rows must be a positive integer")
-    request = api_pb2.VQLCollectorArgs(Query=[api_pb2.VQLRequest(VQL=vql)])
+    bounded_vql = f"SELECT * FROM query(query={vql_literal(vql)}) LIMIT {max_rows}"
+    request = api_pb2.VQLCollectorArgs(Query=[api_pb2.VQLRequest(VQL=bounded_vql)])
     resolved_org_id = None if root_org else resolve_org_id(org_id)
     if resolved_org_id:
         request.org_id = resolved_org_id
