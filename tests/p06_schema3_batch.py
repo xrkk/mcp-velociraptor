@@ -96,7 +96,12 @@ def main() -> int:
     parser.add_argument("--skip-qualification", action="store_true",
                         help="reuse the existing resource selection in the root")
     args = parser.parse_args()
-    root = Path(args.evidence_root)
+    # Absolute from here on: the receive ledger computes paths relative to the
+    # evidence root and must never mix relative and resolved forms.
+    root = Path(args.evidence_root).resolve()
+    args.evidence_root = str(root)
+    for name in ("baseline_binding", "server_observation", "fixture_instance"):
+        setattr(args, name, str(Path(getattr(args, name)).resolve()))
     root.mkdir(parents=True, exist_ok=True)
     if not args.skip_qualification:
         asyncio.run(run_qualification(args))
