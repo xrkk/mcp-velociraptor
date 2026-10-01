@@ -173,13 +173,26 @@ def run_case(results: list[dict[str, Any]], name: str, reject_kind: str, fn) -> 
     try:
         results.append(fn())
     except pkg.PackagePreservationError as exc:
+        if not name.startswith("n"):
+            results.append(record("unexpected_error", case=name, error=str(exc)))
+            return
+        expected = {
+            "n1": "collision", "n2": "count/size/hash", "n3": "identity drift",
+            "n4": "reparse", "n6": "keys differ", "n7": "truncated",
+            "n8": "duplicate", "n9": "size/original_path", "n10": "temporary part",
+            "n11": "exact set mismatch",
+        }.get(name.split("_")[0])
+        if expected is None or expected not in str(exc):
+            results.append(record("unexpected_error", case=name, error=str(exc)))
+            return
+        if name.startswith("n3"):
+            reject_kind = "injected_fault"
         results.append(
             record(reject_kind, case=name, rejected=True, message=str(exc)[:200])
         )
     except refresh_error() as exc:
-        results.append(
-            record(reject_kind, case=name, rejected=True, stage=exc.stage, message=str(exc)[:200])
-        )
+        results.append(record("unexpected_error", case=name, error=str(exc)))
+        return
     except Exception as exc:
         results.append(
             record("unexpected_error", case=name, error=f"{type(exc).__name__}: {exc}")
@@ -220,6 +233,7 @@ def main() -> int:
             pkg.preserve_chain(chain, phase_root=phase, trusted_root=trusted)
             for chain in chains
         ]
+        assert len(chains) == len(preserved) == 3
         return record(
             "real_api_success",
             case="P1_preserve_ordinary_empty_sparse",
@@ -249,6 +263,8 @@ def main() -> int:
             report_ref_path="phase-p2/report.json",
         )
         member_paths = [member["path"] for member in reparsed["members"]]
+        assert sha_bytes(report_path.read_bytes()) == report_sha_before
+        assert len(member_paths) == 4 and "report.json" in member_paths
         return record(
             "real_api_success",
             case="P2_manifest_exact_set_and_verify",
@@ -263,6 +279,8 @@ def main() -> int:
         for chain in chains:
             pkg.preserve_chain(chain, phase_root=phase, trusted_root=trusted)
         keys = {pkg.flow_key(chain.flow_id) for chain in chains}
+        assert len(keys) == len({chain.flow_id for chain in chains}) == 2
+        assert pkg.flow_key(UTF8_FLOW) != pkg.flow_key(ASCII_FLOW)
         return record(
             "real_api_success",
             case="P3_two_fixture_bindings_distinct",
@@ -276,8 +294,15 @@ def main() -> int:
         chain = pkg.locate_download_chains(frozen)[0]
         target = phase / "downloads" / pkg.flow_key(chain.flow_id) / chain.file_id / "content.bin"
         target.parent.mkdir(parents=True)
-        target.write_bytes(b"preexisting collision")
-        pkg.preserve_chain(chain, phase_root=phase, trusted_root=trusted)
+        target.write_bytes(sources[chain.flow_id][chain.file_id])
+        before = target.read_bytes()
+        try:
+            pkg.preserve_chain(chain, phase_root=phase, trusted_root=trusted)
+        except pkg.PackagePreservationError:
+            assert target.read_bytes() == before
+            assert report_path.read_bytes() == report_bytes
+            assert not (phase / pkg.MANIFEST_NAME).exists()
+            raise
         raise AssertionError("collision did not reject")
 
     def n2_source_rewrite_same_size() -> dict[str, Any]:
@@ -295,22 +320,31 @@ def main() -> int:
         trusted, phase, report_path = fresh_phase("n3")
         frozen = json.loads(report_path.read_bytes())
         chain = pkg.locate_download_chains(frozen)[0]
-        real_identity = pkg._file_identity
-        calls = {"n": 0}
-
-        def drifting(path):
-            calls["n"] += 1
-            identity = real_identity(path)
-            if calls["n"] == 2:
-                return (identity[0], identity[1] + 1)
-            return identity
-
-        pkg._file_identity = drifting
+        source = pkg.trusted_source_path(trusted, chain)
+        real_native = pkg.streaming._native
+        class Drift(pkg.streaming._WindowsIO):
+            def __init__(self):
+                super().__init__()
+                self.source_handle = None
+                self.calls = 0
+            def open(self, path, directory):
+                h = super().open(path, directory)
+                if path == source and not directory:
+                    self.source_handle = h
+                return h
+            def identity(self, handle, directory):
+                value = super().identity(handle, directory)
+                if handle == self.source_handle and not directory:
+                    self.calls += 1
+                    if self.calls == 2:
+                        return value[0], bytes([value[1][0] ^ 1]) + value[1][1:]
+                return value
+        pkg.streaming._native = Drift
         try:
             pkg.preserve_chain(chain, phase_root=phase, trusted_root=trusted)
             raise AssertionError("identity drift did not reject")
         finally:
-            pkg._file_identity = real_identity
+            pkg.streaming._native = real_native
 
     def n4_reparse_source() -> dict[str, Any]:
         trusted, phase, report_path = fresh_phase("n4")
@@ -448,14 +482,6 @@ def main() -> int:
         n11_manifest_extra_member_rejected_by_verify,
     ):
         run_case(results, case.__name__, "real_api_rejection", case)
-    results.append(
-        record(
-            "injected_fault",
-            case="N3_identity_drift_note",
-            note="identity drift executed via a seam substitution inside "
-                 "n3_source_identity_drift_injected; that row also carries the rejection",
-        )
-    )
 
     sentinel_ok = sentinel.read_bytes() == SENTINEL_BYTES
     summary = {

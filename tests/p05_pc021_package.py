@@ -19,12 +19,14 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from tests import pc022_windows_refresh as refresh
+from tests import p05_pc021_streaming as streaming
 
 
 PHASE_MANIFEST_KIND = "pc021-p05-phase-manifest-v1"
@@ -257,6 +259,9 @@ def trusted_source_path(trusted_root: Path, chain: DownloadChain) -> Path:
     alias, short-name, case-ambiguous, or out-of-root forms are rejected by
     the exact-string comparison after separator normalization.
     """
+    _require(trusted_root.is_absolute() and len(trusted_root.drive) == 2
+             and trusted_root.drive[0].isalpha() and trusted_root.drive[1] == ":",
+             "trusted root requires a native absolute Windows drive path")
     expected = trusted_root / flow_key(chain.flow_id) / chain.file_id / "content.bin"
     _require(
         chain.local_path == str(expected),
@@ -331,10 +336,6 @@ def _assert_plain_file_object(path: Path, label: str) -> None:
         raise PackagePreservationError(f"{label} is not a plain non-reparse file")
 
 
-def _file_identity(path: Path) -> tuple[int, int]:
-    return refresh.handle_file_identity(path)
-
-
 def preserve_chain(
     chain: DownloadChain,
     *,
@@ -343,86 +344,65 @@ def preserve_chain(
 ) -> dict[str, Any]:
     """Copy one original into the phase tree and publish it as a hard link.
 
-    Order (P05 v19 0.PC021.3.3 plus the PC022 publish primitive): admit the
-    trusted source as a plain non-reparse file; open it once and record
-    stable identity, logical size, and change metadata; stream bounded
-    chunks and count/SHA-256; re-verify the same handle and the
-    path-to-handle identity; demand count/SHA equal the immutable
-    DownloadResult; create the destination hierarchy with per-level native
-    refresh; exclusive-create the ``.part`` in the same directory, stream,
-    flush/fsync/close, refresh the parent, and read back byte-for-byte;
-    publish ``content.bin`` with CreateHardLinkW and identity proof; refresh
-    the parent; re-verify target identity/size/hash; then remove only the
-    owned ``.part`` and refresh the parent again.
+    P05 v19 0.PC021.3.3: pin the plain phase ancestors, create/refresh
+    missing destination levels, then pin the no-follow source and record
+    its actual handle identity, logical size and change metadata. Copy
+    bounded chunks directly into a unique CREATE_NEW part and demand the
+    frozen DownloadResult count/hash. Recheck source handle/path binding,
+    flush/fsync/close the part, refresh its parent and compare the persisted
+    bytes to the retained source in bounded chunks. Source close failure
+    also stops publication. Publish with CreateHardLinkW, refresh, check
+    final identity/size/hash and retain a read handle denying content writes
+    through ownership-checked part deletion and the final parent refresh.
+    Exceptions preserve published members and all uncertain residue.
     """
     source = trusted_source_path(trusted_root, chain)
     _assert_plain_directory_chain(trusted_root, source, "trusted source chain")
     _assert_plain_file_object(source, "trusted source")
-    first_identity = _file_identity(source)
-    count = 0
-    digest = hashlib.sha256()
-    read_back: list[bytes] = []
-    with source.open("rb") as stream:
-        while True:
-            chunk = stream.read(CHUNK_LIMIT)
-            if not chunk:
-                break
-            count += len(chunk)
-            digest.update(chunk)
-            read_back.append(chunk)
-    second_identity = _file_identity(source)
-    _require(
-        first_identity == second_identity,
-        "trusted source identity drifted during the bounded read",
-    )
-    if count == 0:
-        _require(
-            digest.hexdigest() == EMPTY_SHA256 and chain.logical_size == 0,
-            "zero-byte member does not satisfy the empty-file contract",
-        )
-    _require(
-        count == chain.logical_size,
-        f"source byte count {count} differs from logical size {chain.logical_size}",
-    )
-    _require(
-        digest.hexdigest() == chain.sha256,
-        "source content hash differs from the immutable DownloadResult sha256",
-    )
-    payload = b"".join(read_back)
-
     relative = Path(DOWNLOADS_DIR) / flow_key(chain.flow_id) / chain.file_id
-    _ensure_phase_hierarchy(phase_root, relative.parts)
-    part = phase_root / relative / ".pc021.part"
-    _require(not part.exists() and not part.is_symlink(), "stale owned part exists")
-    with part.open("xb") as stream:
-        stream.write(payload)
-        stream.flush()
-        os.fsync(stream.fileno())
-    refresh.windows_refresh_directory(part.parent)
-    if part.read_bytes() != payload:
-        raise PackagePreservationError("owned part readback differs")
+    _assert_plain_directory_chain(phase_root, phase_root / "member", "phase root")
     target = phase_root / relative / "content.bin"
-    _require(
-        not target.exists() and not target.is_symlink(),
-        "member target already exists (collision)",
-    )
-    refresh.windows_publish_hard_link(part, target)
-    refresh.windows_refresh_directory(target.parent)
-    published = target.read_bytes()
-    _require(
-        len(published) == chain.logical_size
-        and hashlib.sha256(published).hexdigest() == chain.sha256,
-        "published member size/hash differs after native refresh",
-    )
-    target_identity = _file_identity(target)
-    part_identity = _file_identity(part)
-    _require(
-        target_identity == part_identity,
-        "published member identity differs from the owned part",
-    )
-    part.unlink()
-    refresh.windows_refresh_directory(target.parent)
-    _require(not part.exists(), "owned part remains after cleanup")
+    api = streaming._native()
+    try:
+        with streaming.BoundPath(api, phase_root, directory=True,
+                                 writable_parent=True) as phase:
+            _ensure_phase_hierarchy(phase_root, relative.parts)
+            phase.verify()
+            with streaming.BoundPath(api, target.parent, directory=True,
+                                     writable_parent=True) as parent:
+                _require(not target.exists() and not target.is_symlink(),
+                         "member target already exists (collision)")
+                _require(not any(p.name.endswith(".part") for p in target.parent.iterdir()),
+                         "unresolved attempt part exists")
+                part = target.parent / f".pc021.{uuid.uuid4().hex}.part"
+                identity = streaming.copy_to_part(
+                    api, source, part, parent, chain.logical_size, chain.sha256,
+                    CHUNK_LIMIT, refresh.windows_refresh_directory,
+                )
+                parent.verify()
+                # Bind publication to the actual CREATE_NEW identity, not a fresh owner.
+                size, sha = streaming.fingerprint(part, CHUNK_LIMIT, api=api,
+                                                   expected_identity=identity)
+                _require((size, sha) == (chain.logical_size, chain.sha256),
+                         "part size/hash differs before publication")
+                refresh.windows_publish_hard_link(part, target)
+                refresh.windows_refresh_directory(target.parent)
+                parent.verify()
+                with streaming.BoundPath(api, target, writable_parent=True,
+                                         published=True) as final:
+                    _require(final.identity == identity,
+                             "published identity differs from CREATE_NEW part")
+                    size, sha = streaming.fingerprint(target, CHUNK_LIMIT, api=api,
+                                                       expected_identity=identity)
+                    _require((size, sha) == (chain.logical_size, chain.sha256),
+                             "published member size/hash differs after native refresh")
+                    streaming.cleanup_owned_part(api, part, parent, identity)
+                    refresh.windows_refresh_directory(target.parent)
+                    parent.verify()
+                    final.verify()
+                phase.verify()
+    except streaming.rb.ReadbackError as exc:
+        raise PackagePreservationError(str(exc)) from exc
     return {
         "member_path": (relative / "content.bin").as_posix(),
         "size": chain.logical_size,
@@ -477,11 +457,11 @@ def build_phase_manifest(
         relative = path.relative_to(phase_root).as_posix()
         if relative == MANIFEST_NAME:
             continue
-        data = path.read_bytes()
+        size, sha = streaming.fingerprint(path, CHUNK_LIMIT)
         chain = download_members.get(relative)
         if chain is not None:
             _require(
-                len(data) == chain.logical_size and _sha256_bytes(data) == chain.sha256,
+                size == chain.logical_size and sha == chain.sha256,
                 f"downloaded member bytes differ from the frozen report: {relative}",
             )
             origin = f"{report_ref_path}#/calls/{chain.download_index}/structured"
@@ -490,8 +470,8 @@ def build_phase_manifest(
         members.append(
             {
                 "path": relative,
-                "size": len(data),
-                "sha256": _sha256_bytes(data),
+                "size": size,
+                "sha256": sha,
                 "origin": origin,
             }
         )
@@ -562,7 +542,6 @@ def verify_phase_package(
         (Path(DOWNLOADS_DIR) / flow_key(chain.flow_id) / chain.file_id / "content.bin").as_posix(): chain
         for chain in locate_download_chains(report)
     }
-    calls = report.get("calls")
     for member in members:
         _require(set(member) == MEMBER_KEYS, "member keys differ")
         relative = member["path"]
@@ -571,9 +550,9 @@ def verify_phase_package(
             not pure.is_absolute() and ".." not in pure.parts and "\\" not in relative,
             f"member path escapes the phase coordinate system: {relative}",
         )
-        data = (phase_root / relative).read_bytes()
+        size, sha = streaming.fingerprint(phase_root / relative, CHUNK_LIMIT)
         _require(
-            member["size"] == len(data) and member["sha256"] == _sha256_bytes(data),
+            member["size"] == size and member["sha256"] == sha,
             f"member bytes differ from the manifest: {relative}",
         )
         chain = chains.get(relative)
