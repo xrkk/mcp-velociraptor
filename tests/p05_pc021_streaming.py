@@ -1,4 +1,4 @@
-"""Private PC021 bounded Windows I/O. No POSIX production fallback.
+"""Private PC021 bounded I/O. No POSIX preservation fallback.
 
 FileBasicInfo/StandardInfo use the fixed Windows ABI (40/24 bytes):
 https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_basic_info
@@ -267,6 +267,17 @@ def copy_to_part(api, source, part, parent, size, sha, limit, refresh_parent):
 
 
 def fingerprint(path, limit, *, api=None, expected_identity=None):
+    # Package graph construction/transport validation is read-only and
+    # portable. Preservation always supplies its explicit Windows API here;
+    # _native/create_part/refresh/publication never select a POSIX writer.
+    if api is None and os.name != 'nt':
+        from tests import p05_pc021_readonly as readonly
+        if expected_identity is not None:
+            raise StreamingError('Windows ownership identity requires an explicit native reader')
+        try:
+            return readonly.fingerprint(path, limit)
+        except readonly.ContentReadError as exc:
+            raise StreamingError(str(exc)) from exc
     api = _native() if api is None else api
     with BoundPath(api, path) as bound:
         if expected_identity is not None and bound.identity != expected_identity:
