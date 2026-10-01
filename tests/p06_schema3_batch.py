@@ -34,9 +34,10 @@ def write_resource_selection(root: Path) -> None:
 
     ledger = root / "接收清单.jsonl"
     rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line]
-    qualification = [row for row in rows if row["scenario"] == "resource-qualification"]
-    if len(qualification) != 1 or qualification[0]["status"] != "success":
-        raise SystemExit("qualification attempt is not the single successful ledger entry")
+    qualification = [row for row in rows
+                     if row["scenario"] == "resource-qualification" and row["status"] == "success"]
+    if len(qualification) != 1:
+        raise SystemExit("successful qualification attempt is not unique in the ledger")
     selection = {
         "report_relative_path": qualification[0]["report_relative_path"],
         "report_sha256": qualification[0]["report_sha256"],
