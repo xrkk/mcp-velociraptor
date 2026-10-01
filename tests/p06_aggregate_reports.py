@@ -63,6 +63,10 @@ REPORT_KEYS = {
     "unexecuted_step_ids",
     "coverage",
 }
+# PLAN-CHANGE-025 schema3: the adopted .232 baseline binding replaces the
+# Snapshot-189 evidence; every other schema2 field keeps its exact contract.
+SCHEMA3_REPORT_KEYS = (REPORT_KEYS - {"snapshot_evidence_sha256"}) | {"baseline_binding"}
+BASELINE_BINDING_SCHEMA = "velo.p06.baseline-binding.v1"
 LEDGER_IDENTITY_FIELDS = (
     "source_sha256",
     "index_sha256",
@@ -121,6 +125,7 @@ def ledger_identity(report: dict[str, Any]) -> dict[str, Any]:
     return {
         **{field: report.get(field) for field in LEDGER_IDENTITY_FIELDS},
         'snapshot_evidence_sha256': report.get('snapshot_evidence_sha256'),
+        'baseline_binding_sha256': (report.get('baseline_binding') or {}).get('observation_sha256'),
         'server_instance_id': server.get('instance_id'),
         'server_pid': server.get('pid'),
         'server_process_start_time_utc': server.get('process_start_time_utc'),
@@ -259,11 +264,70 @@ def verify_snapshot_evidence(report: dict[str, Any], run_dir: Path,
     return restore
 
 
+def verify_baseline_evidence(report: dict[str, Any], run_dir: Path) -> dict[str, Any]:
+    """Recompute baseline-binding.json for a schema3 run and cross-check it."""
+    binding_path = run_dir / "baseline-binding.json"
+    if not binding_path.is_file() or binding_path.is_symlink():
+        raise AggregateError("run directory lacks baseline-binding.json")
+    raw = binding_path.read_bytes()
+    binding = report["baseline_binding"]
+    if sha256_bytes(raw) != binding["observation_sha256"]:
+        raise AggregateError("baseline-binding.json bytes differ from the report hash")
+    document = json.loads(raw.decode("utf-8"))
+    expected = {key: value for key, value in binding.items() if key != "observation_sha256"}
+    if document != expected:
+        raise AggregateError("baseline-binding.json content differs from the report binding")
+    try:
+        verify_observation(report, run_dir)
+    except (EvidenceError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise AggregateError(f'original observation validation failed: {exc}') from exc
+    return document
+
+
+def verify_baseline_binding(report: dict[str, Any]) -> None:
+    """Validate the schema3 baseline binding and its report cross-links."""
+    binding = report.get("baseline_binding")
+    if not isinstance(binding, dict):
+        raise AggregateError("schema3 report lacks a baseline binding object")
+    expected = {"schema", "produced_at", "computer_name", "vm_uuid", "mac", "host_only_ip",
+                "policy_sha256", "deployed_tree", "observation_sha256"}
+    if set(binding) != expected or binding["schema"] != BASELINE_BINDING_SCHEMA:
+        raise AggregateError("baseline binding keys or schema are invalid")
+    import re as _re
+    if not _re.fullmatch(r"[0-9a-f]{64}", str(binding["observation_sha256"])):
+        raise AggregateError("baseline binding observation hash is malformed")
+    if not _re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", str(binding["vm_uuid"])):
+        raise AggregateError("baseline binding vm_uuid is malformed")
+    if not _re.fullmatch(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", str(binding["mac"])):
+        raise AggregateError("baseline binding mac is malformed")
+    if not _re.fullmatch(r"[0-9]{1,3}(\.[0-9]{1,3}){3}", str(binding["host_only_ip"])):
+        raise AggregateError("baseline binding host-only ip is malformed")
+    if not _re.fullmatch(r"[0-9a-f]{64}", str(binding["policy_sha256"])):
+        raise AggregateError("baseline binding policy hash is malformed")
+    tree = binding["deployed_tree"]
+    if not isinstance(tree, dict) or not tree:
+        raise AggregateError("baseline binding deployed tree is empty")
+    for name, digest in tree.items():
+        if (not isinstance(name, str) or not name or ".." in name
+                or name.startswith(("/", "\\")) or not name.endswith(".py")):
+            raise AggregateError("baseline binding deployed tree entry name is invalid")
+        if not _re.fullmatch(r"[0-9a-f]{64}", str(digest)):
+            raise AggregateError("baseline binding deployed tree hash is malformed")
+    server = report.get("server_identity") or {}
+    if str(binding["computer_name"]).casefold() != str(server.get("computer_name", "")).casefold():
+        raise AggregateError("baseline binding computer name differs from the server identity")
+
+
 def verify_report_shape(report: dict[str, Any]) -> None:
-    if set(report) != REPORT_KEYS:
-        raise AggregateError("report root keys do not match schema2")
-    if report["schema_version"] != 2:
-        raise AggregateError("formal P06 evidence must be schema2; schema1 is history-only")
+    if report.get("schema_version") == 3:
+        if set(report) != SCHEMA3_REPORT_KEYS:
+            raise AggregateError("report root keys do not match schema3")
+        verify_baseline_binding(report)
+    else:
+        if set(report) != REPORT_KEYS:
+            raise AggregateError("report root keys do not match schema2")
+        if report["schema_version"] != 2:
+            raise AggregateError("formal P06 evidence must be schema2 or schema3; schema1 is history-only")
     if report["transport"] != "streamable-http":
         raise AggregateError("formal P06 evidence must use the formal HTTP transport")
     if not report["endpoint"] or not ENDPOINT_PATTERN.match(report["endpoint"]):
@@ -379,7 +443,7 @@ def aggregate(
     expected_scenarios = manifest["scenario_ids"]
     if (
         set(selection) != {"schema_version", "all_attempts", "selected", "rejected"}
-        or selection["schema_version"] != 2
+        or selection["schema_version"] not in (2, 3)
     ):
         raise AggregateError("invalid final selection shape")
     if selection["all_attempts"] != [row["monotonic_attempt"] for row in ledger]:
@@ -414,6 +478,8 @@ def aggregate(
     session_ids: set[str] = set()
     run_ids: set[str] = set()
     restore_attempts: set[str] = set()
+    baseline_documents: list[dict[str, Any]] = []
+    report_versions: set[int] = set()
     server_instances: set[str] = set()
     runner_identities: set[tuple[Any, Any]] = set()
     for scenario_id in expected_scenarios:
@@ -433,6 +499,7 @@ def aggregate(
             raise AggregateError("report bytes differ from the host receive ledger")
         report = json.loads(report_path.read_text(encoding="utf-8"))
         verify_report_shape(report)
+        report_versions.add(report["schema_version"])
         if report["scenario"] != scenario_id or report["status"] != "success":
             raise AggregateError("selected report is not a successful matching scenario")
         sequences = [row.get("sequence") for row in report.get("calls", [])]
@@ -453,7 +520,11 @@ def aggregate(
             coverage.add(key)
         run_dir = report_path.parent
         verify_tools_schema_binding(report, run_dir)
-        restore = verify_snapshot_evidence(report, run_dir, evidence_root)
+        if report.get("schema_version") == 3:
+            baseline_documents.append(verify_baseline_evidence(report, run_dir))
+            restore = None
+        else:
+            restore = verify_snapshot_evidence(report, run_dir, evidence_root)
         try:
             verify_resource_evidence(report,run_dir,evidence_root)
         except (ValueError,OSError,KeyError,TypeError,StopIteration) as exc:
@@ -466,7 +537,8 @@ def aggregate(
             raise AggregateError('ledger lacks host receipt timestamp')
         session_ids.add(report["mcp_session"]["id"])
         run_ids.add(report["run_id"])
-        restore_attempts.add(restore["restore_attempt_id"])
+        if restore is not None:
+            restore_attempts.add(restore["restore_attempt_id"])
         server_instances.add(report["server_identity"]["instance_id"])
         runner = report["runner"]
         runner_identity = (runner.get("pid"), runner.get("process_start_time_utc"))
@@ -485,7 +557,8 @@ def aggregate(
                 "package_sha256": ledger_row["package_sha256"],
                 "report_relative_path": ledger_row["report_relative_path"],
                 "report_sha256": actual_hash,
-                "restore_attempt_id": restore["restore_attempt_id"],
+                "restore_attempt_id": restore["restore_attempt_id"] if restore is not None else None,
+                "baseline_binding_sha256": (report.get("baseline_binding") or {}).get("observation_sha256"),
                 "run_id": report["run_id"],
                 "scenario": scenario_id,
             }
@@ -497,12 +570,21 @@ def aggregate(
         raise AggregateError("selected reports do not share tool and fixture identities")
     if len(session_ids) != 5 or len(run_ids) != 5:
         raise AggregateError("selected reports do not have five distinct sessions and runs")
-    if len(restore_attempts) != 5:
+    if len(report_versions) != 1:
+        raise AggregateError("selected reports mix schema versions in one evidence root")
+    if report_versions == {2} and len(restore_attempts) != 5:
         raise AggregateError("selected reports must prove five independent restore attempts")
+    if report_versions == {3}:
+        # PLAN-CHANGE-025: the five runs share one adopted baseline binding
+        # (VM identity, deployed tree, policy); distinctness lives in the
+        # five sessions and run ids checked above.
+        distinct_bindings = {canonical_bytes(doc) for doc in baseline_documents}
+        if len(baseline_documents) != 5 or len(distinct_bindings) != 1:
+            raise AggregateError("schema3 reports must share exactly one adopted baseline binding")
     if len(runner_identities) != 5:
         raise AggregateError("selected scenarios do not have five distinct runner lifecycles")
     return {
-        "schema_version": 2,
+        "schema_version": next(iter(report_versions)),
         "status": "success",
         "scenario_count": 5,
         "tool_count": 129,
@@ -514,6 +596,7 @@ def aggregate(
         "fixture_spec_sha256": next(iter(fixture_specs)),
         "distinct_session_count": len(session_ids),
         "distinct_restore_attempt_count": len(restore_attempts),
+        "distinct_baseline_binding_count": len({canonical_bytes(doc) for doc in baseline_documents}),
         "runner_lifecycle_count": len(runner_identities),
         "server_instance_count": len(server_instances),
         "unexpected_error_count": 0,

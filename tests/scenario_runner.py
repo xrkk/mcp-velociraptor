@@ -49,6 +49,17 @@ RESTORE_STAGE_CANONICAL = {
     "P06_ACTIVE": (6, 8, "NETWORK_ACTIVE", SNAPSHOT_189),
 }
 REPORT_SCHEMA_VERSION = 2
+BASELINE_BINDING_SCHEMA = "velo.p06.baseline-binding.v1"
+BASELINE_BINDING_KEYS = {
+    "schema",
+    "produced_at",
+    "computer_name",
+    "vm_uuid",
+    "mac",
+    "host_only_ip",
+    "policy_sha256",
+    "deployed_tree",
+}
 CURRENT_RESTORE_NAME = "current-restore.json"
 SAFE_ENV = {
     "SYSTEMROOT",
@@ -697,6 +708,44 @@ RESTORE_STAGE_RECORD_KINDS = {
 }
 
 
+def load_baseline_binding(path: Path) -> dict[str, Any]:
+    """Load and validate the adopted .232 baseline binding observation (schema3).
+
+    Replaces the Snapshot-189 restore chain under PLAN-CHANGE-025: the six
+    binding dimensions are the VM identity triple, the deployed tree hash
+    list, the transfer policy hash, plus the run-time captured tools schema
+    and service instance that the report already carries separately.
+    """
+    if not path.is_file() or _is_reparse(path):
+        raise ScenarioInputError("baseline binding observation is missing or not a plain file")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if set(document) != BASELINE_BINDING_KEYS or document["schema"] != BASELINE_BINDING_SCHEMA:
+        raise ScenarioInputError("baseline binding observation keys or schema are invalid")
+    if not isinstance(document["computer_name"], str) or not document["computer_name"]:
+        raise ScenarioInputError("baseline binding computer name is missing")
+    if not re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", str(document["vm_uuid"])):
+        raise ScenarioInputError("baseline binding vm_uuid is malformed")
+    if not re.fullmatch(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", str(document["mac"])):
+        raise ScenarioInputError("baseline binding mac is malformed")
+    if not re.fullmatch(r"([0-9]{1,3}\.){3}[0-9]{1,3}", str(document["host_only_ip"])):
+        raise ScenarioInputError("baseline binding host-only ip is malformed")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(document["policy_sha256"])):
+        raise ScenarioInputError("baseline binding policy hash is malformed")
+    if not isinstance(document["produced_at"], str) or not document["produced_at"]:
+        raise ScenarioInputError("baseline binding production time is missing")
+    tree = document["deployed_tree"]
+    if not isinstance(tree, dict) or not tree:
+        raise ScenarioInputError("baseline binding deployed tree is empty")
+    for name, digest in tree.items():
+        if (not isinstance(name, str) or not name
+                or ".." in name or name.startswith(("/", "\\"))
+                or "\\" in name or not name.endswith(".py")):
+            raise ScenarioInputError("baseline binding deployed tree entry name is invalid")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(digest)):
+            raise ScenarioInputError("baseline binding deployed tree entry hash is malformed")
+    return document
+
+
 def load_current_restore(evidence_root: Path, run_id: str) -> dict[str, Any]:
     """Load and validate the fixed restore declaration for this run."""
     path = evidence_root / CURRENT_RESTORE_NAME
@@ -875,14 +924,30 @@ async def run_scenario(
     evidence_root: Path | None = None,
     server_observation: Path | None = None,
     run_id: str | None = None,
+    baseline_binding: Path | None = None,
+    fixture_instance: Path | None = None,
+    expected_tool_count: int | None = None,
 ) -> tuple[dict[str, Any], Path]:
-    if scenario_id.startswith('p06-') and transport == 'streamable-http':
+    baseline_mode = baseline_binding is not None
+    if baseline_mode:
+        # PLAN-CHANGE-025 schema3: the adopted .232 baseline binding replaces
+        # the Snapshot-189 restore chain; reports go to a fresh evidence root.
+        if transport != "streamable-http":
+            raise ScenarioInputError("baseline binding requires the formal HTTP transport")
+        if evidence_root is None:
+            raise ScenarioInputError("schema3 execution requires an explicit evidence root")
+        if fixture_instance is None:
+            raise ScenarioInputError("schema3 execution requires an explicit fixture instance")
+    if scenario_id.startswith('p06-') and transport == 'streamable-http' and not baseline_mode:
         if evidence_root is not None and Path(evidence_root).resolve() != P06_REPORT_ROOT.resolve():
             raise ScenarioInputError('formal P06 evidence root is fixed to r3')
         evidence_root = P06_REPORT_ROOT
     scenario, index_row, source_hash, index_path = load_indexed_scenario(scenario_id)
-    fixture, fixture_hash = load_fixture(scenario, Path(evidence_root)/'fixture-instance.json'
-                                         if transport=='streamable-http' and evidence_root else None)
+    fixture, fixture_hash = load_fixture(
+        scenario,
+        fixture_instance if baseline_mode
+        else (Path(evidence_root) / 'fixture-instance.json'
+              if transport == 'streamable-http' and evidence_root else None))
     if transport not in {"stdio", "streamable-http"}:
         raise ScenarioInputError("transport must be 'stdio' or 'streamable-http'")
     # The outer workflow pre-reserves the run id in current-restore.json (0.5);
@@ -890,18 +955,27 @@ async def run_scenario(
     if run_id is not None and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", run_id):
         raise ScenarioInputError("reserved run id must be a lowercase uuid")
     run_id = run_id or str(uuid.uuid4())
-    report_root = P06_REPORT_ROOT / scenario_id if scenario_id.startswith("p06-") else P05_REPORT_ROOT
+    if baseline_mode:
+        report_root = Path(evidence_root) / scenario_id
+    else:
+        report_root = P06_REPORT_ROOT / scenario_id if scenario_id.startswith("p06-") else P05_REPORT_ROOT
     run_dir = report_root / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
-    fixture_path = Path(evidence_root)/'fixture-instance.json' if transport=='streamable-http' and evidence_root else FIXTURE_INSTANCE_PATH
-    (run_dir/'fixture-instance.json').write_bytes(fixture_path.read_bytes())
+    fixture_path = (Path(fixture_instance) if baseline_mode
+                    else (Path(evidence_root) / 'fixture-instance.json'
+                          if transport == 'streamable-http' and evidence_root else FIXTURE_INSTANCE_PATH))
+    (run_dir / 'fixture-instance.json').write_bytes(fixture_path.read_bytes())
     report_path = run_dir / "report.json"
     started_at = utc_now()
     started = time.monotonic()
     restore_document: dict[str, Any] | None = None
-    if evidence_root is not None:
+    binding_document: dict[str, Any] | None = None
+    if baseline_mode:
+        binding_document = load_baseline_binding(Path(baseline_binding))
+        (run_dir / 'baseline-binding.json').write_bytes(Path(baseline_binding).read_bytes())
+    elif evidence_root is not None:
         restore_document = load_current_restore(Path(evidence_root), run_id)
-    if transport == 'streamable-http' and restore_document is None:
+    if transport == 'streamable-http' and restore_document is None and not baseline_mode:
         raise SnapshotEvidenceError('formal HTTP execution requires original restore evidence')
     authorization_configured = bool(
         transport == "streamable-http" and os.environ.get(token_env, "").strip()
@@ -926,7 +1000,7 @@ async def run_scenario(
             "process_start_time_utc": _runner_start_time_utc(),
         },
         "scenario": scenario_id,
-        "schema_version": REPORT_SCHEMA_VERSION,
+        "schema_version": 3 if baseline_mode else REPORT_SCHEMA_VERSION,
         "server_identity": None,
         "server_observation_sha256": None,
         "snapshot_evidence_sha256": None,
@@ -938,6 +1012,12 @@ async def run_scenario(
         "transport": transport,
         "unexecuted_step_ids": [step['id'] for step in scenario['steps']],
     }
+    if baseline_mode:
+        report.pop("snapshot_evidence_sha256")
+        report["baseline_binding"] = {
+            **binding_document,
+            "observation_sha256": sha256_file(Path(baseline_binding)),
+        }
     completed: dict[str, Any] = {}
     scenario_failed = False
     stderr_file = tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False)
@@ -1031,8 +1111,13 @@ async def run_scenario(
                 tools_bytes = canonical_bytes(tools_document)
                 report["tools_schema_sha256"] = hashlib.sha256(tools_bytes).hexdigest()
                 (run_dir / "tools-schema.json").write_bytes(tools_bytes)
-                if len(tools) != 130 or len(names) != 130:
-                    raise ScenarioInputError("runtime tool inventory must contain 130 unique tools")
+                expected_tools = expected_tool_count or (137 if baseline_mode else 130)
+                if len(tools) != expected_tools or len(names) != expected_tools:
+                    raise ScenarioInputError(
+                        f"runtime tool inventory must contain {expected_tools} unique tools")
+                if baseline_mode and report["server_identity"]["computer_name"].casefold() != \
+                        binding_document["computer_name"].casefold():
+                    raise ScenarioFailure("baseline binding computer name differs from the live service")
                 required_tools = {step["tool"] for step in scenario["steps"] + scenario["cleanup"]}
                 unknown = sorted(required_tools - names)
                 if unknown:
@@ -1040,7 +1125,8 @@ async def run_scenario(
                 if scenario_id.startswith('p06-') and transport=='streamable-http':
                     from tests.p06_resource_gate import GuestResourceSampler, ScenarioResourceGate, ResourceRejected, guarded_step
                     sampler = GuestResourceSampler(endpoint,run_id,report['server_identity'],run_dir/'resources')
-                    resource_gate = ScenarioResourceGate(P06_REPORT_ROOT,scenario,sampler)
+                    resource_gate = ScenarioResourceGate(
+                        Path(evidence_root) if baseline_mode else P06_REPORT_ROOT, scenario, sampler)
                     try:
                         gate_row = await resource_gate.before('p06-resource-start',initial=True)
                         report['steps'].append({'id':'p06-resource-start','kind':'resource-gate',
@@ -1197,6 +1283,10 @@ def main() -> int:
     parser.add_argument("--evidence-root", default=None)
     parser.add_argument("--server-observation", default=None)
     parser.add_argument("--run-id", default=None)
+    parser.add_argument("--baseline-binding", default=None,
+                        help="adopted .232 baseline binding observation (schema3, PLAN-CHANGE-025)")
+    parser.add_argument("--fixture-instance", default=None)
+    parser.add_argument("--expected-tool-count", type=int, default=None)
     args = parser.parse_args()
     try:
         report, path = asyncio.run(
@@ -1208,6 +1298,9 @@ def main() -> int:
                 evidence_root=Path(args.evidence_root) if args.evidence_root else None,
                 server_observation=Path(args.server_observation) if args.server_observation else None,
                 run_id=args.run_id,
+                baseline_binding=Path(args.baseline_binding) if args.baseline_binding else None,
+                fixture_instance=Path(args.fixture_instance) if args.fixture_instance else None,
+                expected_tool_count=args.expected_tool_count,
             )
         )
     except (ScenarioInputError, SnapshotEvidenceError, OSError, json.JSONDecodeError) as exc:
