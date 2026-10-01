@@ -34,6 +34,7 @@ from typing import Any
 from tests import p05_pc020_activation as graph
 from tests import p05_pc020_evidence as evidence
 from tests import p05_pc021_stage_rules as stage_rules
+from tests import p05_pc021_transition_evidence as transition
 
 
 class ConsumerError(ValueError):
@@ -82,31 +83,13 @@ def verify_p06_admission(
     ):
         raise ConsumerError("epoch8 canonical activation Ref is not bound to this root")
 
-    receipt_bytes = epoch8_receipt_path.read_bytes()
-    committed = json.loads(receipt_bytes)
-    if not isinstance(committed, dict) or set(committed) != {
-        "schema_version", "kind", "workflow_id", "transition_id",
-        "from_sha256", "to_sha256", "next_sha256",
-        "activation_root_sha256", "issuance_receipt_sha256",
-        "started_at", "replaced_at", "directory_fsynced_at", "readback_at",
-        "status", "error",
-    }:
-        raise ConsumerError("epoch8 transition receipt keys differ")
-    if committed.get("kind") != "pc021-epoch8-activation-transition-receipt-v3":
-        # legacy shapes stay readable as history only and never upgrade
-        raise ConsumerError("transition receipt is not the current v3 kind")
-    if committed.get("schema_version") != 3:
-        raise ConsumerError("transition receipt schema generation differs")
-    if committed.get("status") != "COMMITTED" or committed.get("error") is not None:
-        raise ConsumerError("epoch8 transition receipt is not COMMITTED")
-    if (
-        committed.get("to_sha256") != _sha(epoch8_canonical)
-        or committed.get("from_sha256") != _sha(epoch7_canonical)
-        or committed.get("activation_root_sha256") != _sha(root_bytes)
-        or committed.get("issuance_receipt_sha256")
-        != _sha((activation_dir / "issuance-receipt.json").read_bytes())
-    ):
-        raise ConsumerError("v3 COMMITTED receipt hashes do not bind C7/R/S/H8")
+    try:
+        intent_bytes, receipt_bytes = transition.read_fixed(activation_dir, epoch8_receipt_path)
+        committed = transition.verify_committed_bytes(intent_bytes, receipt_bytes,
+            epoch7=epoch7_canonical, epoch8=epoch8_canonical, root=root_bytes,
+            issuance=evidence._plain_file(activation_dir, "issuance-receipt.json", "issuance receipt").read_bytes())
+    except (ValueError, OSError, TypeError, KeyError) as exc:
+        raise ConsumerError(str(exc)) from exc
     return {
         "activation_root_sha256": _sha(root_bytes),
         "epoch8_sha256": _sha(epoch8_canonical),

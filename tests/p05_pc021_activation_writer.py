@@ -42,22 +42,14 @@ from tests import p05_pc020_activation as graph
 from tests import p05_pc020_evidence as evidence
 from tests import p05_pc021_issuer as issuer
 from tests import pc022_windows_refresh as refresh
+from tests import p05_pc021_readback as readback
+from tests import p05_pc021_transition_evidence as transition
 
 
-INTENT_V2_KEYS = {
-    "schema_version", "kind", "workflow_id", "transition_id",
-    "from_sha256", "to_sha256", "next_sha256",
-    "activation_root_sha256", "issuance_receipt_sha256", "created_at",
-}
-RECEIPT_V3_KEYS = {
-    "schema_version", "kind", "workflow_id", "transition_id",
-    "from_sha256", "to_sha256", "next_sha256",
-    "activation_root_sha256", "issuance_receipt_sha256",
-    "started_at", "replaced_at", "directory_fsynced_at", "readback_at",
-    "status", "error",
-}
-INTENT_V2_KIND = "pc020-canonical-transition-intent-v2"
-RECEIPT_V3_KIND = "pc021-epoch8-activation-transition-receipt-v3"
+INTENT_V2_KEYS = transition.INTENT_KEYS
+RECEIPT_V3_KEYS = transition.RECEIPT_KEYS
+INTENT_V2_KIND = transition.INTENT_KIND
+RECEIPT_V3_KIND = transition.RECEIPT_KIND
 FAILED_BEFORE_REPLACE = "FAILED_BEFORE_REPLACE"
 TRANSITION_INDETERMINATE = "TRANSITION_INDETERMINATE"
 COMMITTED = "COMMITTED"
@@ -164,10 +156,11 @@ def transition_to_epoch8(
     root_path = activation_dir / "activation-evidence.json"
     receipt_binding = activation_dir / "issuance-receipt.json"
     next_path = Path(str(canonical_path) + ".next")
-    intent_path = canonical_path.parent / f"{canonical_path.name}.{transition_id}.epoch8-intent.json"
-    receipt_path = canonical_path.parent / f"{canonical_path.name}.{transition_id}.epoch8-receipt.json"
+    intent_path = activation_dir / transition.INTENT_NAME
+    receipt_path = activation_dir / transition.RECEIPT_NAME
     started_at = _utc_now()
     target_sha: str | None = None
+    next_sha: str | None = None
     replace_attempted = False
     replaced_at: str | None = None
     directory_fsynced_at: str | None = None
@@ -181,7 +174,7 @@ def transition_to_epoch8(
             intent_path=intent_path, receipt_path=receipt_path,
             from_sha256=(getattr(capability, "epoch7_sha256", "")
                          if type(capability) is issuer.IssuanceCapability else ""), to_sha256=target_sha,
-            next_sha256=target_sha, receipt_written=receipt_written,
+            next_sha256=next_sha, receipt_written=receipt_written,
             canonical_observation=observation,
         )
 
@@ -221,13 +214,6 @@ def transition_to_epoch8(
     try:
         epoch7 = json.loads(c7.decode("utf-8"))
 
-        # Step 4-5: derive N8, exclusive .next with durability and readback.
-        if _lexists(next_path):
-            raise evidence.Pc020EvidenceError("unknown existing .next blocks transition")
-        if _lexists(intent_path):
-            raise evidence.Pc020EvidenceError("existing epoch8 intent blocks transition")
-        if _lexists(receipt_path):
-            raise evidence.Pc020EvidenceError("existing epoch8 receipt blocks transition")
         root_document = json.loads(hr.decode("utf-8"))
         activation_ref = {
             "source": "snapshot189-activation",
@@ -238,9 +224,20 @@ def transition_to_epoch8(
         target = _derive_epoch8(epoch7, activation_ref=activation_ref, checkpoint_marker=root_document["checkpoint_marker"])
         target_bytes = evidence.canonical_json(target)
         target_sha = _sha(target_bytes)
+
+        # All absent outputs inherit verified parents on the actual same volume.
+        # Recheck before each publication, including a possible failure receipt.
+        _same_volume_parents(canonical_path, activation_dir)
+        if _lexists(next_path):
+            raise evidence.Pc020EvidenceError("unknown existing .next blocks transition")
+        if _lexists(intent_path):
+            raise evidence.Pc020EvidenceError("existing epoch8 intent blocks transition")
+        if _lexists(receipt_path):
+            raise evidence.Pc020EvidenceError("existing epoch8 receipt blocks transition")
         _create_durable(next_path, target_bytes)
         if _read(next_path) != target_bytes:
             raise evidence.Pc020EvidenceError("candidate .next byte readback differs")
+        next_sha = target_sha
 
         # Step 6: durable v2 intent (10 keys; declares no refresh outcome).
         intent = {
@@ -254,6 +251,7 @@ def transition_to_epoch8(
         }
         if set(intent) != INTENT_V2_KEYS:
             raise AssertionError("intent key construction differs")
+        _same_volume_parents(canonical_path, activation_dir)
         _create_durable(intent_path, evidence.canonical_json(intent))
         if _read(intent_path) != evidence.canonical_json(intent):
             raise evidence.Pc020EvidenceError("intent readback differs")
@@ -269,6 +267,7 @@ def transition_to_epoch8(
             refresh.handle_directory_identity(canonical_path.parent),
             label="replace",
         )
+        _same_volume_parents(canonical_path, activation_dir)
 
         # Step 8-9: same-volume atomic replace, native refresh, readback.
         replace_attempted = True
@@ -299,26 +298,43 @@ def transition_to_epoch8(
         try:
             failure = _receipt(
                 transition_id, capability=capability,
-                to_sha256=target_sha, next_sha256=target_sha,
+                to_sha256=target_sha, next_sha256=next_sha,
                 started_at=started_at, replaced_at=replaced_at,
                 directory_fsynced_at=directory_fsynced_at, readback_at=readback_at,
                 status=status, error=error,
             )
-            _create_durable(receipt_path, evidence.canonical_json(failure))
+            _same_volume_parents(canonical_path, activation_dir)
+            failure_bytes = evidence.canonical_json(failure)
+            _create_durable(receipt_path, failure_bytes)
+            if _read(receipt_path) != failure_bytes:
+                raise evidence.Pc020EvidenceError("failure receipt readback differs")
             receipt_written = True
         except Exception as receipt_exc:
             error += f"; receipt failed: {type(receipt_exc).__name__}: {receipt_exc}"
         raise Epoch8TransitionError(error, outcome(status, receipt_written=receipt_written)) from exc
 
-    committed_receipt = _receipt(
-        transition_id, capability=capability,
-        to_sha256=target_sha, next_sha256=target_sha,
-        started_at=started_at, replaced_at=replaced_at,
-        directory_fsynced_at=directory_fsynced_at, readback_at=readback_at,
-        status=COMMITTED, error=None,
-    )
     try:
-        _create_durable(receipt_path, evidence.canonical_json(committed_receipt))
+        committed_receipt = _receipt(
+            transition_id, capability=capability,
+            to_sha256=target_sha, next_sha256=next_sha,
+            started_at=started_at, replaced_at=replaced_at,
+            directory_fsynced_at=directory_fsynced_at, readback_at=readback_at,
+            status=COMMITTED, error=None,
+        )
+        _same_volume_parents(canonical_path, activation_dir)
+        receipt_bytes = evidence.canonical_json(committed_receipt)
+        _create_durable(receipt_path, receipt_bytes)
+        actual_receipt = _read(receipt_path)
+        if actual_receipt != receipt_bytes:
+            raise evidence.Pc020EvidenceError("COMMITTED receipt readback differs")
+        actual_intent = _read(intent_path)
+        if actual_intent != evidence.canonical_json(intent):
+            raise evidence.Pc020EvidenceError("intent drifted before completion")
+        actual_c8, actual_r, actual_s = _read(canonical_path), _read(root_path), _read(receipt_binding)
+        if actual_c8 != target_bytes or actual_r != hr or actual_s != hs:
+            raise evidence.Pc020EvidenceError("C8/R/S drifted before completion")
+        transition.verify_committed_bytes(actual_intent, actual_receipt, epoch7=c7,
+            epoch8=actual_c8, root=actual_r, issuance=actual_s)
     except Exception as exc:
         # A complete receipt whose final persistence/refresh failed does not
         # report success: the state stays TRANSITION_INDETERMINATE.
@@ -352,7 +368,14 @@ def _receipt(
 
 
 def _read(path: Path) -> bytes:
-    return path.read_bytes()
+    return readback._read_no_follow(path)
+
+
+def _same_volume_parents(canonical_path: Path, activation_dir: Path) -> None:
+    issuer._plain_ancestry(canonical_path.parent, "canonical parent")
+    issuer._plain_ancestry(activation_dir, "activation directory")
+    refresh.require_same_volume(refresh.handle_directory_identity(canonical_path.parent),
+        refresh.handle_directory_identity(activation_dir), label="transition outputs")
 
 
 def _lexists(path: Path) -> bool:

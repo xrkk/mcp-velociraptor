@@ -131,9 +131,9 @@ class Epoch8WriterTests(unittest.TestCase):
                 if kind == "next":
                     Path(str(canonical) + ".next").write_bytes(b"unknown")
                 elif kind == "intent":
-                    (canonical.parent / f"{canonical.name}.{transition_id}.epoch8-intent.json").write_bytes(b"x")
+                    (case / "epoch8-transition-intent.json").write_bytes(b"x")
                 else:
-                    (canonical.parent / f"{canonical.name}.{transition_id}.epoch8-receipt.json").write_bytes(b"x")
+                    (case / "epoch8-transition-receipt.json").write_bytes(b"x")
                 with self.assertRaisesRegex(Exception, "blocks transition"):
                     self.run_writer(case, canonical, capability, transition_id=transition_id)
 
@@ -144,7 +144,7 @@ class Epoch8WriterTests(unittest.TestCase):
 
         def drifting_create(path, payload):
             real_create(path, payload)
-            if path.name.endswith(".epoch8-intent.json"):
+            if path.name == "epoch8-transition-intent.json":
                 drift_done["n"] += 1
                 canonical.write_bytes(self.canonical_bytes.replace(b'"epoch":7', b'"epoch": 7'))
 
@@ -232,7 +232,7 @@ class Epoch8WriterTests(unittest.TestCase):
             self.run_writer(case, canonical, capability)
         self.assertEqual(raised.exception.outcome.status, writer.FAILED_BEFORE_REPLACE)
         self.assertFalse(raised.exception.outcome.receipt_written)
-        self.assertFalse(raised.exception.outcome.receipt_path.exists())
+        self.assertEqual(raised.exception.outcome.receipt_path, first.receipt_path)
         self.assertEqual({p: p.read_bytes() for p in canonical.parent.glob(canonical.name + '*')}, before)
         committed = canonical.read_bytes()
         evidence.verify_schema6_shape(committed, expected_epoch=8)

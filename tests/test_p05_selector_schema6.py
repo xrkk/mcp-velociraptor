@@ -177,6 +177,7 @@ class SelectorGraphTests(CapabilityFixture):
         cls.binding = adapter.ControllerBindings(cls.parent, cls.policy, cls.c7, cls.receipt7, cls.root_policy)
 
     def setUp(self):
+        CapabilityFixture.setUp(self)
         self.selector = load_selector()
         self.path = self.parent / "current-selector.json"
         self.path.write_bytes(type(self).c7)
@@ -216,22 +217,17 @@ class SelectorGraphTests(CapabilityFixture):
         self.assertEqual((result, out), (2, "")); self.assertIn("trusted policy", error)
 
     def test_complete_epoch8_graph_and_negative_branches(self):
-        root = self.base / "activation-evidence.json"
-        c8 = epoch8(type(self).c7, root); self.path.write_bytes(evidence.canonical_json(c8))
-        h7, h8 = evidence._sha(type(self).c7), evidence._sha(self.path.read_bytes())
-        hashes = {"from_sha256": h7, "to_sha256": h8, "next_sha256": h8,
-            "activation_root_sha256": evidence._sha(root.read_bytes()),
-            "issuance_receipt_sha256": evidence._sha((self.base / "issuance-receipt.json").read_bytes())}
-        transition = str(uuid.uuid4())
-        receipt = {"schema_version":3, "kind":activation.RECEIPT_V3_KIND, "workflow_id":evidence.WORKFLOW_ID,
-            "transition_id":transition, **hashes, "started_at":"2026-10-01T00:00:00Z",
-            "replaced_at":"2026-10-01T00:00:01Z", "directory_fsynced_at":"2026-10-01T00:00:02Z",
-            "readback_at":"2026-10-01T00:00:03Z", "status":"COMMITTED", "error":None}
-        intent = {"schema_version":2, "kind":"pc020-canonical-transition-intent-v2",
-            "workflow_id":evidence.WORKFLOW_ID, "transition_id":transition, **hashes,
-            "created_at":"2026-10-01T00:00:00Z"}
-        rpath, ipath = self.base / "epoch8-transition-receipt.json", self.base / "epoch8-transition-intent.json"
-        rpath.write_bytes(evidence.canonical_json(receipt)); ipath.write_bytes(evidence.canonical_json(intent))
+        case, canonical, capability = self.scene()
+        outcome = self.run_writer(case, canonical, capability)
+        self.assertEqual(outcome.status, "COMMITTED")
+        self.path = canonical
+        root = case / "activation-evidence.json"
+        rpath, ipath = outcome.receipt_path, outcome.intent_path
+        self.assertEqual(rpath, case / "epoch8-transition-receipt.json")
+        self.assertEqual(ipath, case / "epoch8-transition-intent.json")
+        # These exact artifacts are actual issuer/writer outputs; no rebuilding
+        # or relocating a receipt to make the consumer test pass.
+        receipt, intent = json.loads(rpath.read_bytes()), json.loads(ipath.read_bytes())
         before = self.tree()
         result, out, error = self.cli("--emit-active", bindings=self.binding)
         self.assertEqual(result, 0, error); self.assertEqual(json.loads(out)["snapshot_name"], evidence.SNAPSHOT_189)
@@ -248,7 +244,7 @@ class SelectorGraphTests(CapabilityFixture):
         result, out, error = self.cli("--emit-active", bindings=self.binding)
         self.assertEqual((result, out), (2, "")); self.assertIn("intent", error)
         ipath.write_bytes(evidence.canonical_json(intent))
-        report = self.base / json.loads(root.read_bytes())["candidate_cycles"][1]["report"]["path"]
+        report = case / json.loads(root.read_bytes())["candidate_cycles"][1]["report"]["path"]
         original = report.read_bytes(); report.write_bytes(b"{}\n")
         try:
             result, out, error = self.cli("--emit-active", bindings=self.binding)

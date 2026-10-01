@@ -140,7 +140,7 @@ def _mutate_receipt(outcome, *, kind=None, status=None, error=None, to_sha256=No
         receipt["to_sha256"] = to_sha256
     if extra_key:
         receipt["future_field"] = 1
-    outcome.receipt_path.write_bytes(json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode())
+    outcome.receipt_path.write_bytes(evidence.canonical_json(receipt))
     return outcome.receipt_path
 
 

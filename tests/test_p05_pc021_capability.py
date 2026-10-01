@@ -162,7 +162,8 @@ class CapabilityAdmissionTests(CapabilityFixture):
                           replaces.call_count), (0, 0, 0, 0))
         self.assertEqual(self.tree(), before)
         self.assertFalse(raised.exception.outcome.receipt_written)
-        self.assertFalse(raised.exception.outcome.receipt_path.exists())
+        # A fixed receipt may already belong to the winner. Admission refusal
+        # must preserve it, rather than inventing a fresh UUID output path.
         return raised.exception
 
     def test_mint_commit_exact_records_and_downstream_without_capability(self):
@@ -249,6 +250,7 @@ class CapabilityAdmissionTests(CapabilityFixture):
         case, canonical, capability = self.scene()
         state = issuer._capability_state(capability)
         actual_open = Path.open
+        actual_read = writer._read
         checked = []
         paths = {canonical, case/'activation-evidence.json', case/'issuance-receipt.json'}
         def opened(path, mode='r', *args, **kwargs):
@@ -256,7 +258,12 @@ class CapabilityAdmissionTests(CapabilityFixture):
                 self.assertTrue(state.lock.locked(), str(path))
                 checked.append(path)
             return actual_open(path, mode, *args, **kwargs)
-        with patch.object(Path, 'open', opened):
+        def read(path):
+            if path in paths and not state.spent:
+                self.assertTrue(state.lock.locked(), str(path))
+                checked.append(path)
+            return actual_read(path)
+        with patch.object(Path, 'open', opened), patch.object(writer, '_read', side_effect=read):
             result = self.run_writer(case, canonical, capability)
         self.assertEqual(result.status, writer.COMMITTED)
         self.assertTrue(paths.issubset(set(checked)))
@@ -394,7 +401,7 @@ class CapabilityAdmissionTests(CapabilityFixture):
         create = writer._create_durable
         def drift(path, payload):
             create(path, payload)
-            if path.name.endswith('.epoch8-intent.json'):
+            if path.name == 'epoch8-transition-intent.json':
                 canonical.write_bytes(self.c7 + b'\n')
         with patch.object(writer, '_create_durable', side_effect=drift):
             with self.assertRaises(writer.Epoch8TransitionError) as raised:
