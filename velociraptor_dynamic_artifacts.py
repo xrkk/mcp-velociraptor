@@ -11,12 +11,12 @@ import hashlib
 import inspect
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, Mapping
+from typing import Annotated, Any, Literal, Mapping, get_args
 
 from jsonschema import Draft202012Validator
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
-from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr
+from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr, TypeAdapter, ValidationError
 
 from velociraptor_mcp_core import (
     FlowReferenceResult,
@@ -350,16 +350,27 @@ def _parameter_annotation(parameter: ArtifactParameterSpec) -> Any:
 
 
 def _validate_runtime_parameters(
-    spec: ArtifactSpec, arguments: Mapping[str, Any]
+    spec: ArtifactSpec, arguments: Mapping[str, Any], *, omit_none_defaults: bool = False
 ) -> dict[str, Any]:
+    """Validate the same public types used by the generated dynamic schema.
+
+    Only the dynamic handler may omit SDK-inserted None defaults: its
+    non-nullable input model already rejects explicit null. Hunt's nested
+    parameter object has no such model, so every supplied value is validated.
+    """
     public = {parameter.name: parameter for parameter in spec.exposed_parameters}
     normalized: dict[str, Any] = {}
     for name, value in arguments.items():
-        if value is None:
-            continue
         parameter = public.get(name)
         if parameter is None:
             raise InvalidArgumentError(details={"field": name, "reason": "unknown"})
+        if value is None and omit_none_defaults:
+            continue
+        try:
+            # Field metadata belongs to the SDK model; regex rules are checked below.
+            TypeAdapter(get_args(_parameter_annotation(parameter))[0]).validate_python(value, strict=True)
+        except ValidationError as exc:
+            raise InvalidArgumentError(details={"field": name, "reason": "type"}) from exc
         if parameter.kind == "regex":
             try:
                 re.compile(value)
@@ -380,7 +391,7 @@ def make_artifact_handler(
 ):
     def handler(**arguments: Any) -> Annotated[CallToolResult, FlowReferenceResult]:
         try:
-            parameters = _validate_runtime_parameters(spec, arguments)
+            parameters = _validate_runtime_parameters(spec, arguments, omit_none_defaults=True)
             flow = target.run_with_client(
                 lambda client_id: backend.start_collection(
                     client_id,

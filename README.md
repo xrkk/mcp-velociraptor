@@ -158,6 +158,15 @@ completion. In particular, an initial `ERROR` is reported verbatim and must not
 be treated as a successful collection outcome. Missing or empty backend state
 is a `BACKEND_ERROR`.
 
+`start_hunt` validates every supplied artifact parameter against the same
+startup-verified type, option and regex definitions as its dynamic tool before
+creating a Hunt or Flow. Nested explicit `null`, unknown/hidden/upload fields,
+wrong scalar types and out-of-set choices are rejected. Omitted parameters stay
+omitted so Velociraptor supplies its defaults; valid values are not rewritten.
+This fix has Linux-host regression coverage with the actual service and SDK
+validation paths plus a fake backend. Windows deployment and real Hunt/Flow
+acceptance remain pending.
+
 This contract implementation and its isolated fixtures do not constitute a
 formal service deployment. PC017 logical-file download support is implemented
 in the local source tree but is not deployed by this slice. The local fixed

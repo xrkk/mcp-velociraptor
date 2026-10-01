@@ -323,6 +323,12 @@ Flow `flow_state`. The first immediate backend value is preserved, including
 `ERROR`; clients must inspect it rather than treating `status="success"` as a
 successful collection outcome. Missing or empty initial state is a
 `BACKEND_ERROR`.
+The bridge's `start_hunt` now validates nested artifact parameters with the
+same startup-verified types, options and regex rules as dynamic tools before
+creating any Hunt or Flow. Explicit `null`, unknown/hidden/upload parameters,
+wrong types and invalid choices fail; omitted parameters retain backend
+defaults. Linux-host service/SDK tests use a fake backend, and Windows real
+Hunt/Flow acceptance remains pending. This does not qualify the historical agent.
 For `get_flow_results`, `v1:<offset>` is interpreted only in the explicitly
 supplied `flow_id`/`source` context. A paged response always carries
 `pagination.next_cursor`: a string for another page or JSON `null` at the end;
