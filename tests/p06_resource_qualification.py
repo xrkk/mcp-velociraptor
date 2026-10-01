@@ -58,15 +58,15 @@ def resources():
     disk = shutil.disk_usage('C:\\')
     # PC025: on the adopted .232 baseline the r3 report root does not exist on
     # the guest; the deployed repository's Logs tree is the real guest-side
-    # root that grows during runs (dispatch observations land there).
+    # root that grows during runs. The reading key set is frozen by
+    # validate_reading and must not gain per-era keys.
     report_root = OUT if OUT.is_dir() else REPO_ROOT / 'Logs'
     return {'physical_memory_bytes': int(state.total_physical),
             'available_memory_bytes': int(state.available_physical),
             'c_total_bytes': disk.total, 'c_free_bytes': disk.free,
             'datastore_bytes': tree_bytes(DATASTORE),
             'download_root_bytes': tree_bytes(DOWNLOAD_ROOT),
-            'report_root_bytes': tree_bytes(report_root),
-            'report_root': str(report_root)}
+            'report_root_bytes': tree_bytes(report_root)}
 
 
 def prepare_download_root(path):
