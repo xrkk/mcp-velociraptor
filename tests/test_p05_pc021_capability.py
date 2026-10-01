@@ -2,7 +2,7 @@
 
 Requires the existing PC020 fixture environment, never edits the input trees.
 All outputs live under PC020_TEST_TEMP_ROOT. Only Windows native refresh,
-directory identity and replace are simulated; graph predicates are real.
+directory identity, no-follow readback and replace are simulated; graph predicates are real.
 Receiver observations are explicitly synthetic, not evidence of a live host.
 """
 from __future__ import annotations
@@ -30,8 +30,29 @@ from tests import p05_pc020_evidence as evidence
 from tests import p05_pc021_activation_writer as writer
 from tests import p05_pc021_issuer as issuer
 from tests import pc022_windows_refresh as refresh
+from tests import p05_pc021_readback as readback
 from tests import p06_pc021_consumer as consumer
 from tests.pc020_activation_fixture import ActivationFixture
+
+
+class _HostReadbackIO:
+    """Explicit test-only POSIX simulation of native open-handle readback."""
+    def open(self, path, directory):
+        return os.open(path, os.O_RDONLY | os.O_NOFOLLOW |
+                       (os.O_DIRECTORY if directory else os.O_NONBLOCK))
+
+    def identity(self, handle, directory):
+        import stat
+        info = os.fstat(handle)
+        if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
+            raise readback.ReadbackError('simulated readback object type differs')
+        return info.st_dev, info.st_ino
+
+    def read(self, handle):
+        return os.read(handle, 65536)
+
+    def close(self, handle):
+        os.close(handle)
 
 
 class CapabilityFixture(unittest.TestCase):
@@ -80,6 +101,8 @@ class CapabilityFixture(unittest.TestCase):
     def setUp(self):
         self.seams = ExitStack()
         self.addCleanup(self.seams.close)
+        if os.name != 'nt':
+            self.seams.enter_context(patch.object(readback, '_native', side_effect=_HostReadbackIO))
         self.seams.enter_context(patch.object(refresh, 'windows_refresh_directory', return_value={}))
         self.seams.enter_context(patch.object(refresh, 'handle_directory_identity',
                                              side_effect=lambda p: (p.stat().st_dev, p.stat().st_ino)))

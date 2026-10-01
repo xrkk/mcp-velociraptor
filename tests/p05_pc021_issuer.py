@@ -37,6 +37,7 @@ from typing import Any
 from tests import p05_pc020_activation as graph
 from tests import p05_pc020_evidence as evidence
 from tests import pc022_windows_refresh as refresh
+from tests import p05_pc021_readback as readback
 
 
 ISSUANCE_OPERATION = "P05_ACTIVATION_ISSUE"
@@ -219,50 +220,14 @@ def issue_activation(
     if receipt_path.exists() or receipt_path.is_symlink():
         raise IssuerError("layout", "issuance receipt already exists")
 
+    readback._native()  # Fail closed off Windows before creating any issuer output.
     document = json_deep_copy(root_draft)
     events: list[dict[str, Any]] = []
 
     # Step 1: frozen inputs + full private pre-issue predicate.
-    evidence.verify_schema6_shape(epoch7_canonical, expected_epoch=7)
-    canonical = evidence._json_bytes(epoch7_canonical, "trusted epoch7 canonical")
-    if canonical["active_snapshot"]["name"] != evidence.SNAPSHOT_187:
-        raise IssuerError("preissue", "trusted canonical is not active Snapshot187")
-    seen: dict[str, tuple[int, str]] = {}
-    preparation_path = evidence._ref(activation_dir, document["preparation_evidence"], "preparation", seen)
-    migration_path = evidence._ref(activation_dir, document["migration_evidence"], "migration", seen)
-    creation_path = evidence._ref(activation_dir, document["creation_metadata"], "creation", seen)
-    preparation = evidence.verify_preparation(preparation_path, policy=policy)
-    migration = evidence.verify_migration(migration_path, original_preparation=preparation_path, policy=policy)
-    if canonical["preparation_evidence"]["evidence_sha256"] != _sha(preparation_path.read_bytes()):
-        raise IssuerError("preissue", "canonical does not bind preparation bytes")
-    if canonical["migration_evidence"]["evidence_sha256"] != _sha(migration_path.read_bytes()):
-        raise IssuerError("preissue", "canonical does not bind migration bytes")
-    sources = evidence._sources(activation_dir, document["source_inputs"], root_policy.source_inputs, "source_inputs", seen)
-    implementations = evidence._sources(activation_dir, document["implementation_sources"], root_policy.implementation_sources, "implementation_sources", seen)
-    source_graph = graph._source_graph(sources, implementations)
-    marker = document.get("checkpoint_marker")
-    creation_result = graph.creation.verify_snapshot189_creation(
-        creation_path, preparation_admission=preparation_path, policy=policy, expected_marker=marker,
-    )
-    cycles = document.get("candidate_cycles")
-    if not isinstance(cycles, list) or len(cycles) != 2:
-        raise IssuerError("preissue", "activation requires exactly two candidate cycles")
-    phases = [
-        graph._phase(activation_dir, document["initial"], "p05-flow-triage-repair-initial", source_graph, policy, None, seen),
-        graph._phase(activation_dir, cycles[0], "p05-flow-triage-repair-candidate", source_graph, policy, creation_path, seen),
-        graph._phase(activation_dir, cycles[1], "p05-flow-triage-repair-candidate", source_graph, policy, creation_path, seen),
-    ]
-    phase_docs = [document["initial"], *cycles]
-    for key in ("run_id", "restore_attempt_id"):
-        if len({phase[key] for phase in phase_docs}) != 3:
-            raise IssuerError("preissue", f"three phases reuse {key}")
-    for key in ("session", "runner", "server"):
-        if len({phase[key] for phase in phases}) != 3:
-            raise IssuerError("preissue", f"three phases reuse decoded {key} identity")
-    for left in range(3):
-        for right in range(left + 1, 3):
-            if phases[left]["flows"] & phases[right]["flows"]:
-                raise IssuerError("preissue", "three phases reuse decoded Flow identity")
+    graph._verify_preissue(root_path, document, policy=policy,
+                           epoch7_canonical=epoch7_canonical, root_policy=root_policy)
+    cycles = document["candidate_cycles"]
 
     # Step 2: event 1, then exactly one UTC sample shared by event 2 and root.
     events.append({"sequence": 1, "event": EVENT_ORDER[0], "at": _utc_now()})
@@ -273,9 +238,15 @@ def issue_activation(
     # Step 3: exclusive-create R with native durability and staged events.
     root_payload = evidence.canonical_json(document)
     _create_durable_file_events(root_path, root_payload, events)
-    read_back = root_path.read_bytes()
+    read_back = readback._read_no_follow(root_path)
     if read_back != root_payload:
         raise IssuerError("readback", "activation root readback differs")
+    if receipt_path.exists() or receipt_path.is_symlink():
+        raise IssuerError("readback", "receipt appeared before root validation")
+    graph._verify_immutable_root(root_path, read_back, policy=policy,
+                                 epoch7_canonical=epoch7_canonical, root_policy=root_policy)
+    if receipt_path.exists() or receipt_path.is_symlink():
+        raise IssuerError("readback", "receipt appeared during root validation")
     events.append({"sequence": 6, "event": EVENT_ORDER[5], "at": _utc_now()})
 
     # Step 4: v2 receipt persisted, refreshed, read back, public verifier.
@@ -307,7 +278,7 @@ def issue_activation(
         raise IssuerError("receipt", "receipt key construction differs")
     receipt_payload = evidence.canonical_json(receipt)
     _create_durable_file(receipt_path, receipt_payload)
-    if receipt_path.read_bytes() != receipt_payload:
+    if readback._read_no_follow(receipt_path) != receipt_payload:
         raise IssuerError("readback", "issuance receipt readback differs")
     graph.verify_snapshot189_activation(
         root_path, policy=policy, epoch7_canonical=epoch7_canonical, root_policy=root_policy,

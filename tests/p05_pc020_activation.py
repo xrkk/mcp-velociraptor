@@ -460,10 +460,7 @@ def _verify_receipt(
         )
 
 
-def _verify(
-    activation_path: Path, *, policy: evidence.FrozenSourcePolicy, epoch7_canonical: bytes,
-    root_policy: evidence.FrozenSourcePolicy | None = None,
-) -> dict[str, Any]:
+def _root_layout(activation_path: Path) -> Path:
     if not isinstance(activation_path, Path) or not activation_path.is_absolute() or activation_path.is_symlink():
         raise Activation189Error("activation root must be an absolute plain file")
     root = activation_path.parent
@@ -474,9 +471,14 @@ def _verify(
         uuid.UUID(root.name)
     except ValueError as exc:
         raise Activation189Error("activation package directory is not a UUID") from exc
-    document = _json(activation_path, "activation root")
-    if set(document) != ROOT_KEYS:
-        raise Activation189Error("activation root keys differ")
+    return root
+
+
+def _root_graph(
+    root: Path, document: dict[str, Any], *, policy: evidence.FrozenSourcePolicy,
+    epoch7_canonical: bytes, root_policy: evidence.FrozenSourcePolicy | None = None,
+) -> tuple[dict[str, Any], dict[str, tuple[int, str]]]:
+    """One complete content predicate shared by all three private/public stages."""
     if (
         document.get("schema_version") != 1 or document.get("kind") != "snapshot189-activation-evidence-v1"
         or document.get("workflow_id") != evidence.WORKFLOW_ID or document.get("candidate") != evidence.SNAPSHOT_189
@@ -528,17 +530,46 @@ def _verify(
     # this root.  Report times are guest clock readings, creation times are host
     # command readings, and issued_at is an issuer clock reading; compare none
     # of their magnitudes across domains (P05 PC020 section 6).
-    _utc(document.get("issued_at"), "issued_at")
-    _verify_receipt(root, document, epoch7_canonical, seen)
     return {
         "scope": "snapshot189_three_phase_activation_evidence",
         "workflow_id": evidence.WORKFLOW_ID, "candidate": evidence.SNAPSHOT_189,
-        "checkpoint_marker": marker, "issued_at": document["issued_at"],
+        "checkpoint_marker": marker, "issued_at": document.get("issued_at"),
         "phase_count": 3, "preparation_id": preparation["admission_id"],
         "migration_id": migration["migration_id"], "creation_operation_id": creation_result["operation_id"],
         "synthetic_fixture": policy.synthetic_fixture, "operational_ready": False,
         "authorizes_activation_write": False, "authorizes_p06": False,
-    }
+    }, seen
+
+
+def _verify_preissue(activation_path: Path, document: dict[str, Any], **bindings) -> None:
+    if set(document) != ROOT_KEYS - {"issued_at"}:
+        raise Activation189Error("root draft keys differ")
+    _root_graph(_root_layout(activation_path), document, **bindings)
+
+
+def _verify_immutable_root(activation_path: Path, root_payload: bytes, **bindings) -> dict[str, Any]:
+    """Private issuer gate over actual no-follow readback; no receipt authorization."""
+    document = evidence._json_bytes(root_payload, "activation root readback")
+    if not isinstance(document, dict) or set(document) != ROOT_KEYS:
+        raise Activation189Error("activation root keys differ")
+    _utc(document.get("issued_at"), "issued_at")
+    facts, _ = _root_graph(_root_layout(activation_path), document, **bindings)
+    return facts
+
+
+def _verify(
+    activation_path: Path, *, policy: evidence.FrozenSourcePolicy, epoch7_canonical: bytes,
+    root_policy: evidence.FrozenSourcePolicy | None = None,
+) -> dict[str, Any]:
+    root = _root_layout(activation_path)
+    document = _json(activation_path, "activation root")
+    if set(document) != ROOT_KEYS:
+        raise Activation189Error("activation root keys differ")
+    _utc(document.get("issued_at"), "issued_at")
+    facts, seen = _root_graph(root, document, policy=policy,
+                              epoch7_canonical=epoch7_canonical, root_policy=root_policy)
+    _verify_receipt(root, document, epoch7_canonical, seen)
+    return facts
 
 
 def verify_snapshot189_activation(
