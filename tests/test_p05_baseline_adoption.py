@@ -7,6 +7,9 @@ import json
 import tempfile
 import unittest
 import uuid
+import contextlib
+import io
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -201,7 +204,17 @@ class BaselineAdoptionTests(unittest.TestCase):
         checked = selector.read_state(state_path, self.module.WORKFLOW_ID)
         self.assertEqual(checked["epoch"], 5)
         self.assertEqual(checked["phase"], "PREPARATION_BASELINE")
-        self.assertEqual(selector.revert_payload(checked)["snapshot_name"], self.module.SNAPSHOT_187)
+        with self.assertRaises(selector.StateError):
+            selector.revert_payload(checked)
+        # Historical schema5 still has its full read validation, but neither
+        # public selection mode may treat that history as current authority.
+        for mode in (("--emit-active",), ("--validate-candidate", self.module.SNAPSHOT_187)):
+            output = io.StringIO()
+            with patch("sys.argv", [selector.__file__, "--state", str(state_path),
+                    "--expect-workflow", self.module.WORKFLOW_ID, *mode]), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(selector.main(), 2)
+            self.assertEqual(output.getvalue(), "")
 
         activation_root = self.root / "activation-188" / str(uuid.uuid4())
         activation_root.mkdir(parents=True)
@@ -226,6 +239,8 @@ class BaselineAdoptionTests(unittest.TestCase):
             "activated_at": "2026-09-14T00:00:00Z",
         }
         state_path.write_text(json.dumps(activated), encoding="utf-8")
+        with self.assertRaises(selector.StateError):
+            selector.revert_payload(activated)
         with self.assertRaises(selector.StateError):
             selector.read_state(state_path, self.module.WORKFLOW_ID)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the single recovery state and emit a VMware revert argv.
+"""Read the single recovery state and gate schema6 recovery selection.
 
 This governance helper never executes VMware or any other external process.
 """
@@ -100,7 +100,7 @@ def read_state(path: Path, expected_workflow: str) -> dict[str, Any]:
     if not stat.S_ISREG(mode) or path.is_symlink():
         raise StateError("state must be a regular non-symlink file")
     try:
-        raw = path.read_text(encoding="utf-8")
+        raw = path.read_bytes().decode("utf-8")
         state = json.loads(raw)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StateError(f"cannot read valid JSON state: {exc}") from exc
@@ -108,6 +108,13 @@ def read_state(path: Path, expected_workflow: str) -> dict[str, Any]:
     if not isinstance(state, dict):
         raise StateError("state must be an object")
     schema_version = state.get("schema_version")
+    if type(schema_version) is not int:
+        raise StateError("schema_version must be an integer")
+    if schema_version == 6:
+        try:
+            return schema6_adapter().read_schema6(raw.encode("utf-8"), expected_workflow)
+        except (ValueError, TypeError, KeyError) as exc:
+            raise StateError(f"schema6 state validation failed: {exc}") from exc
     if schema_version == 1:
         state = require_exact_keys(state, V1_TOP_KEYS, "state")
     elif schema_version in (2, 3, 4):
@@ -115,7 +122,7 @@ def read_state(path: Path, expected_workflow: str) -> dict[str, Any]:
     elif schema_version == 5:
         state = require_exact_keys(state, V5_TOP_KEYS, "state")
     else:
-        raise StateError("schema_version must equal 1, 2, 3, 4, or 5")
+        raise StateError("schema_version must equal 1, 2, 3, 4, 5, or 6")
     active = require_exact_keys(state["active_snapshot"], SNAPSHOT_KEYS, "active_snapshot")
     activation_evidence = state["activation_evidence"]
     if schema_version != 5 or activation_evidence is not None:
@@ -299,23 +306,45 @@ def read_state(path: Path, expected_workflow: str) -> dict[str, Any]:
     return state
 
 
+def schema6_adapter():
+    repo_root = Path(__file__).resolve().parents[3]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    from tests import p05_selector_readonly
+    return p05_selector_readonly
+
+
+def governed_bindings(state: dict[str, Any]):
+    """No policy discovery or archive fallback: an adopted binding is required.
+
+    The fixed P05 root is already governed. The current external policy and
+    epoch7 receipt locator have not been adopted for this CLI. Keep refusal
+    until the controller supplies that governance; no new CLI trust flags.
+    """
+    try:
+        schema6_adapter().resolve_refs(state, EVIDENCE_ROOT)
+    except (OSError, ValueError) as exc:
+        raise StateError(f"formal P05 evidence qualification failed: {exc}") from exc
+    raise StateError("current frozen policy and COMMITTED epoch7 receipt binding missing")
+
+
 def revert_payload(state: dict[str, Any]) -> dict[str, Any]:
-    if state.get("schema_version") != 5:
-        raise StateError("historical schema cannot emit a recovery argv")
+    if state.get("schema_version") != 6:
+        raise StateError("historical schemas 1–5 cannot select a current recovery argv")
+    try:
+        qualification = schema6_adapter().qualify(
+            schema6_adapter().evidence.canonical_json(state),
+            bindings=governed_bindings(state),
+            stage="P05_REPAIR_INITIAL" if state["epoch"] == 7 else "P06_ACTIVE",
+        )
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise StateError(f"schema6 evidence qualification failed: {exc}") from exc
     active = state["active_snapshot"]
     return {
-        "epoch": state["epoch"],
-        "phase": state["phase"],
-        "snapshot_name": active["name"],
-        "checkpoint_marker": active["checkpoint_marker"],
-        "revert_argv": [
-            "/usr/bin/vmrun",
-            "-T",
-            "ws",
-            "revertToSnapshot",
-            VMX,
-            active["name"],
-        ],
+        "epoch": state["epoch"], "phase": state["phase"],
+        "snapshot_name": active["name"], "checkpoint_marker": active["checkpoint_marker"],
+        "qualification": qualification,
+        "revert_argv": ["/usr/bin/vmrun", "-T", "ws", "revertToSnapshot", VMX, active["name"]],
     }
 
 
@@ -454,102 +483,23 @@ def main() -> int:
     next_path = Path(str(state_path) + ".next")
     try:
         canonical = read_state(state_path, args.expect_workflow)
-        if canonical['schema_version'] == 5:
-            require_governed_evidence(Path(canonical['baseline_evidence']['evidence_path']))
-            if canonical['activation_evidence'] is not None:
-                require_governed_evidence(Path(canonical['activation_evidence']['evidence_path']))
-        if args.adopt_baseline:
-            if args.activation_evidence:
-                raise StateError("--activation-evidence is only valid with --emit-next")
-            if next_exists(next_path):
-                raise StateError("pending .next state blocks baseline adoption")
-            if (canonical["schema_version"], canonical["epoch"]) != (3, 4):
-                raise StateError("baseline adoption requires the historical schema3 epoch4 predecessor")
-            adoption_path = Path(args.adopt_baseline)
-            require_governed_evidence(adoption_path)
-            if not adoption_path.is_absolute():
-                raise StateError("baseline adoption record path must be absolute")
-            canonical_bytes = state_path.read_bytes()
-            if json.loads(canonical_bytes) != canonical:
-                raise StateError("canonical state changed while baseline adoption was being prepared")
-            target = preparation_state(canonical, adoption_path, canonical_bytes)
-            write_exclusive_json(next_path, target)
-            written = read_state(next_path, args.expect_workflow)
-            if written != target:
-                raise StateError("exclusive preparation .next differs from the derived adoption state")
-            if state_path.read_bytes() != canonical_bytes:
-                raise StateError("canonical state drifted before baseline adoption replacement")
-            os.replace(next_path, state_path)
-            fsync_directory(state_path.parent)
-            activated = read_state(state_path, args.expect_workflow)
-            if activated != target:
-                raise StateError("adopted preparation state differs from the derived state")
-            print(json.dumps(revert_payload(activated), ensure_ascii=False, separators=(",", ":")))
-            return 0
-
-        if args.emit_next:
-            requested_next = Path(args.emit_next)
-            if not requested_next.is_absolute() or requested_next != next_path:
-                raise StateError("emit-next must reference the canonical same-directory .next path")
-            if (
-                canonical["schema_version"] != 5
-                or canonical["epoch"] != 5
-                or canonical["phase"] != "PREPARATION_BASELINE"
-            ):
-                raise StateError(
-                    "emit-next requires schema5 epoch5 PREPARATION_BASELINE; "
-                    "historical schemas are read-only"
-                )
-            if not next_exists(next_path):
-                raise StateError("emit-next requires an exclusively created same-directory .next")
-            if not args.activation_evidence:
-                raise StateError("emit-next requires --activation-evidence")
-            evidence_path = Path(args.activation_evidence)
-            require_governed_evidence(evidence_path)
-            if (
-                not evidence_path.is_absolute()
-                or not evidence_path.is_file()
-                or evidence_path.is_symlink()
-            ):
-                raise StateError("activation evidence must be an existing absolute file")
-            candidate = read_state(requested_next, args.expect_workflow)
-            if (
-                candidate["schema_version"] != 5
-                or candidate["epoch"] != 6
-                or candidate["phase"] != "NETWORK_ACTIVE"
-                or candidate["baseline_evidence"] != canonical["baseline_evidence"]
-            ):
-                raise StateError("next state must be schema5 epoch6 with unchanged baseline evidence")
-            evidence = candidate["activation_evidence"]
-            if evidence["evidence_path"] != str(evidence_path):
-                raise StateError("next state evidence path mismatch")
-            if evidence["evidence_sha256"] != sha256_file(evidence_path):
-                raise StateError("next state evidence hash mismatch")
-            # read_state(candidate) already invoked the complete activation
-            # verifier.  Do not add a summary-only substitute here.
-            canonical_bytes = state_path.read_bytes()
-            candidate_bytes = requested_next.read_bytes()
-            if json.loads(canonical_bytes) != canonical or json.loads(candidate_bytes) != candidate:
-                raise StateError("canonical or candidate state changed during activation validation")
-            os.replace(requested_next, state_path)
-            fsync_directory(state_path.parent)
-            activated = read_state(state_path, args.expect_workflow)
-            if activated != candidate:
-                raise StateError("activated state differs from validated candidate")
-            if activated["activation_evidence"]["evidence_sha256"] != sha256_file(evidence_path):
-                raise StateError("activated state evidence hash mismatch")
-            print(json.dumps(revert_payload(activated), ensure_ascii=False, separators=(",", ":")))
-            return 0
-
+        if args.adopt_baseline or args.emit_next:
+            raise StateError("selector is read-only; state transitions require the native controller writer")
         if args.activation_evidence:
             raise StateError("--activation-evidence is only valid with --emit-next")
         if next_exists(next_path):
             raise StateError("pending .next state blocks normal recovery selection")
-        if canonical["schema_version"] != 5:
-            raise StateError("historical schemas are read-only and cannot select a recovery argv")
+        if canonical["schema_version"] != 6:
+            raise StateError("historical schemas 1–5 are diagnostic only and cannot select current recovery")
+        original_bytes = state_path.read_bytes()
+        if read_state(state_path, args.expect_workflow) != canonical:
+            raise StateError("canonical changed during selection")
+        if args.validate_candidate is not None and args.validate_candidate != canonical["active_snapshot"]["name"]:
+            raise StateError("candidate is not canonical-active; candidate-stage recovery requires its controller gate")
+        payload = revert_payload(canonical)
+        if state_path.read_bytes() != original_bytes or next_exists(next_path):
+            raise StateError("canonical or pending .next changed during qualification")
         if args.validate_candidate is not None:
-            if args.validate_candidate != canonical["active_snapshot"]["name"]:
-                return 3
             print(
                 json.dumps(
                     {
@@ -557,13 +507,14 @@ def main() -> int:
                         "phase": canonical["phase"],
                         "snapshot_name": canonical["active_snapshot"]["name"],
                         "valid": True,
+                        "qualification": payload["qualification"],
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
                 )
             )
             return 0
-        print(json.dumps(revert_payload(canonical), ensure_ascii=False, separators=(",", ":")))
+        print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
         return 0
     except (StateError, OSError) as exc:
         return fail(str(exc))
