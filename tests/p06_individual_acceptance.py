@@ -29,15 +29,23 @@ def assert_error(result, code, details):
 
 
 async def acceptance(endpoint, token_env):
+    from tests import p06_pc026_binding
+    admission = p06_pc026_binding.load()
     root = runner.P06_REPORT_ROOT
     declaration = json.loads((root/'current-restore.json').read_bytes())
     run_id = declaration['run_id']
-    restore = runner.load_current_restore(root,run_id)
+    restore = runner.load_current_restore(root,run_id,_admission=admission)
     if restore['snapshot_stage']!='P06_ACTIVE':
-        raise ValueError('individual acceptance requires activated Snapshot188')
+        raise ValueError('individual acceptance requires activated Snapshot191')
     spec_hash = runner.sha256_file(runner.FIXTURE_SPEC_PATH)
     _,fixture_hash = runner.load_fixture({'fixture_spec_sha256':spec_hash},root/'fixture-instance.json')
     run_dir = root/'individual-acceptance'/run_id
+    for path in (Path(__file__),runner.P06_INDEX_PATH,runner.FIXTURE_SPEC_PATH):
+        ref = admission.group.freeze_refs[path.relative_to(ROOT).as_posix()]
+        if runner.sha256_file(path) != ref['sha256']:
+            raise ValueError('individual acceptance source differs from approval')
+    admission.read(root/'fixture-instance.json')
+    admission.recheck()
     run_dir.mkdir(parents=True,exist_ok=False)
     (run_dir/'fixture-instance.json').write_bytes((root/'fixture-instance.json').read_bytes())
     report = dict(schema_version=2,scenario='individual-acceptance',run_id=run_id,
@@ -71,7 +79,7 @@ async def acceptance(endpoint, token_env):
             row.update(ended_at=runner.utc_now(),duration_ms=int((time.monotonic()-clock)*1000))
 
     try:
-        async with formal_session(endpoint,token_env,root/'server-observation.json',run_dir,report) as session:
+        async with formal_session(endpoint,token_env,root/'server-observation.json',run_dir,report,expected_tool_count=137) as session:
             listing = await session.list_tools()
             (run_dir/'tools-list-second.json').write_bytes(runner.canonical_bytes(
                 listing.model_dump(mode='json',by_alias=True,exclude_none=True)))
@@ -79,7 +87,8 @@ async def acceptance(endpoint, token_env):
                 raise AssertionError('tools/list changed within one session')
             invocations = json.loads((ROOT/'tests/data/p03_invocations.json').read_bytes())
             fixed = json.loads((ROOT/'tests/data/p04_fixed_tools_golden.json').read_bytes())
-            if {tool.name for tool in listing.tools}!={row['artifact'] for row in invocations}|set(fixed):
+            from velo_transfer.mcp_tools import TRANSFER_TOOL_NAMES
+            if {tool.name for tool in listing.tools}!={row['artifact'] for row in invocations}|set(fixed)|set(TRANSFER_TOOL_NAMES):
                 raise AssertionError('tools/list differs from the reviewed 130-tool union')
             cases = (
                 ('unknown-flow','get_flow_status',{'flow_id':'F.__p06_missing__'},'NOT_FOUND',
@@ -131,6 +140,7 @@ async def acceptance(endpoint, token_env):
                     'server_observation_sha256':report['server_observation_sha256']}
         (run_dir/'snapshot-evidence.json').write_bytes(runner.canonical_bytes(snapshot))
         report['snapshot_evidence_sha256'] = runner.sha256_file(run_dir/'snapshot-evidence.json')
+        admission.recheck()
         (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
         (run_dir/'package-manifest.json').write_bytes(runner.canonical_bytes(member_inventory(run_dir,root)))
         verify_manifest(run_dir,root)

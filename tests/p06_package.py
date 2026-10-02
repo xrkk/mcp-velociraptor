@@ -47,11 +47,12 @@ def _plain_directory(root: Path) -> None:
             raise EvidenceError('package root contains a link or is not a directory')
 
 
-def _activation_directory(evidence_root: Path, record_path: str) -> Path:
+def _activation_directory(evidence_root: Path, record_path: str, *, current: bool = False) -> Path:
     """Return the P05 activation bundle directory named by a restore record."""
     activation = plain_file(evidence_root, record_path)
     bundle = activation.parent
-    if activation.name != 'activation-evidence.json' or bundle.parent.name != 'activation-188':
+    namespace = 'activation-191' if current else 'activation-188'
+    if activation.name != 'activation-evidence.json' or bundle.parent.name != namespace:
         raise EvidenceError('activation restore record is outside the reviewed activation-188 layout')
     try:
         uuid.UUID(bundle.name)
@@ -209,7 +210,7 @@ def source_for_member(run_dir: Path, evidence_root: Path, name: str) -> Path:
         original = plain_file(evidence_root, record['path'])
         if record.get('kind') == 'activation_evidence':
             source = _activation_member_sources(
-                _activation_directory(evidence_root, record['path']), attempt
+                _activation_directory(evidence_root, record['path'], current=_current_restore(restore)), attempt
             ).get(name)
             if source is not None:
                 return source
@@ -219,9 +220,50 @@ def source_for_member(run_dir: Path, evidence_root: Path, name: str) -> Path:
             ).get(name)
             if source is not None:
                 return source
+        elif _current_restore(restore) and record.get('kind') in {'pc020_preparation', 'pc020_migration'}:
+            prefix = 'restore/' + str(original.parent.relative_to(evidence_root).as_posix()) + '/'
+            if name.startswith(prefix):
+                return plain_file(original.parent, name[len(prefix):])
         elif name == 'restore/' + record['path']:
             return original
     raise EvidenceError('package member is not declared by the restore evidence')
+
+
+def member_sources(run_dir: Path, evidence_root: Path) -> dict[str, Path]:
+    """Resolve the complete original set once for a consumption transaction.
+
+    No cross-call cache: later reads still verify bytes and path identities.
+    Enumerating an activation tree per member makes full closure reads quadratic.
+    """
+    _plain_directory(run_dir)
+    _plain_directory(evidence_root)
+    sources = {}
+    for path in run_dir.rglob('*'):
+        info = path.lstat()
+        if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
+            continue
+        relative = path.relative_to(run_dir).as_posix()
+        if relative != FINAL_MANIFEST:
+            sources['run/' + relative] = plain_file(run_dir, relative)
+    snapshot = run_dir / 'snapshot-evidence.json'
+    if snapshot.exists():
+        restore = json.loads(plain_file(run_dir, snapshot.name).read_bytes())['restore']
+        for row in restore['restore_records']:
+            original = plain_file(evidence_root, row['path'])
+            if row['kind'] == 'activation_evidence':
+                sources.update(_activation_member_sources(_activation_directory(
+                    evidence_root, row['path'], current=_current_restore(restore)),
+                    restore['restore_attempt_id']))
+            elif row['kind'] == 'baseline_adoption':
+                sources.update(_baseline_adoption_member_sources(_baseline_adoption_directory(
+                    evidence_root, row['path']), restore['restore_attempt_id']))
+            elif _current_restore(restore) and row['kind'] in {'pc020_preparation', 'pc020_migration'}:
+                from tests.p05_pc020_evidence import _walk
+                sources.update({'restore/' + p.relative_to(evidence_root).as_posix(): p
+                                for p in _walk(original.parent).values()})
+            else:
+                sources['restore/' + row['path']] = original
+    return sources
 
 
 def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = False) -> dict:
@@ -266,7 +308,7 @@ def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = Fals
             if record.get('kind') == 'activation_evidence':
                 _add_activation_members(
                     members,
-                    _activation_directory(evidence_root, record['path']),
+                    _activation_directory(evidence_root, record['path'], current=_current_restore(document['restore'])),
                     document['restore'].get('restore_attempt_id'),
                 )
             elif record.get('kind') == 'baseline_adoption':
@@ -275,10 +317,20 @@ def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = Fals
                     _baseline_adoption_directory(evidence_root, record['path']),
                     document['restore'].get('restore_attempt_id'),
                 )
+            elif _current_restore(document['restore']) and record.get('kind') in {'pc020_preparation', 'pc020_migration'}:
+                from tests.p05_pc020_evidence import _walk
+                for relative, source in _walk(original.parent).items():
+                    add('restore/' + source.relative_to(evidence_root).as_posix(), source)
             else:
                 add('restore/' + record['path'], original)
     return {'schema_version': 1, 'members': [members[name] for name in
             sorted(members, key=lambda value: value.encode('utf-8'))]}
+
+
+def _current_restore(restore: dict) -> bool:
+    from tests.p05_pc026_profile import CURRENT
+    return (restore.get('canonical_schema_version') == 6 and restore.get('canonical_epoch') == 8
+            and restore.get('snapshot_name') == CURRENT.snapshot)
 
 
 def verify_manifest(run_dir: Path, evidence_root: Path, *, payload: bool = False) -> str:

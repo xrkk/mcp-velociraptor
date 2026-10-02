@@ -240,13 +240,15 @@ async def guarded_step(gate, step_id, operation):
 
 
 class ScenarioResourceGate:
-    def __init__(self, root: Path, scenario: dict, sampler):
+    def __init__(self, root: Path, scenario: dict, sampler, *, _admission=None):
         from tests.p06_evidence import plain_file, digest
         from tests.p06_package import verify_manifest, verify_payload_zip
         from tests.p06_resource_policy import load_policy
-        policy = load_policy(scenario)
+        policy = load_policy(scenario, _admission=_admission)
         from tests.p06_aggregate_reports import verify_report_shape, verify_tools_schema_binding, verify_snapshot_evidence
-        selection = json.loads(plain_file(root,'resource-qualification-selection.json').read_text(encoding='utf-8'))
+        selection_path = plain_file(root,'resource-qualification-selection.json')
+        selection_bytes = _admission.read(selection_path) if _admission is not None else selection_path.read_bytes()
+        selection = json.loads(selection_bytes)
         report_path = plain_file(root, selection['report_relative_path'])
         if digest(report_path)!=selection['report_sha256']:
             raise ValueError('qualification selection bytes differ')
@@ -256,14 +258,19 @@ class ScenarioResourceGate:
                             'p06_resource_qualification.py','p06_package.py','p06_evidence.py','p06_resource_policy.py',
                             'p06_receive.py','p06_aggregate_reports.py','data/p06_scenario_index.json',
                             'data/p06_resource_policy.json','data/p03_invocations.json'}
-        if set(source)!=expected_sources or any(digest(Path(__file__).parent/name)!=value for name,value in source.items()):
+        source_root = _admission.group.repository / 'tests' if _admission is not None else Path(__file__).parent
+        if _admission is not None:
+            expected_sources |= {'p06_pc026_binding.py'}
+        if set(source)!=expected_sources or any(digest(source_root/name)!=value for name,value in source.items()):
             raise ValueError('qualification implementation changed; requalification required')
         verify_report_shape(report)
         if (report['scenario']!='resource-qualification' or report['status']!='success'
                 or report['failure'] or report['coverage'] or any(call.get('is_error') for call in report['calls'])):
             raise ValueError('selected qualification is not a successful formal attempt')
-        verify_tools_schema_binding(report,report_path.parent)
-        if report.get('schema_version') == 3:
+        verify_tools_schema_binding(report,report_path.parent,current=_admission is not None)
+        if _admission is not None:
+            _admission.report(report, report_path.parent, root)
+        elif report.get('schema_version') == 3:
             from tests.p06_aggregate_reports import verify_baseline_evidence
             verify_baseline_evidence(report, report_path.parent)
         else:
@@ -287,6 +294,12 @@ class ScenarioResourceGate:
                 or any(budget.get(key)!=value for key,value in payload_identity.items())):
             raise ValueError('qualification payload identity or actual size differs')
         measured = freeze_measurements(report)
+        if _admission is not None:
+            _admission.read(plain_file(root,'resource-qualification-selection.json'))
+            from tests.p05_pc020_evidence import _walk
+            for path in _walk(report_path.parent).values():
+                _admission.read(path)
+            _admission.recheck()
         if budget['steps']!=measured['steps'] or budget['observed_peak_bytes']!=measured['observed_peak_bytes']:
             raise ValueError('frozen qualification cannot be recomputed')
         self.budget, self.sampler = budget, sampler

@@ -156,7 +156,13 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
     from tests import scenario_runner as runner
     from tests.p06_formal_session import formal_session
     from tests.p06_resource_gate import GuestResourceSampler, admit, freeze_measurements, ResourceRejected, require_trace_inactive
-    from tests.p06_package import member_inventory, source_for_member, verify_manifest, verify_payload_zip
+    from tests.p06_package import member_inventory, member_sources, verify_manifest, verify_payload_zip
+    if baseline_binding is not None:
+        raise ValueError('schema3 qualification is historical and cannot authorize current P06')
+    if os.name != 'posix':
+        raise ValueError('current qualification requires host approval; Windows handoff is not adopted')
+    from tests import p06_pc026_binding
+    admission = p06_pc026_binding.load()
     schema3 = baseline_binding is not None
     if schema3:
         # PLAN-CHANGE-025: the adopted .232 baseline binding replaces the
@@ -175,9 +181,9 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
         evidence_root = OUT
         declaration = json.loads((evidence_root/'current-restore.json').read_text(encoding='utf-8'))
         run_id = declaration['run_id']
-        restore = runner.load_current_restore(evidence_root, run_id)
+        restore = runner.load_current_restore(evidence_root, run_id, _admission=admission)
         if restore['snapshot_stage'] != 'P06_ACTIVE':
-            raise ValueError('qualification requires activated Snapshot188')
+            raise ValueError('qualification requires activated Snapshot191')
         binding_document = None
     spec_hash = runner.sha256_file(runner.FIXTURE_SPEC_PATH)
     fixture_instance_arg = Path(fixture_instance) if schema3 else evidence_root/'fixture-instance.json'
@@ -186,6 +192,12 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
         run_dir = evidence_root/'resource-qualification'/run_id
     else:
         run_dir = runner.P06_REPORT_ROOT/'resource-qualification'/run_id
+    for path in (Path(__file__), INVOCATIONS, runner.FIXTURE_SPEC_PATH):
+        ref = admission.group.freeze_refs[path.relative_to(REPO_ROOT).as_posix()]
+        if runner.sha256_file(path) != ref['sha256']:
+            raise ValueError('qualification source differs from approval')
+    admission.read(fixture_instance_arg)
+    admission.recheck()
     run_dir.mkdir(parents=True, exist_ok=False)
     (run_dir/'fixture-instance.json').write_bytes(fixture_instance_arg.read_bytes())
     if schema3:
@@ -214,14 +226,14 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
                             'files':{name:runner.sha256_file(REPO_ROOT/'tests'/name) for name in
                                      ('scenario_runner.py','p06_resource_gate.py','p06_formal_session.py',
                                       'p06_resource_qualification.py','p06_package.py','p06_evidence.py','p06_resource_policy.py',
-                                      'p06_receive.py','p06_aggregate_reports.py','data/p06_scenario_index.json',
+                                      'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py','data/p06_scenario_index.json',
                                       'data/p06_resource_policy.json','data/p03_invocations.json')}})
     try:
         if len(invocations) != 8:
             raise ValueError('qualification must include all eight in-scope resource-sensitive invocations')
         session_observation = Path(server_observation) if schema3 else evidence_root/'server-observation.json'
         async with formal_session(endpoint, token_env, session_observation, run_dir, report,
-                                  expected_tool_count=137 if schema3 else 130) as session:
+                                  expected_tool_count=137) as session:
             sampler = GuestResourceSampler(endpoint, run_id, report['server_identity'], run_dir/'resources')
             before = await sampler.sample('qualification-start')
             require_trace_inactive(before)
@@ -273,15 +285,17 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
             raw = runner.canonical_bytes(snapshot)
             (run_dir/'snapshot-evidence.json').write_bytes(raw)
             report['snapshot_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
+        admission.recheck()
         (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
     if report['status']=='success':
         # Measured payload precedes the budget, avoiding hash/size self-reference.
         manifest = member_inventory(run_dir, evidence_root, payload=True)
         (run_dir/'qualification-payload-manifest.json').write_bytes(runner.canonical_bytes(manifest))
+        sources = member_sources(run_dir, evidence_root)
         with zipfile.ZipFile(run_dir/'qualification-payload.zip','x',zipfile.ZIP_STORED) as archive:
             archive.write(run_dir/'qualification-payload-manifest.json','qualification-payload-manifest.json')
             for member in manifest['members']:
-                archive.write(source_for_member(run_dir, evidence_root, member['path']), member['path'])
+                archive.write(sources[member['path']], member['path'])
         budget = {'schema_version':1,'report_sha256':runner.sha256_file(run_dir/'report.json'),
                   **verify_payload_zip(run_dir,evidence_root),
                   **freeze_measurements(report)}

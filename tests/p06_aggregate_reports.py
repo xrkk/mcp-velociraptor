@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .p06_evidence import EvidenceError, verify_restore, verify_observation
+    from .p06_evidence import EvidenceError, verify_historical_restore as verify_restore, verify_observation
 except ImportError:
-    from p06_evidence import EvidenceError, verify_restore, verify_observation
+    from p06_evidence import EvidenceError, verify_historical_restore as verify_restore, verify_observation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,7 +192,7 @@ def load_ledger(path: Path = LEDGER, evidence_root: Path | None = None) -> list[
     return rows
 
 
-def verify_tools_schema_binding(report: dict[str, Any], run_dir: Path) -> None:
+def verify_tools_schema_binding(report: dict[str, Any], run_dir: Path, *, current=False) -> None:
     """tools-schema.json bytes, recomputed hash, and report hash must agree."""
     tools_path = run_dir / "tools-schema.json"
     if not tools_path.is_file() or tools_path.is_symlink():
@@ -204,13 +204,18 @@ def verify_tools_schema_binding(report: dict[str, Any], run_dir: Path) -> None:
     recomputed = sha256_bytes(canonical_bytes(document))
     if recomputed != report["tools_schema_sha256"]:
         raise AggregateError("tools-schema canonical recomputation differs")
-    if len(document) != 130:
+    count = 137 if current else 130
+    if len(document) != count:
         raise AggregateError("tools-schema inventory does not contain 130 tools")
     listing = json.loads(contained_plain_file(run_dir,'tools-list.json').read_bytes())
     actual = sorted(({'name':row['name'],'inputSchema':row['inputSchema'],
                       'outputSchema':row.get('outputSchema')} for row in listing['tools']),key=lambda row:row['name'])
-    if actual!=document or len({row['name'] for row in actual})!=130:
+    if actual!=document or len({row['name'] for row in actual})!=count:
         raise AggregateError('tools-schema differs from original tools/list')
+    if current:
+        from velo_transfer.mcp_tools import TRANSFER_TOOL_NAMES
+        if {row['name'] for row in actual if row['name'].startswith('transfer_')} != set(TRANSFER_TOOL_NAMES):
+            raise AggregateError('current tools/list lacks the exact seven transfer tools')
 
 
 def verify_snapshot_evidence(report: dict[str, Any], run_dir: Path,
@@ -357,22 +362,23 @@ def verify_report_shape(report: dict[str, Any]) -> None:
         raise AggregateError("server observation hash is missing")
 
 
-def verify_resource_evidence(report: dict[str, Any], run_dir: Path, evidence_root: Path) -> None:
+def verify_resource_evidence(report: dict[str, Any], run_dir: Path, evidence_root: Path, *, _admission=None) -> None:
     """Join every declared large step to its qualification and raw observation."""
     from tests.p06_resource_gate import ScenarioResourceGate, admit, remaining_peak
     from tests.p06_evidence import plain_file
-    index_path = ROOT/'tests/data/p06_scenario_index.json'
+    source_root = _admission.group.repository if _admission is not None else ROOT
+    index_path = source_root/'tests/data/p06_scenario_index.json'
     if sha256_file(index_path)!=report['index_sha256']:
         raise AggregateError('scenario index differs from the frozen source')
     index = json.loads(index_path.read_text(encoding='utf-8'))
     rows = [row for row in index['scenarios'] if row['scenario_id']==report['scenario']]
     if len(rows)!=1:
         raise AggregateError('scenario source is not uniquely indexed')
-    source = plain_file(ROOT/'tests/scenarios',rows[0]['path'])
+    source = plain_file(source_root/'tests/scenarios',rows[0]['path'])
     if sha256_file(source)!=rows[0]['sha256'] or rows[0]['sha256']!=report['source_sha256']:
         raise AggregateError('scenario source hash differs')
     scenario = json.loads(source.read_text(encoding='utf-8'))
-    gate = ScenarioResourceGate(evidence_root,scenario,None)
+    gate = ScenarioResourceGate(evidence_root,scenario,None,_admission=_admission)
     steps = {row['id']:row for row in report['steps']}
     if len(steps)!=len(report['steps']):
         raise AggregateError('report step ids are duplicated')
@@ -430,12 +436,13 @@ def verify_resource_evidence(report: dict[str, Any], run_dir: Path, evidence_roo
         raise AggregateError('scenario exceeded its frozen deadline')
 
 
-def aggregate(
+def aggregate_historical(
     *,
     evidence_root: Path = EVIDENCE_ROOT,
     ledger_path: Path = LEDGER,
     selection_path: Path = SELECTION,
     manifest_path: Path = MANIFEST,
+    _admission=None,
 ) -> dict[str, Any]:
     ledger = load_ledger(ledger_path, evidence_root=evidence_root)
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
@@ -519,14 +526,15 @@ def aggregate(
                 raise AggregateError("coverage relation is duplicated")
             coverage.add(key)
         run_dir = report_path.parent
-        verify_tools_schema_binding(report, run_dir)
+        verify_tools_schema_binding(report, run_dir, current=_admission is not None)
         if report.get("schema_version") == 3:
             baseline_documents.append(verify_baseline_evidence(report, run_dir))
             restore = None
         else:
-            restore = verify_snapshot_evidence(report, run_dir, evidence_root)
+            restore = (_admission.report(report, run_dir, evidence_root) if _admission is not None
+                       else verify_snapshot_evidence(report, run_dir, evidence_root))
         try:
-            verify_resource_evidence(report,run_dir,evidence_root)
+            verify_resource_evidence(report,run_dir,evidence_root,_admission=_admission)
         except (ValueError,OSError,KeyError,TypeError,StopIteration) as exc:
             raise AggregateError(f'formal resource evidence failed: {exc}') from exc
         expected_identity = ledger_identity(report)
@@ -606,8 +614,35 @@ def aggregate(
     }
 
 
+def _aggregate_current(admission, *, evidence_root=None, ledger_path=None,
+                       selection_path=None, manifest_path=None):
+    evidence_root = evidence_root or admission.group.repository / EVIDENCE_ROOT.relative_to(ROOT)
+    ledger_path = ledger_path or evidence_root / '接收清单.jsonl'
+    selection_path = selection_path or evidence_root / 'final-selection.json'
+    manifest_path = manifest_path or admission.group.repository / MANIFEST.relative_to(ROOT)
+    for path in (ledger_path, selection_path, manifest_path):
+        admission.read(path)
+    reference = admission.group.freeze_refs['tests/data/p06_coverage_manifest.json']
+    if sha256_file(manifest_path) != reference['sha256']:
+        raise AggregateError('coverage manifest differs from approval')
+    result = aggregate_historical(evidence_root=evidence_root, ledger_path=ledger_path,
+        selection_path=selection_path, manifest_path=manifest_path, _admission=admission)
+    admission.recheck()
+    return result
+
+
+def aggregate(*, evidence_root=EVIDENCE_ROOT, ledger_path=LEDGER,
+              selection_path=SELECTION, manifest_path=MANIFEST):
+    from tests import p06_pc026_binding
+    return _aggregate_current(p06_pc026_binding.load(), evidence_root=evidence_root,
+        ledger_path=ledger_path, selection_path=selection_path, manifest_path=manifest_path)
+
+
 def main() -> int:
-    result = aggregate()
+    from tests import p06_pc026_binding
+    admission = p06_pc026_binding.load()
+    result = _aggregate_current(admission)
+    admission.recheck()
     OUTPUT.write_bytes(canonical_bytes(result))
     print(json.dumps({"output": str(OUTPUT), "status": result["status"]}, sort_keys=True))
     return 0

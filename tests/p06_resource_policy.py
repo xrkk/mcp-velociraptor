@@ -60,17 +60,18 @@ def build_policy(scenarios, invocations):
     return {'schema_version':1,'steps':rows}
 
 
-def load_policy(scenario):
-    index_path = ROOT/'tests/data/p06_scenario_index.json'
+def load_policy(scenario, *, _admission=None):
+    root = _admission.group.repository if _admission is not None else ROOT
+    index_path = root/'tests/data/p06_scenario_index.json'
     index = json.loads(index_path.read_bytes())
     binding = index['resource_policy']
     if binding.get('path')!='p06_resource_policy.json' or set(binding)!={'path','sha256'}:
         raise ValueError('resource policy must use its fixed indexed path')
-    raw = plain_file(ROOT/'tests/data',binding['path']).read_bytes()
+    raw = plain_file(root/'tests/data',binding['path']).read_bytes()
     if hashlib.sha256(raw).hexdigest()!=binding['sha256']:
         raise ValueError('resource policy hash differs from reviewed index')
     value = json.loads(raw)
-    invocations = json.loads((ROOT/'tests/data/p03_invocations.json').read_bytes())
+    invocations = json.loads((root/'tests/data/p03_invocations.json').read_bytes())
     expected = build_policy([scenario],invocations)['steps']
     rows = [row for row in value['steps'] if row['scenario_id']==scenario['scenario_id']]
     if value['schema_version']!=1 or rows!=expected:

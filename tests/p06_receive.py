@@ -17,10 +17,21 @@ def receive(run_dir: Path, root: Path) -> dict:
         raise ValueError('only completed attempts can be received')
     if report['status']=='failed' and (not report.get('failure') or report.get('coverage')):
         raise ValueError('failed attempts require a cause and empty coverage')
+    admission = None
+    if report['status'] == 'success':
+        from tests import p06_pc026_binding
+        admission = p06_pc026_binding.load()
+        admission.report(report, run_dir, root)
     package_sha = verify_manifest(run_dir,root)
     relative = report_path.relative_to(root).as_posix()
     ledger_path = root/'接收清单.jsonl'
     lock_path = root/'.receive.lock'
+    # Reject an already recorded attempt before creating even a transient lock.
+    existing = load_ledger(ledger_path, root) if ledger_path.exists() else []
+    if any(row['report_relative_path'] == relative for row in existing):
+        raise ValueError('attempt is already received; receipt is immutable')
+    if admission is not None:
+        admission.recheck()
     # A crash leaves a visible lock; never silently bypass concurrent writers.
     with lock_path.open('x',encoding='utf-8') as lock:
         lock.write(str(os.getpid()))
@@ -34,6 +45,8 @@ def receive(run_dir: Path, root: Path) -> dict:
                'manifest_relative_path':(run_dir/'package-manifest.json').relative_to(root).as_posix(),
                'manifest_sha256':package_sha,'package_sha256':package_sha,
                **ledger_identity(report),'received_at':datetime.now(UTC).isoformat()}
+        if admission is not None:
+            admission.recheck()
         with ledger_path.open('ab') as stream:
             stream.write(canonical_bytes(row))
             stream.flush()

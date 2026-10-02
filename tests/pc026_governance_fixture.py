@@ -50,7 +50,7 @@ def build(root: Path, bootstrap: Path, values: dict, repo: Path):
     write(creation,cd)
     # Freeze current resources in this isolated repository, including 191 scenario
     # and source index bytes. Historical scenario bytes inside bootstrap stay intact.
-    for path in {graph.INDEX,graph.FIXTURE,graph.SCHEMA,*(row[0] for row in graph.SCENARIOS.values())}:
+    for path in {graph.INDEX,graph.FIXTURE,*(row[0] for row in graph.SCENARIOS.values())}:
      target=root/path;target.write_bytes((A/'source'/path).read_bytes())
     candidate_path=graph.SCENARIOS['p05-flow-triage-repair-candidate'][0]
     scenario=json.loads((root/candidate_path).read_bytes());scenario['required_snapshot']=profiles.CURRENT.snapshot;write(root/candidate_path,scenario)
@@ -59,6 +59,18 @@ def build(root: Path, bootstrap: Path, values: dict, repo: Path):
      if row['snapshot_stage']=='P05_REPAIR_CANDIDATE':row['required_snapshot']=profiles.CURRENT.snapshot
      row['sha256']=ev._sha((root/graph.SCENARIOS[row['scenario_id']][0]).read_bytes())
     write(root/graph.INDEX,idx)
+    # Current P06 source resources are separately rebound in this synthetic
+    # repository; historical frozen bootstrap bytes are never relabelled.
+    p06_index = root / 'tests/data/p06_scenario_index.json'
+    index = json.loads(p06_index.read_bytes())
+    for row in index['scenarios']:
+     path = root / 'tests/scenarios' / row['path']
+     scenario = json.loads(path.read_bytes())
+     scenario['required_snapshot'] = profiles.CURRENT.snapshot
+     write(path, scenario)
+     row['required_snapshot'] = profiles.CURRENT.snapshot
+     row['sha256'] = ev._sha(path.read_bytes())
+    write(p06_index, index)
     for path in gov.RESOURCES:fixture.freeze[path]=reference(root,path);fixture.refs[path]=fixture.freeze[path]
     # Independent current policy exactly mirrors the loader's explicit partition.
     source_paths={p for p in fixture.normative if p!=gov.BOOTSTRAP}|{gov.NORMATIVE,gov.CONTRACT}|set(gov.SOURCE_RESOURCES)

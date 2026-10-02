@@ -243,7 +243,7 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
                 }) as adoption,
                 patch.object(evidence, 'verify_activation_bundle') as activation,
             ):
-                verified = evidence.verify_restore(fixture.restore, fixture.root)
+                verified = evidence.verify_historical_restore(fixture.restore, fixture.root)
             self.assertEqual(verified['baseline_adoption'], fixture.adoption)
             self.assertEqual(verified['activation_evidence'], fixture.activation)
             self.assertEqual(adoption.call_args.args[0], fixture.adoption)
@@ -263,7 +263,7 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
             fixture = Schema5RestoreFixture(Path(directory))
             fixture._write_canonical(baseline_path='host-only/adoption.json')
             with self.assertRaisesRegex(evidence.EvidenceError, 'baseline evidence path'):
-                evidence.verify_restore(fixture.restore, fixture.root)
+                evidence.verify_historical_restore(fixture.restore, fixture.root)
 
     def test_rejects_other_bundle_uuid_even_when_content_hash_matches(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -272,7 +272,7 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
                 '/original-host/P05/baseline-adoption/' + str(uuid.uuid4()) + '/adoption.json'
             ))
             with self.assertRaisesRegex(evidence.EvidenceError, 'baseline evidence path'):
-                evidence.verify_restore(fixture.restore, fixture.root)
+                evidence.verify_historical_restore(fixture.restore, fixture.root)
 
     def test_rejects_legacy_or_preparation_state_before_it_can_reach_p06(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -280,14 +280,14 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
             fixture.restore['canonical_schema_version'] = 4
             fixture.restore['canonical_epoch'] = 5
             with self.assertRaisesRegex(evidence.EvidenceError, 'activated schema5 Snapshot188'):
-                evidence.verify_restore(fixture.restore, fixture.root)
+                evidence.verify_historical_restore(fixture.restore, fixture.root)
 
     def test_rejects_an_absolute_restore_record_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = Schema5RestoreFixture(Path(directory))
             fixture.restore['restore_records'][0]['path'] = '/outside-package/snapshot-metadata.json'
             with self.assertRaisesRegex(evidence.EvidenceError, 'contained POSIX|escapes'):
-                evidence.verify_restore(fixture.restore, fixture.root)
+                evidence.verify_historical_restore(fixture.restore, fixture.root)
 
     def test_rejects_restore_records_that_are_not_attempt_bound_originals(self) -> None:
         def not_executed_text(fixture: Schema5RestoreFixture) -> None:
@@ -348,7 +348,7 @@ class P06EvidenceSchema5Tests(unittest.TestCase):
                     patch.object(evidence, 'verify_activation_bundle'),
                 ):
                     with self.assertRaisesRegex(evidence.EvidenceError, pattern):
-                        evidence.verify_restore(fixture.restore, fixture.root)
+                        evidence.verify_historical_restore(fixture.restore, fixture.root)
 
     def test_activation_pairing_uses_187_initial_and_188_candidates_before_raw_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

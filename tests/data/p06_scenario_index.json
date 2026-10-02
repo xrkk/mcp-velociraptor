@@ -7,41 +7,41 @@
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-compromise-scope.json",
-      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-compromise-scope",
-      "sha256": "0bae062848a7a65281be4105bdb0f81d9944565230443cd0e0f47ffd66e9a6dc",
+      "sha256": "a760e24b0955315b7f5cb3ae550c466d5af4dbfc6b400979e185ebc4c3792bff",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-ransomware-root-cause.json",
-      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-ransomware-root-cause",
-      "sha256": "d13d22781f518d209e964f6c0ebf8e276d9c5759e515cf456db7c2310c90cd24",
+      "sha256": "75cdb2e03f0dbb49a849968f8bc66f66029f64df54033c32959f70464c7aa70c",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-credential-lateral-movement.json",
-      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-credential-lateral-movement",
-      "sha256": "e5d2e224a1ad251d4aa6f7940b28ef6a41b08c14d3f545f07daf1cb8e3055cc4",
+      "sha256": "fa21505515d47f388888994abd942f6ad177293238019fac6c6e3c9deeb7fa18",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-data-exfiltration.json",
-      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-data-exfiltration",
-      "sha256": "286a423ace6323918275d2177f1172161c2cfd5b81f0d7f90885947be05ce4d0",
+      "sha256": "c06f1f038189c13d661bd4108a9005f5567a8cd5eecd562a5f7898a6715c79a4",
       "snapshot_stage": "P06_ACTIVE"
     },
     {
       "fixture_spec_sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c",
       "path": "full/p06-remediation-validation.json",
-      "required_snapshot": "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+      "required_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
       "scenario_id": "p06-remediation-validation",
-      "sha256": "ab193502b63f211de843018f6b822fc7a8fb095b4ab537a2e101a742d96a4dec",
+      "sha256": "21f0bdc5871a40bf93f92bbc9e23e65009a8aca9dee3589ffd20f56ddd42e899",
       "snapshot_stage": "P06_ACTIVE"
     }
   ],

@@ -2523,7 +2523,7 @@ def _verify_restore_raw_records(
     )
 
 
-def verify_restore(restore: dict, root: Path) -> dict[str, Path]:
+def verify_historical_restore(restore: dict, root: Path) -> dict[str, Path]:
     """Validate only an activated schema5 Snapshot188 P06 restore record.
 
     Every record is resolved relative to ``root`` and must be an in-package,
@@ -2593,6 +2593,13 @@ def verify_restore(restore: dict, root: Path) -> dict[str, Path]:
         forbidden_identity=(restore['restore_attempt_id'], restore['run_id']),
     )
     return by_kind
+
+
+def verify_restore(restore: dict, root: Path) -> dict[str, Path]:
+    """Current host consumer: fixed approval and complete schema6/191 graph."""
+    from tests import p06_pc026_binding
+    admission = p06_pc026_binding.load()
+    return admission.restore(restore, root)
 
 
 def verify_observation(report: dict, run_dir: Path) -> None:

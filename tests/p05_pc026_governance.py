@@ -48,6 +48,12 @@ ENTRIES = frozenset({SELECTOR, "tests/p05_pc026_governance.py",
     "tests/test_p05_pc020_activation.py",
     "tests/test_p05_pc026_governance.py", "tests/pc026_governance_fixture.py",
     "tests/test_p05_selector_schema6.py", "tests/test_p05_pc021_transition_output.py"})
+ENTRIES = ENTRIES | frozenset({"tests/scenario_runner.py", "tests/p06_evidence.py",
+    "tests/p06_receive.py", "tests/p06_aggregate_reports.py", "tests/p07_cost_measurement.py",
+    "tests/p07_cost_measurement_r232.py", "tests/p06_pc026_binding.py",
+    "tests/test_p06_pc026_binding.py", "tests/p06_resource_qualification.py",
+    "tests/p06_formal_session.py", "tests/p06_contracts.py", "tests/test_p06_contracts.py",
+    "tests/test_p06_resource_gate.py", "tests/test_p06_aggregate.py"})
 RESOURCES = frozenset({"requirements.txt", "requirements.lock",
     "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
@@ -57,6 +63,12 @@ RESOURCES = frozenset({"requirements.txt", "requirements.lock",
     "tests/scenarios/schema-v1.json",
     "tests/scenarios/representative/p05-flow-triage-repair-initial.json",
     "tests/scenarios/representative/p05-flow-triage-repair-candidate.json"})
+RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
+    "tests/data/p06_coverage_manifest.json", "tests/data/p06_resource_policy.json",
+    "tests/data/p03_invocations.json", "tests/data/p04_fixed_tools_golden.json",
+    *('tests/scenarios/full/' + name + '.json' for name in (
+        'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
+        'p06-data-exfiltration', 'p06-remediation-validation'))})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
     if path.startswith(("tests/data/", "tests/scenarios/")))
 
@@ -142,6 +154,7 @@ LOCAL_MODULES = frozenset({
     'velociraptor_mcp_core.py',
     'velociraptor_transport.py',
 })
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
 
 
 class GovernanceError(evidence.Pc020EvidenceError):

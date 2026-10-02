@@ -61,19 +61,19 @@ class P06ContractTests(unittest.TestCase):
             {"scenarios": 5, "tools": 129, "relations": 645},
         )
 
-    def test_schema5_stage_contracts_reject_legacy_p06_evidence(self):
+    def test_current_p06_and_historical_p05_stage_contracts_are_separate(self):
         self.assertEqual(
             scenario_runner.SNAPSHOT_STAGES,
             {
                 ('P05_REPAIR_INITIAL', scenario_runner.SNAPSHOT_187),
                 ('P05_REPAIR_CANDIDATE', scenario_runner.SNAPSHOT_189),
-                ('P06_ACTIVE', scenario_runner.SNAPSHOT_189),
+                ('P06_ACTIVE', scenario_runner.SNAPSHOT_191),
             },
         )
         schema = json.loads(scenario_runner.SCHEMA_PATH.read_text(encoding="utf-8"))
         self.assertEqual(
             schema["properties"]["required_snapshot"]["enum"],
-            [scenario_runner.SNAPSHOT_187, scenario_runner.SNAPSHOT_189],
+            [scenario_runner.SNAPSHOT_187, scenario_runner.SNAPSHOT_189, scenario_runner.SNAPSHOT_191],
         )
         self.assertEqual(
             scenario_runner.RESTORE_STAGE_CANONICAL['P05_REPAIR_INITIAL'],
@@ -85,7 +85,7 @@ class P06ContractTests(unittest.TestCase):
         )
         self.assertEqual(
             scenario_runner.RESTORE_STAGE_CANONICAL['P06_ACTIVE'],
-            (6, 8, 'NETWORK_ACTIVE', scenario_runner.SNAPSHOT_189),
+            (6, 8, 'NETWORK_ACTIVE', scenario_runner.SNAPSHOT_191),
         )
         self.assertEqual(
             scenario_runner.RESTORE_STAGE_RECORD_KINDS['P05_REPAIR_INITIAL'],
@@ -100,11 +100,11 @@ class P06ContractTests(unittest.TestCase):
             scenario_runner.RESTORE_RECORD_KINDS,
         )
         files, index, _manifest = p06_contracts.build_contracts()
-        self.assertEqual(p06_contracts.SNAPSHOT, scenario_runner.SNAPSHOT_189)
+        self.assertEqual(p06_contracts.SNAPSHOT, scenario_runner.SNAPSHOT_191)
         self.assertEqual(len(files), 5)
         for row in index['scenarios']:
             self.assertEqual(row['snapshot_stage'], 'P06_ACTIVE')
-            self.assertEqual(row['required_snapshot'], scenario_runner.SNAPSHOT_189)
+            self.assertEqual(row['required_snapshot'], scenario_runner.SNAPSHOT_191)
 
     def test_every_tool_has_five_distinct_scenario_roles(self):
         manifest = json.loads(p06_contracts.MANIFEST.read_text(encoding="utf-8"))

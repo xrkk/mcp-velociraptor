@@ -19,7 +19,7 @@ FIXTURE_SPEC = DATA / "p05_fixture_spec.json"
 INDEX = DATA / "p06_scenario_index.json"
 MANIFEST = DATA / "p06_coverage_manifest.json"
 SCHEMA = SCENARIOS / "schema-v1.json"
-SNAPSHOT = "Snapshot 189-Velociraptor-MCP可恢复验收基线"
+SNAPSHOT = "Snapshot 191-Velociraptor-MCP可恢复验收基线"
 NO_MATCH = "__mcp_p03_no_match__"
 
 # Each scenario uses a distinct investigation-scoped regex pattern so that the
@@ -253,7 +253,7 @@ def relation(
         "step_ids": step_ids,
         "parameters_sha256": sha256_bytes(canonical_bytes(arguments)),
         "fixture_preconditions": [
-            "Snapshot188 fixture-instance-v1 identity matches the tracked fixture spec",
+            "Snapshot191 fixture-instance-v1 identity matches the tracked fixture spec",
             f"The {topic} investigation starts from the clean snapshot and one unique Windows client",
             "This scenario binds its evidence chain to fixture file "
             + (focus_file if focus_file else "the shared platform baseline"),

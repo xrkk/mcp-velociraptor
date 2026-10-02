@@ -333,7 +333,7 @@ class AggregateFixture:
         # than treated as a host-side P06 acceptance run.
         with (patch.object(aggregate, 'verify_resource_evidence') as resource_verifier,
               patch.object(aggregate, 'verify_restore', return_value={})):
-            result = aggregate.aggregate(
+            result = aggregate.aggregate_historical(
                 evidence_root=self.evidence,
                 ledger_path=self.evidence / "ledger.jsonl",
                 selection_path=self.evidence / "selection.json",
@@ -358,7 +358,7 @@ class AggregateSchema2Tests(unittest.TestCase):
                   patch.object(aggregate, 'verify_restore', return_value={})):
                 with self.assertRaisesRegex(aggregate.AggregateError,
                                             'missing original resource reading'):
-                    aggregate.aggregate(
+                    aggregate.aggregate_historical(
                         evidence_root=fixture.evidence,
                         ledger_path=fixture.evidence / 'ledger.jsonl',
                         selection_path=fixture.evidence / 'selection.json',
@@ -383,7 +383,7 @@ class AggregateSchema2Tests(unittest.TestCase):
             with (patch.object(aggregate, 'verify_resource_evidence'),
                   patch.object(aggregate, 'verify_restore', side_effect=ValueError('canonical SHA differs'))):
                 with self.assertRaisesRegex(aggregate.AggregateError, 'canonical SHA'):
-                    aggregate.aggregate(
+                    aggregate.aggregate_historical(
                         evidence_root=fixture.evidence,
                         ledger_path=fixture.evidence / 'ledger.jsonl',
                         selection_path=fixture.evidence / 'selection.json',

@@ -11,8 +11,26 @@ explicit isolated fixture seam verifies complete 191 content while preserving
 historical 448+4 originals and the old 189 verifier defaults. This reader never
 publishes evidence, writes canonical state, mints capabilities or executes VMware.
 Native Windows observations, service-principal/default ACL qualification and
-actual READY issuance remain separate; runner/receiver/aggregate/P07 integration
-is still pending. The historical agent does not acquire a recovery feature.
+actual READY issuance remain separate. Current host P06 restore, receiver and
+aggregate entrypoints retain the same fixed approval and qualify the complete
+191/C8 graph plus eight restore kinds. Success receipt admission precedes lock
+and ledger writes; duplicates are rejected before a lock. Failed attempts keep
+zero coverage and their original failure preservation rule. Aggregation requires
+five independent restores and the unchanged 129 × 5 = 645 relation set, while
+resource qualification must use that same current graph and 137-tool face.
+Every consumed package/selection is retained for a final drift recheck. Historical
+restore and aggregate verifiers are explicitly named `verify_historical_restore`
+and `aggregate_historical`; historical 188/189/schema3 inputs cannot qualify the
+current entrypoints. There is no automatic approval creation or test-root CLI.
+
+P07 current entrypoints enforce the approval/P06 handoff and refuse historical
+cost output. A current upstream five-pair collection binding and the Windows
+approval handoff still need a controller contract; current P07 cost production
+and native Windows execution are not complete. Explicit historical measurement
+functions preserve old calculations, without declaring current acceptance.
+Isolated host fixtures verify consumer content and rejection boundaries; they
+are not real recoveries, 645 business executions or measured cost achievements.
+The historical agent does not acquire a recovery feature.
 
 The implementation freeze requires an explicit reviewed local-module catalog,
 parent package initializers, and non-Python resources including the transfer

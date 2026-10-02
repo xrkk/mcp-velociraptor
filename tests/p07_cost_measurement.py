@@ -276,7 +276,7 @@ def cost_pair_rows(upstream: list[dict], current: list[dict]) -> list[dict]:
     return pairs
 
 
-def main() -> int:
+def main_historical() -> int:
     upstream, upstream_capture_sha = upstream_tools()
     current, current_schema_sha, current_source = current_tools()
     upstream_groups = upstream_group_rows()
@@ -382,6 +382,17 @@ def main() -> int:
         )
     )
     return 0
+
+
+def main() -> int:
+    """Current admission precedes every count/output; old pairs stay historical."""
+    from tests import p06_pc026_binding, p06_aggregate_reports
+    admission = p06_pc026_binding.load()
+    p06_aggregate_reports._aggregate_current(admission)
+    admission.recheck()
+    # Existing upstream-task documents carry a group label, not a run/restore
+    # or approval Ref. Do not relabel their historical costs as current pairs.
+    raise ValueError('current P07 upstream pair approval/run/restore binding is not yet implemented')
 
 
 if __name__ == "__main__":

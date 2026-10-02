@@ -23,7 +23,7 @@ from mcp.client.stdio import stdio_client
 
 # Allow direct script execution from any working directory (tests/ layout).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tests.p06_evidence import EvidenceError, verify_restore
+from tests.p06_evidence import EvidenceError, verify_historical_restore as verify_restore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -38,15 +38,16 @@ P05_REPORT_ROOT = REPO_ROOT / "Logs" / "P05" / "wf-01a05d1d-p05"
 P06_REPORT_ROOT = REPO_ROOT / "Logs" / "P06" / "wf-01a05d1d-p06-r3"
 SNAPSHOT_187 = "Snapshot 187-固定IP+WindowsMCP开机自启"
 SNAPSHOT_189 = "Snapshot 189-Velociraptor-MCP可恢复验收基线"
+SNAPSHOT_191 = "Snapshot 191-Velociraptor-MCP可恢复验收基线"
 SNAPSHOT_STAGES = {
     ("P05_REPAIR_INITIAL", SNAPSHOT_187),
     ("P05_REPAIR_CANDIDATE", SNAPSHOT_189),
-    ("P06_ACTIVE", SNAPSHOT_189),
+    ("P06_ACTIVE", SNAPSHOT_191),
 }
 RESTORE_STAGE_CANONICAL = {
     "P05_REPAIR_INITIAL": (6, 7, "PREPARATION_BASELINE", SNAPSHOT_187),
     "P05_REPAIR_CANDIDATE": (6, 7, "PREPARATION_BASELINE", SNAPSHOT_187),
-    "P06_ACTIVE": (6, 8, "NETWORK_ACTIVE", SNAPSHOT_189),
+    "P06_ACTIVE": (6, 8, "NETWORK_ACTIVE", SNAPSHOT_191),
 }
 REPORT_SCHEMA_VERSION = 2
 BASELINE_BINDING_SCHEMA = "velo.p06.baseline-binding.v1"
@@ -746,18 +747,34 @@ def load_baseline_binding(path: Path) -> dict[str, Any]:
     return document
 
 
-def load_current_restore(evidence_root: Path, run_id: str) -> dict[str, Any]:
-    """Load and validate the fixed restore declaration for this run."""
+def load_current_restore(evidence_root: Path, run_id: str, *, _admission=None) -> dict[str, Any]:
+    """Only the fixed approved current P06 eight-kind declaration qualifies."""
+    from tests import p06_pc026_binding
+    admission = _admission or p06_pc026_binding.load()
+    path = _plain_contained_file(evidence_root, CURRENT_RESTORE_NAME)
+    document = json.loads(admission.read(path))
+    if (set(document) != CURRENT_RESTORE_KEYS or document.get('run_id') != run_id
+            or document.get('snapshot_stage') != 'P06_ACTIVE'):
+        raise SnapshotEvidenceError('current P06 restore run/stage/keys differ')
+    admission.restore(document, evidence_root)
+    return document
+
+
+def load_historical_restore(evidence_root: Path, run_id: str) -> dict[str, Any]:
+    """Explicit legacy P05 declaration reader; never current P06 admission."""
     path = evidence_root / CURRENT_RESTORE_NAME
     if not path.is_file() or _is_reparse(path):
         raise SnapshotEvidenceError("current-restore.json is missing or not a plain file")
-    document = json.loads(path.read_text(encoding="utf-8"))
+    raw = path.read_bytes()
+    document = json.loads(raw)
     if set(document) != CURRENT_RESTORE_KEYS:
         raise SnapshotEvidenceError("current-restore.json keys are invalid")
     if document["workflow_id"] != "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2":
         raise SnapshotEvidenceError("current-restore.json belongs to another workflow")
     if document["run_id"] != run_id:
         raise SnapshotEvidenceError("current-restore.json is bound to another run id")
+    if document["snapshot_stage"] == "P06_ACTIVE":
+        raise SnapshotEvidenceError("historical P06 uses verify_historical_restore, not this P05 reader")
     if (document["snapshot_stage"], document["snapshot_name"]) not in SNAPSHOT_STAGES:
         raise SnapshotEvidenceError("current-restore.json stage/snapshot pair is not approved")
     records = document["restore_records"]
@@ -928,6 +945,14 @@ async def run_scenario(
     fixture_instance: Path | None = None,
     expected_tool_count: int | None = None,
 ) -> tuple[dict[str, Any], Path]:
+    admission = None
+    if scenario_id.startswith('p06-') and transport == 'streamable-http':
+        if baseline_binding is not None:
+            raise ScenarioInputError('schema3 baseline binding is historical and cannot authorize current P06')
+        if os.name != 'posix':
+            raise ScenarioInputError('current P06 requires the host approval decision; Windows handoff is not adopted')
+        from tests import p06_pc026_binding
+        admission = p06_pc026_binding.load()
     baseline_mode = baseline_binding is not None
     if baseline_mode:
         # PLAN-CHANGE-025 schema3: the adopted .232 baseline binding replaces
@@ -955,6 +980,20 @@ async def run_scenario(
     if run_id is not None and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", run_id):
         raise ScenarioInputError("reserved run id must be a lowercase uuid")
     run_id = run_id or str(uuid.uuid4())
+    if admission is not None:
+        # No run directory, fixture copy, session or tool exists before admission.
+        load_current_restore(Path(evidence_root), run_id, _admission=admission)
+        index_ref = admission.group.freeze_refs['tests/data/p06_scenario_index.json']
+        source_ref = admission.group.freeze_refs['tests/scenarios/' + index_row['path']]
+        from tests.p05_pc026_profile import CURRENT
+        if (index_row['required_snapshot'] != CURRENT.snapshot
+                or sha256_file(index_path) != index_ref['sha256']
+                or source_hash != source_ref['sha256']):
+            raise ScenarioInputError('current P06 scenario source/index differs from approved 191 source')
+        fixture_path = Path(evidence_root) / 'fixture-instance.json'
+        if hashlib.sha256(admission.read(fixture_path)).hexdigest() != fixture_hash:
+            raise ScenarioInputError('fixture changed before admission')
+        admission.recheck()
     if baseline_mode:
         report_root = Path(evidence_root) / scenario_id
     else:
@@ -974,7 +1013,8 @@ async def run_scenario(
         binding_document = load_baseline_binding(Path(baseline_binding))
         (run_dir / 'baseline-binding.json').write_bytes(Path(baseline_binding).read_bytes())
     elif evidence_root is not None:
-        restore_document = load_current_restore(Path(evidence_root), run_id)
+        restore_document = (load_current_restore(Path(evidence_root), run_id, _admission=admission)
+                            if admission is not None else load_historical_restore(Path(evidence_root), run_id))
     if transport == 'streamable-http' and restore_document is None and not baseline_mode:
         raise SnapshotEvidenceError('formal HTTP execution requires original restore evidence')
     authorization_configured = bool(
@@ -1111,7 +1151,7 @@ async def run_scenario(
                 tools_bytes = canonical_bytes(tools_document)
                 report["tools_schema_sha256"] = hashlib.sha256(tools_bytes).hexdigest()
                 (run_dir / "tools-schema.json").write_bytes(tools_bytes)
-                expected_tools = expected_tool_count or (137 if baseline_mode else 130)
+                expected_tools = 137 if admission is not None else (expected_tool_count or (137 if baseline_mode else 130))
                 if len(tools) != expected_tools or len(names) != expected_tools:
                     raise ScenarioInputError(
                         f"runtime tool inventory must contain {expected_tools} unique tools")
@@ -1126,7 +1166,7 @@ async def run_scenario(
                     from tests.p06_resource_gate import GuestResourceSampler, ScenarioResourceGate, ResourceRejected, guarded_step
                     sampler = GuestResourceSampler(endpoint,run_id,report['server_identity'],run_dir/'resources')
                     resource_gate = ScenarioResourceGate(
-                        Path(evidence_root) if baseline_mode else P06_REPORT_ROOT, scenario, sampler)
+                        Path(evidence_root) if baseline_mode else P06_REPORT_ROOT, scenario, sampler, _admission=admission)
                     try:
                         gate_row = await resource_gate.before('p06-resource-start',initial=True)
                         report['steps'].append({'id':'p06-resource-start','kind':'resource-gate',
@@ -1260,6 +1300,8 @@ async def run_scenario(
             evidence_bytes = canonical_bytes(snapshot_evidence)
             (run_dir / "snapshot-evidence.json").write_bytes(evidence_bytes)
             report["snapshot_evidence_sha256"] = hashlib.sha256(evidence_bytes).hexdigest()
+        if admission is not None:
+            admission.recheck()
         report_path.write_bytes(canonical_bytes(report))
         if scenario_id.startswith('p06-') and transport == 'streamable-http':
             from tests.p06_package import member_inventory, verify_manifest
@@ -1303,7 +1345,7 @@ def main() -> int:
                 expected_tool_count=args.expected_tool_count,
             )
         )
-    except (ScenarioInputError, SnapshotEvidenceError, OSError, json.JSONDecodeError) as exc:
+    except (ScenarioInputError, SnapshotEvidenceError, OSError, ValueError) as exc:
         print(f"scenario-runner: {exc}", file=sys.stderr)
         return 2
     print(json.dumps({"report": str(path), "status": report["status"]}, ensure_ascii=False, sort_keys=True))

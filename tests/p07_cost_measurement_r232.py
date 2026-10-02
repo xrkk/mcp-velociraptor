@@ -26,7 +26,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from p07_cost_measurement import SCENARIOS, COST_PAIR_GROUPS, UPSTREAM_CAPTURE, canonical_text, sha256_file, upstream_tools
+import sys
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tests.p07_cost_measurement import SCENARIOS, COST_PAIR_GROUPS, UPSTREAM_CAPTURE, canonical_text, sha256_file, upstream_tools
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PAIRS_ROOT = REPO_ROOT / "Logs" / "P07" / "cost-pairs-232"
@@ -240,7 +243,7 @@ def face(tools: list[dict]) -> dict:
     }
 
 
-def main() -> int:
+def main_historical() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-root", required=True,
                         help="directory containing p232-scenarios/ and tools-list-232-137.json")
@@ -371,6 +374,15 @@ def main() -> int:
         )
     )
     return 0
+
+
+def main() -> int:
+    """The old .232 no-restore layout cannot publish a current cost result."""
+    from tests import p06_pc026_binding, p06_aggregate_reports
+    admission = p06_pc026_binding.load()
+    p06_aggregate_reports._aggregate_current(admission)
+    admission.recheck()
+    raise ValueError('historical .232 schema3/no-restore pairs cannot satisfy current P07')
 
 
 if __name__ == "__main__":
