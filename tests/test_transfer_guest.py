@@ -413,6 +413,7 @@ class GuestTests(unittest.TestCase):
         partial, ledger = self.service._ledger_paths(state)
         partial.write_bytes(b"")
         ledger.write_bytes(b"")
+        state["partial_identity"] = self.service._partial_fingerprint(state, partial.stat(), ledger.stat())
         with partial.open("r+b") as stream:
             stream.seek((1 << 32) + 7)
             stream.write(b"x")

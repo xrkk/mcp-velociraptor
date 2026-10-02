@@ -17,6 +17,7 @@ from pathlib import Path
 from .errors import TransferContentError as Error
 from .manifest import _no_link, canonical_json, check_relative, safe_chain
 from .policy import Policy, validate_deadline
+from .protocol import validate_prefix_verification
 
 STATE_SCHEMA = "velo.transfer.store.v1"
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\Z")
@@ -90,6 +91,17 @@ def _validate_json(value, *, max_bytes: int, max_nodes: int = 10000,
             raise Error("invalid_state")
 
     visit(value, 0)
+
+
+def _guest_prefix(state):
+    # TaskStore is also used by the internal lease and independent generic stores.
+    if isinstance(state, dict) and isinstance(state.get("request"), dict) and "offset" in state:
+        proof = state.get("prefix_verification")  # Legacy objects carry no proof.
+        validate_prefix_verification(proof, digest=state["request"]["request_digest"],
+            offset=state["offset"], worker=state.get("owner"), chunk_count=state["chunk_count"])
+        if proof is not None and (state.get("cancelled") or state.get("error") is not None or
+                                  state["request"]["direction"] != "push"):
+            raise Error("invalid_state")
 
 
 def _pairs(items):
@@ -325,6 +337,7 @@ class TaskStore:
             raise Error("state_hash_mismatch")
         if canonical_json(envelope) != raw:
             raise Error("invalid_state")
+        _guest_prefix(envelope["state"])
         return envelope
 
     def load(self, transfer_id: str, expected_binding: dict) -> dict:
@@ -339,6 +352,7 @@ class TaskStore:
         return copy.deepcopy(envelope)
 
     def _encode(self, transfer_id: str, binding: dict, revision: int, state) -> tuple[dict, bytes]:
+        _guest_prefix(state)
         maximum = self.policy.limits["max_state_bytes"]
         # Account the full envelope including digest before deepcopy/json.dumps.
         content = {"schema": STATE_SCHEMA, "transfer_id": transfer_id,

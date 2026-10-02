@@ -52,6 +52,25 @@ def validate_binding(binding):
     return copy.deepcopy(binding)
 
 
+def validate_prefix_verification(proof, *, digest, offset, worker, chunk_count=None):
+    """Validate a persisted/wire proof against its independent task/worker facts."""
+    if proof is None:
+        return
+    _object(proof, ("schema", "request_digest", "worker_nonce", "verified_offset",
+                    "chunk_count", "ledger_sha256", "completed"), "invalid_state")
+    _digest(proof["request_digest"])
+    _digest(proof["ledger_sha256"])
+    if (proof["schema"] != "velo.transfer.prefix-verification.v1" or
+            proof["completed"] is not True or proof["request_digest"] != digest or
+            type(proof["verified_offset"]) is not int or proof["verified_offset"] != offset or
+            type(proof["chunk_count"]) is not int or proof["chunk_count"] < 0 or
+            (chunk_count is not None and proof["chunk_count"] != chunk_count) or
+            not isinstance(worker, dict) or worker.get("job") != "verify_partial" or
+            not isinstance(proof["worker_nonce"], str) or not proof["worker_nonce"] or
+            proof["worker_nonce"] != worker.get("nonce")):
+        raise Error("invalid_state")
+
+
 def validate_destination(destination, direction):
     """Validate the registered descriptor, without dereferencing remote paths."""
     _object(destination, ("endpoint", "identity", "canonical_path"), "invalid_destination")

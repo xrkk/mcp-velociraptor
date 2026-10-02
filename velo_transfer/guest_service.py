@@ -293,9 +293,12 @@ class GuestTransferService:
         expected = state["request"]["expected_vm_identity"]
         if expected["vm_uuid"] != self.observation.vm_uuid or expected["boot_identity"] != self.observation.boot_identity:
             raise Error("vm_identity_mismatch")
+        state.setdefault("prefix_verification", None)
         return envelope
 
     def _save(self, store, envelope, state):
+        if state["cancelled"] or state["error"] is not None:
+            state["prefix_verification"] = None
         return store.save(envelope["transfer_id"], envelope["binding"], envelope["revision"], state)
 
     def _task_path(self, transfer_id, observation=None):
@@ -375,7 +378,8 @@ class GuestTransferService:
                          "partial_identity": None, "cleanup_targets": None,
                          "terminal": None, "stage_intent": None, "staging": None,
                          "publish_intent": None, "owner": None, "cancelled": False,
-                         "error": None, "cleanup": None, "destination_verification": None}
+                         "error": None, "cleanup": None, "destination_verification": None,
+                         "prefix_verification": None}
                 envelope = store.create(transfer_id, self._binding(request), state)
                 if envelope["state"] != state:
                     raise Error("task_binding_conflict")
@@ -393,7 +397,8 @@ class GuestTransferService:
                 "package": state["package"], "verified_offset": state["offset"],
                 "terminal": copy.deepcopy(terminal), "cleanup": state["cleanup"],
                 "destination_verification": copy.deepcopy(state.get("destination_verification")),
-                "error": state["error"], "worker": copy.deepcopy(state["owner"])}
+                "error": state["error"], "worker": copy.deepcopy(state["owner"]),
+                "prefix_verification": copy.deepcopy(state.get("prefix_verification"))}
 
     def transfer_status(self, transfer_id: str, request_digest: str):
         store = self._store()
@@ -418,6 +423,11 @@ class GuestTransferService:
         if state["terminal"] is not None:
             GuestTerminal.restore(state["terminal"], self._protocol_binding(state["request"], state["package"]),
                                   state["request"]["expected_destination"])
+        if state.get("prefix_verification") is not None:
+            partial, ledger = self._ledger_paths(state)
+            if state["offset"] or partial.exists() or ledger.exists():
+                if self._partial_fingerprint(state, _no_link(partial), _no_link(ledger)) != state["partial_identity"]:
+                    raise Error("partial_changed")
         result = self._public(state)
         if result["worker"] is not None and result["worker"]["stopped"]:
             for attempt in range(3):
@@ -482,6 +492,8 @@ class GuestTransferService:
                     store.save(_LEASE_ID, lease["binding"], lease["revision"], {"active": None})
                 if not saved["stopped"]:
                     saved["stopped"] = True
+                    if saved["job"] == "verify_partial" and current.get("prefix_verification") is None and current["error"] is None:
+                        current["error"] = "worker_result_unknown"
                     if time.monotonic() >= current["deadline_monotonic"] and current["error"] is None:
                         current["error"] = "deadline_exceeded"
                     self._save(store, fresh, current)
@@ -546,6 +558,7 @@ class GuestTransferService:
                          "stopped": False}
                 state["owner"] = owner
                 state["error"] = None
+                state["prefix_verification"] = None
                 if job == "release" and state["request"]["direction"] == "push":
                     # A new attempt must never inherit a prior worker's proof.
                     state["destination_verification"] = None
@@ -672,15 +685,30 @@ class GuestTransferService:
         if job == "package":
             self._package(envelope, budget)
         elif job == "verify_partial":
-            self._verified_partial(state, force=True, budget=budget)
+            original_identity = copy.deepcopy(state["partial_identity"])
+            ledger_sha = self._verified_partial(state, force=True, budget=budget)
             store = self._store()
             with store.writer():
                 fresh = self._load(transfer_id, digest, store)
                 current = fresh["state"]
                 if (current["cancelled"] or current["offset"] != state["offset"] or
-                        current["chunk_count"] != state["chunk_count"]):
+                        current["chunk_count"] != state["chunk_count"] or
+                        current["owner"] != state["owner"] or
+                        current["partial_identity"] != original_identity):
+                    # Disk fingerprint is checked below; original protected progress
+                    # must still refer to exactly the worker's task revision.
                     raise Error("worker_state_changed")
+                budget.check()
+                partial, ledger = self._ledger_paths(current)
+                if current["offset"] or partial.exists() or ledger.exists():
+                    if self._partial_fingerprint(current, _no_link(partial), _no_link(ledger)) != state["partial_identity"]:
+                        raise Error("partial_changed")
                 current["partial_identity"] = state["partial_identity"]
+                current["prefix_verification"] = {
+                    "schema": "velo.transfer.prefix-verification.v1", "request_digest": digest,
+                    "worker_nonce": current["owner"]["nonce"], "verified_offset": current["offset"],
+                    "chunk_count": current["chunk_count"], "ledger_sha256": ledger_sha,
+                    "completed": True}
                 self._save(store, fresh, current)
         elif job == "prepare":
             self._prepare(envelope, budget)
@@ -791,8 +819,8 @@ class GuestTransferService:
         budget.check()
         partial, ledger = self._ledger_paths(state, observation=observation)
         offset = state["offset"]
-        if not partial.exists() and not ledger.exists() and offset == 0:
-            return
+        if not os.path.lexists(partial) and not os.path.lexists(ledger) and offset == 0 and state["chunk_count"] == 0 and state["partial_identity"] is None:
+            return hashlib.sha256(b"").hexdigest()
         safe_chain(partial, self.policy.work_root)
         safe_chain(ledger, self.policy.work_root)
         pinfo, linfo = _no_link(partial), _no_link(ledger)
@@ -803,6 +831,11 @@ class GuestTransferService:
         if os.name == "nt" and (self.acl(partial, "state") is not True or
                                 self.acl(ledger, "state") is not True):
             raise Error("windows_acl_not_verified")
+        owned = state.get("partial_identity")
+        if (not isinstance(owned, dict) or
+                owned["partial"][:2] != [pinfo.st_dev, pinfo.st_ino] or
+                owned["ledger"][:2] != [linfo.st_dev, linfo.st_ino]):
+            raise Error("partial_changed")
         key = self._partial_fingerprint(state, pinfo, linfo)
         if not force and state.get("partial_identity") == key:
             return
@@ -813,9 +846,11 @@ class GuestTransferService:
             raise Error("metadata_budget_exceeded")
         with partial.open("rb") as data, ledger.open("rb") as records:
             position = 0
+            ledger_digest = hashlib.sha256()
             for _ in range(state["chunk_count"]):
                 budget.check()
                 line = records.readline(256)
+                ledger_digest.update(line)
                 record = _strict_json(line, 255)
                 _dict(record, ("offset", "count", "sha256"), "partial_corrupt")
                 if (record["offset"] != position or not _positive(record["count"]) or
@@ -844,6 +879,7 @@ class GuestTransferService:
                 os.fsync(output.fileno())
         pinfo, linfo = _no_link(partial), _no_link(ledger)
         state["partial_identity"] = self._partial_fingerprint(state, pinfo, linfo)
+        return ledger_digest.hexdigest()
 
     @staticmethod
     def _partial_fingerprint(state, pinfo, linfo):
@@ -920,13 +956,16 @@ class GuestTransferService:
                         "replayed": True}
             if offset != state["offset"] or state["phase"] != "DEST_RECEIVING":
                 raise Error("chunk_offset_conflict")
+            record = canonical_json({"offset": offset, "count": count, "sha256": chunk_sha256}) + b"\n"
+            if (ledger.stat().st_size if ledger.exists() else 0) + len(record) > state["request"]["budget"]["max_metadata_bytes"]:
+                raise Error("metadata_budget_exceeded")
+            self._budget(state).space(partial.parent, count + len(record))
+            state["prefix_verification"] = None
             if not partial.exists():
                 self._atomic_sidecar(partial, b"", state["request"]["budget"]["max_package_bytes"])
                 self._atomic_sidecar(ledger, b"", state["request"]["budget"]["max_metadata_bytes"])
-            record = canonical_json({"offset": offset, "count": count, "sha256": chunk_sha256}) + b"\n"
-            if ledger.stat().st_size + len(record) > state["request"]["budget"]["max_metadata_bytes"]:
-                raise Error("metadata_budget_exceeded")
-            self._budget(state).space(partial.parent, count)
+            state["partial_identity"] = self._partial_fingerprint(state, _no_link(partial), _no_link(ledger))
+            fresh = self._save(store, fresh, state)
             with partial.open("r+b") as output:
                 output.seek(offset)
                 output.write(data)
@@ -1064,6 +1103,9 @@ class GuestTransferService:
             if not partial.exists():
                 self._atomic_sidecar(partial, b"", state["request"]["budget"]["max_package_bytes"])
                 self._atomic_sidecar(ledger, b"", state["request"]["budget"]["max_metadata_bytes"])
+            state["prefix_verification"] = None
+            state["partial_identity"] = self._partial_fingerprint(state, _no_link(partial), _no_link(ledger))
+            fresh = self._save(store, fresh, state)
             with partial.open("r+b") as output:
                 output.seek(offset)
                 for count, data, sha in prepared:
@@ -1127,6 +1169,7 @@ class GuestTransferService:
                 self._check_idle(store)
                 state["terminal"] = terminal.snapshot()
                 state["phase"] = terminal.local_phase
+                state["prefix_verification"] = None
                 self._save(store, envelope, state)
                 launch = True
             elif (operation["status"] == "IN_PROGRESS" and

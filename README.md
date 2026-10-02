@@ -1,5 +1,7 @@
 # Velociraptor MCP
 
+PC026 now persists a worker-bound prefix verification only after full payload/ledger checks in the same protected state revision. Resume reuses the original deadline; writes, cancellation and revalidation clear the proof, and foreign tails are never truncated. Legacy state without a proof requires bounded revalidation.
+
 PC026 scoped implementation now prevalidates the complete JSON batch (including every decoded hash and total ledger/disk budget) before payload writes. Valid I/O failures retain an owned unacknowledged tail for bounded recovery. This is local development work; formal Windows acceptance and deployment remain separate. Binary session/frame hardening is pending and must not be treated as available.
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
