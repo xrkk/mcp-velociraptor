@@ -30,10 +30,13 @@ RUNTIME = BASE + "controller-runtime-record.json"
 APPROVAL = BASE + "controller-approval.json"
 FREEZE = BASE + "implementation-freeze.json"
 DEPLOYMENT = BASE + "deployment-configuration.json"
+COMPLETION = BASE + "p06-completion-record.json"
 CONTRACT = BASE + "2026.10.02-04-PC026-运行信任锚读取契约.md"
 CONTRACT_SHA = "5336acb8ed4a1536f2aac71792b976d849b1cc8cab0234063e735a1b5e28ad71"
 NATIVE_CONTRACT = BASE + "2026.10.02-05-PC026-Windows固定原生读取补充.md"
 NATIVE_CONTRACT_SHA = "c5c9f1291bbe0bee4e40b642482b28ac62aa28fed98305fb42448ee5c962d300"
+HANDOFF_CONTRACT = BASE + "2026.10.02-06-PC026-P07固定交接读取契约.md"
+HANDOFF_CONTRACT_SHA = "dc3b548d8e2741c5773df669962fdab51af41ca7db204655a3a2302bcf12676c"
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
 MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
@@ -59,8 +62,9 @@ ENTRIES = ENTRIES | frozenset({"tests/scenario_runner.py", "tests/p06_evidence.p
     "tests/test_p06_pc026_binding.py", "tests/p06_resource_qualification.py",
     "tests/p06_formal_session.py", "tests/p06_contracts.py", "tests/test_p06_contracts.py",
     "tests/test_p06_resource_gate.py", "tests/test_p06_aggregate.py",
-    "tests/p05_pc026_windows_reader.py", "tests/test_p05_pc026_windows_reader.py"})
-RESOURCES = frozenset({NATIVE_CONTRACT, "requirements.txt", "requirements.lock",
+    "tests/p05_pc026_windows_reader.py", "tests/test_p05_pc026_windows_reader.py",
+    "tests/p07_handoff.py", "tests/test_p07_handoff.py"})
+RESOURCES = frozenset({NATIVE_CONTRACT, HANDOFF_CONTRACT, "requirements.txt", "requirements.lock",
     "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
     "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
@@ -76,7 +80,7 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
         'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
         'p06-data-exfiltration', 'p06-remediation-validation'))})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
-    if path == NATIVE_CONTRACT or path.startswith(("tests/data/", "tests/scenarios/")))
+    if path in {NATIVE_CONTRACT, HANDOFF_CONTRACT} or path.startswith(("tests/data/", "tests/scenarios/")))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
 # third-party imports when this reader itself runs in an incomplete tree.
@@ -307,7 +311,7 @@ def _read(path, *, reader=None):
         try:
             return reader.read(path, private=path.name in {
                 "controller-runtime-record.json", "controller-approval.json",
-                "deployment-configuration.json", ".env", "api.config.yaml"})
+                "deployment-configuration.json", "p06-completion-record.json", ".env", "api.config.yaml"})
         except Exception as exc:
             raise GovernanceError("native governance read failed: " + str(exc)) from exc
         finally:
@@ -618,6 +622,21 @@ def _load_at(repository: Path, *, synthetic_fixture=False):
         raise
 
 
+def private_host_boundary(repository, identity, host):
+    require(host["owner_uid"] in {"0", str(os.geteuid())}
+            and not (int(host["mode"], 8) & 0o022), "runtime owner/ACL trust boundary differs")
+    for index, (identity, security) in enumerate(zip(identity[0][:-1], identity[1][:-1])):
+        mode = identity[2]
+        # OS-owned ancestors above the code root can use mapped/container UIDs.
+        # The controlled repository and its governance descendants must retain
+        # the reader/root owner boundary; do not infer UID 0 for filesystem /.
+        controlled = index >= len(repository.parts) - 1
+        require((not controlled or security[0] in {0, os.geteuid()})
+                and (not mode & 0o002 or not controlled and mode & stat.S_ISVTX)
+                and (not controlled or not mode & 0o020 or security[1] == os.getegid()),
+                "runtime ancestor owner/ACL trust boundary differs")
+
+
 def _load_group(repository: Path, *, synthetic_fixture, reader):
     """Internal file-tree seam; all fixed model/hash/path gates still apply."""
     require(repository.is_absolute() and str(repository) == str(repository.absolute())
@@ -629,22 +648,12 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
             "adopted native contract version anchor differs")
     runtime_bytes, runtime_identity, runtime_host = _read(repository / RUNTIME, reader=reader)
     if reader is None:
-        require(runtime_host["owner_uid"] in {"0", str(os.geteuid())}
-                and not (int(runtime_host["mode"], 8) & 0o022), "runtime owner/ACL trust boundary differs")
-        for index, (identity, security) in enumerate(zip(runtime_identity[0][:-1], runtime_identity[1][:-1])):
-            mode = identity[2]
-            # OS-owned ancestors above the code root can use mapped/container UIDs.
-            # The controlled repository and its governance descendants must retain
-            # the reader/root owner boundary; do not infer UID 0 for filesystem /.
-            controlled = index >= len(repository.parts) - 1
-            require((not controlled or security[0] in {0, os.geteuid()})
-                    and (not mode & 0o002 or not controlled and mode & stat.S_ISVTX)
-                    and (not controlled or not mode & 0o020 or security[1] == os.getegid()),
-                    "runtime ancestor owner/ACL trust boundary differs")
+        private_host_boundary(repository, runtime_identity, runtime_host)
     runtime = evidence._json_bytes(runtime_bytes, "fixed runtime record")
     exact(runtime, "schema_version kind profile_id workflow_id contract_ref approval_ref allowed_refs status",
           "pc026-controller-runtime-record-v1", "ADOPTED")
     allowed = refs(runtime["allowed_refs"])
+    require(COMPLETION not in allowed, "completion must stay outside original allowlist")
     require(runtime["contract_ref"] == {"path": CONTRACT, "size": 6559, "sha256": CONTRACT_SHA}
             and runtime["approval_ref"]["path"] == APPROVAL, "fixed runtime trust anchors differ")
     group = GovernedGroup(repository, {}, allowed, {RUNTIME: (runtime_bytes, runtime_identity)}, {}, {}, {}, synthetic_fixture, reader=reader)
@@ -653,6 +662,8 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
         require(not path.startswith(".tmp/") and "candidate" not in path.split("/")[:-1], "unadopted governance source")
     require(allowed.get(NATIVE_CONTRACT) == {"path": NATIVE_CONTRACT, "size":6343,
             "sha256":NATIVE_CONTRACT_SHA}, "native contract allowlist anchor missing")
+    require(allowed.get(HANDOFF_CONTRACT) == {"path":HANDOFF_CONTRACT, "size":9234,
+            "sha256":HANDOFF_CONTRACT_SHA}, "handoff contract allowlist anchor missing")
     require(DEPLOYMENT in allowed, "fixed deployment Ref absent")
     deployment = group.document(allowed[DEPLOYMENT])
     _validate_deployment(group, deployment)
@@ -697,7 +708,7 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
           "pc026-implementation-freeze-v1", "FROZEN")
     require(freeze["normative_manifest"] == approval["normative_manifest"], "freeze normative binding differs")
     group.freeze_refs = refs(freeze["members"])
-    forbidden = {RUNTIME, APPROVAL, FREEZE, approval["publication_receipt"]["path"]}
+    forbidden = {RUNTIME, APPROVAL, FREEZE, COMPLETION, approval["publication_receipt"]["path"]}
     require(not forbidden & set(group.freeze_refs)
             and not any(path.startswith("Logs/") for path in group.freeze_refs),
             "cyclic implementation freeze or future evidence member")

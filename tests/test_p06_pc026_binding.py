@@ -251,21 +251,19 @@ class CurrentConsumerTests(unittest.TestCase):
             result = p06_aggregate_reports.aggregate(**options)
             self.assertEqual((result['relation_count'],result['distinct_restore_attempt_count']), (645,5))
             before = inventory(self.received)
-            # Both real P07 entrypoints perform this real current aggregation,
-            # then refuse cost output until the upstream binding contract exists.
-            from contextlib import ExitStack
+            # Current P07 now consumes the fixed handoff; this older receiver
+            # fixture has no controlled completion/Git records. Its aggregate
+            # success above is not handoff qualification. Exercise the actual
+            # cost-entry refusal after a focused verifier seam; full handoff
+            # create/read-only verification lives in test_p07_handoff.
+            from tests import p07_handoff
             for entry in (p07_cost_measurement.main, p07_cost_measurement_r232.main):
-                with ExitStack() as stack:
-                    stack.enter_context(patch.object(p06_aggregate_reports,'EVIDENCE_ROOT',
-                        p06_aggregate_reports.ROOT / self.received.relative_to(self.root)))
-                    # The default coordinate is code-owned in production;
-                    # only the explicit file-tree test seam supplies this root.
-                    stack.enter_context(patch.object(p07_cost_measurement,'OUTPUT',self.received/'cost.json'))
-                    stack.enter_context(patch.object(p07_cost_measurement_r232,'OUTPUT',self.received/'cost232.json'))
+                with patch.object(p07_handoff, 'verify', return_value={}) as verify:
                     with contextlib.redirect_stdout(io.StringIO()) as output:
                         with self.assertRaisesRegex(ValueError, 'upstream|historical'):
                             entry()
-                        self.assertEqual(output.getvalue(),'')
+                        self.assertEqual(output.getvalue(), '')
+                    verify.assert_called_once_with()
                 self.assertEqual(inventory(self.received), before)
             bad = copy.deepcopy(selection)
             keys = list(selected)

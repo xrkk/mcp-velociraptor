@@ -390,10 +390,8 @@ from tests.p05_pc026_governance import consumption
 @consumption
 def main() -> int:
     """Current admission precedes every count/output; old pairs stay historical."""
-    from tests import p06_pc026_binding, p06_aggregate_reports
-    admission = p06_pc026_binding.load()
-    p06_aggregate_reports._aggregate_current(admission)
-    admission.recheck()
+    from tests import p07_handoff
+    p07_handoff.verify()
     # Existing upstream-task documents carry a group label, not a run/restore
     # or approval Ref. Do not relabel their historical costs as current pairs.
     raise ValueError('current P07 upstream pair approval/run/restore binding is not yet implemented')

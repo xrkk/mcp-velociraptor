@@ -382,10 +382,8 @@ from tests.p05_pc026_governance import consumption
 @consumption
 def main() -> int:
     """The old .232 no-restore layout cannot publish a current cost result."""
-    from tests import p06_pc026_binding, p06_aggregate_reports
-    admission = p06_pc026_binding.load()
-    p06_aggregate_reports._aggregate_current(admission)
-    admission.recheck()
+    from tests import p07_handoff
+    p07_handoff.verify()
     raise ValueError('historical .232 schema3/no-restore pairs cannot satisfy current P07')
 
 

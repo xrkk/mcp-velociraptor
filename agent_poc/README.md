@@ -23,6 +23,24 @@ restore and aggregate verifiers are explicitly named `verify_historical_restore`
 and `aggregate_historical`; historical 188/189/schema3 inputs cannot qualify the
 current entrypoints. There is no automatic approval creation or test-root CLI.
 
+The fixed PC026 P07 handoff command is `python -m tests.p07_handoff`;
+`python -m tests.p07_handoff --verify` only reads and verifies the existing
+`Logs/P06/wf-01a05d1d-p06-r3/p06-handoff.json`. Both use the code-owned
+repository, approved 04/05/06 contracts, complete current 191 graph and strict
+five-report aggregation. The private controller completion record at
+`PLAN/2026.10.02/p06-completion-record.json` stays outside the original runtime
+allowlist, approval and freeze. It binds the current approval/selection, actual
+Git blobs for every frozen code/resource member, and two distinct new
+implementation/independent-check records; a schema-valid synthetic record does
+not prove real independent acceptance. The handoff binds the exact recomputed
+aggregate bytes and selected evidence closure. Creation is exclusive; identical
+existing bytes can be verified, while conflict or drift refuses without replacing
+or deleting evidence. A failed final recheck can leave an untrusted output.
+Missing production approval/completion prevents publication. Both P07 cost
+entrypoints verify this handoff and still refuse the undefined current five-pair
+collector. Local synthetic host tests do not qualify Windows service ACLs,
+formal P06/645 execution, independent acceptance or cost measurement.
+
 P07 current entrypoints enforce the approval/P06 handoff and refuse historical
 cost output. A current upstream five-pair collection binding still needs a controller
 contract; current P07 cost production is not complete. The adopted Windows

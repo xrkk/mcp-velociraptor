@@ -73,7 +73,7 @@ def build(root: Path, bootstrap: Path, values: dict, repo: Path):
     write(p06_index, index)
     for path in gov.RESOURCES:fixture.freeze[path]=reference(root,path);fixture.refs[path]=fixture.freeze[path]
     # Independent current policy exactly mirrors the loader's explicit partition.
-    source_paths={p for p in fixture.normative if p!=gov.BOOTSTRAP}|{gov.NORMATIVE,gov.CONTRACT,gov.NATIVE_CONTRACT}|set(gov.SOURCE_RESOURCES)
+    source_paths={p for p in fixture.normative if p!=gov.BOOTSTRAP}|{gov.NORMATIVE,gov.CONTRACT,gov.NATIVE_CONTRACT,gov.HANDOFF_CONTRACT}|set(gov.SOURCE_RESOURCES)
     impl_paths=set(fixture.freeze)-source_paths
     shutil.rmtree(A/'source')
     for key,paths in [('source_inputs',source_paths),('implementation_sources',impl_paths)]:
