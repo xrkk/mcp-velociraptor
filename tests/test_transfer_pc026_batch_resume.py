@@ -17,7 +17,6 @@ from tests import test_transfer_pc026_prefix as prefix_fixture
 from velo_transfer.errors import TransferContentError as Error
 from velo_transfer.guest_service import GuestTransferService
 from velo_transfer.adapters import AdapterError
-from velo_transfer.host_coordinator import TransferCoordinator
 from velo_transfer.manifest import canonical_json, digest_json
 from velo_transfer.request import HostRequest
 
@@ -174,6 +173,8 @@ class RealGuestPeer:
 @unittest.skipIf(os.name == 'nt', 'Linux host coordinator integration, native guest covered separately')
 class RealGuestCoordinatorTests(unittest.IsolatedAsyncioTestCase):
     async def run_case(self, when):
+        from velo_transfer.host_coordinator import TransferCoordinator
+
         f = prefix_fixture.PrefixTests('test_actual_worker_proof_matches_ledger_new_nonce_and_deadline')
         f.setUp()
         self.addCleanup(f.doCleanups)
