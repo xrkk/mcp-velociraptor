@@ -14,6 +14,17 @@ Native Windows observations, service-principal/default ACL qualification and
 actual READY issuance remain separate; runner/receiver/aggregate/P07 integration
 is still pending. The historical agent does not acquire a recovery feature.
 
+The implementation freeze requires an explicit reviewed local-module catalog,
+parent package initializers, and non-Python resources including the transfer
+wire/tool schema. Candidate omissions remain semantic failures after every
+surviving approval/publication/allowlist hash is rebound. The synthetic fixture
+copies this declared closure; an isolated subprocess loads wire, all seven tool
+schemas, the bridge and governance/selector modules without reading project code
+or resources from the original repository. Installed third-party dependencies
+are allowed. This validates loading and read-only closure, not live backend,
+Windows publication, service ACLs, or production READY qualification. Resources
+and dynamic helper dependencies must be maintained when those entries change.
+
 PC026 VBT1 now uses the same formal HTTP app, bearer, process instance and live session established by the official SDK. Strict frames and headers validate complete payloads before the existing guest engine runs. Actual request/response stream counters enforce the 100 MiB body limit, including JSON/SSE wrappers; chunk, header, batch and guest policy limits remain stricter where applicable. The client negotiates binary once on that session, preserves HTTP error codes and never replays an uncertain write through another encoding. stdio and unsupported session managers advertise `binary_wire:null`. Local and isolated Windows verification use development fixtures; formal port 28790, service-principal/default ACL and source firewall qualification remain pending.
 
 Non-200 binary responses are classified from exact HTTP safety JSON before checking the instance header: a genuine bearer rejection is `unauthorized` even without that header. HTTP 200 still requires the bound instance and full frame validation; malformed safety responses remain `protocol_error`. Unknown writes keep their reconciliation requirement and are never replayed or switched to JSON. Linux ASGI composition and loopback HTTP checks cover these client gates; they do not qualify the formal Windows deployment.

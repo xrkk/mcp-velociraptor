@@ -15,6 +15,8 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 import uuid
@@ -63,14 +65,10 @@ class ApprovalFixture:
         for path in self.bootstrap:
             self.copy(bootstrap / path, path)
         self.freeze = {}
-        for directory, dirs, files in os.walk(gov.REPOSITORY):
-            dirs[:] = [name for name in dirs if not name.startswith(".") and name != "Logs"]
-            for name in files:
-                if name.endswith(".py"):
-                    source = Path(directory) / name
-                    path = source.relative_to(gov.REPOSITORY).as_posix()
-                    self.copy(source, path)
-                    self.freeze[path] = reference(root, path)
+        # Explicit reviewed closure only; no broad .py copy masking missing deps.
+        for path in gov.ENTRIES | gov.LOCAL_MODULES:
+            self.copy(gov.REPOSITORY / path, path)
+            self.freeze[path] = reference(root, path)
         for path in gov.RESOURCES:
             self.copy(gov.REPOSITORY / path, path)
             self.freeze[path] = reference(root, path)
@@ -213,6 +211,97 @@ class GovernanceTests(unittest.TestCase):
         self.assertTrue(facts["content_graph_validated"])
         self.assertTrue(facts["synthetic_fixture"])
         self.assertEqual(before, inventory(self.root))
+
+    def test_isolated_wire_tools_and_governance_load_from_frozen_tree(self):
+        # -I ignores PYTHONPATH/cwd; -B prevents loader imports from writing caches.
+        # The only inserted project path is the isolated, explicitly frozen tree.
+        code = r"""
+import sys, json, importlib.util
+from pathlib import Path
+root = Path(sys.argv[1]).resolve()
+original = Path(sys.argv[2]).resolve()
+sys.path.insert(0, str(root))
+def audit(event, args):
+    if event == "open" and isinstance(args[0], (str, bytes)):
+        path = Path(args[0]).absolute()
+        if path.is_relative_to(original) and not (path.is_relative_to(root)
+                or path.is_relative_to(original / ".venv")):
+            raise AssertionError("project read escaped isolated tree: " + str(path))
+sys.addaudithook(audit)
+from tests import p05_pc026_governance as governance
+from velo_transfer import wire, adapters, mcp_tools
+import mcp_velociraptor_bridge
+from mcp.server.mcpserver import MCPServer
+schema_path = root / "velo_transfer/transfer_tools_schema.json"
+contract = json.loads(schema_path.read_bytes())
+assert adapters.SCHEMAS == mcp_tools._CONTRACT == contract
+frame = wire.encode({}, b"", "pull_request")
+assert wire.decode(frame, "pull_request") == ({}, b"")
+server = MCPServer("isolated-resource-closure")
+service = mcp_tools.register_transfer_tools(server)
+assert set(server._tool_manager._tools) == set(mcp_tools.TRANSFER_TOOL_NAMES)
+for name in mcp_tools.TRANSFER_TOOL_NAMES:
+    assert server._tool_manager.get_tool(name).fn_metadata.output_schema == contract[name]["outputSchema"]
+service.shutdown()
+group = governance.load()
+assert governance.RESOURCES <= group.freeze_refs.keys()
+spec = importlib.util.spec_from_file_location("isolated_selector", root / governance.SELECTOR)
+selector = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(selector)
+modules = {}
+for name, module in tuple(sys.modules.items()):
+    if name == "tests" or name.startswith(("tests.", "velo_transfer" , "velociraptor_")) or name == "mcp_velociraptor_bridge":
+        path = Path(module.__file__).resolve()
+        assert path.is_relative_to(root), (name, path)
+        assert path.relative_to(root).as_posix() in group.freeze_refs, (name, path)
+        modules[name] = str(path.relative_to(root))
+print(json.dumps({"modules": modules, "resource": str(schema_path.relative_to(root)),
+                  "registered_tools": sorted(server._tool_manager._tools), "governance_loaded": True}))
+"""
+        before = inventory(self.root)
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith(("VELOCIRAPTOR_", "PC026_"))}
+        result = subprocess.run([sys.executable, "-I", "-B", "-c", code,
+            str(self.root), str(gov.REPOSITORY)], cwd=self.root, env=environment,
+            text=True, capture_output=True, timeout=90)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        facts = json.loads(result.stdout)
+        self.assertTrue(facts["governance_loaded"])
+        self.assertIn("velo_transfer.wire", facts["modules"])
+        self.assertIn("velo_transfer.adapters", facts["modules"])
+        self.assertEqual(len(facts["registered_tools"]), 7)
+        self.assertEqual(before, inventory(self.root))
+        print("isolated load evidence: " + result.stdout.strip(), flush=True)
+
+    def test_rebound_missing_resources_packages_and_dependencies_reject_semantically(self):
+        paths = ("velo_transfer/transfer_tools_schema.json", "tests/scenarios/schema-v1.json",
+                 "tests/__init__.py", "velo_transfer/__init__.py",
+                 "velo_transfer/guest_service.py", "velo_transfer/connection.py",
+                 "tests/test_p05_pc020_activation.py", "tests/p05_service_host.py",
+                 "tests/p05_service_observation.py", "tests/p05_process_parent.py")
+        for path in paths:
+            with self.subTest(path=path):
+                target = self.root / path
+                original = target.read_bytes()
+                reference_row = self.fixture.freeze.pop(path)
+                self.fixture.refs.pop(path)
+                target.unlink()
+                try:
+                    # Rebuild the entire publication/archive/approval/runtime,
+                    # not just freeze hashes: all surviving Ref bindings are valid.
+                    self.fixture.refresh()
+                    before = inventory(self.root)
+                    expected = "required resource: " if path in gov.RESOURCES else "required entry/import: "
+                    with self.assertRaisesRegex(gov.GovernanceError,
+                            "implementation freeze omits " + expected + path):
+                        self.load()
+                    self.assertEqual(before, inventory(self.root))
+                    print("rebound closure rejection: " + path, flush=True)
+                finally:
+                    target.write_bytes(original)
+                    self.fixture.freeze[path] = reference_row
+                    self.fixture.refs[path] = reference_row
+                    self.fixture.refresh()
 
     def test_runtime_approval_hash_and_path_matrix(self):
         runtime = self.root / gov.RUNTIME

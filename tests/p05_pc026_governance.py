@@ -44,9 +44,12 @@ SID = re.compile(r"S-1-(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*)){1,15}")
 ENTRIES = frozenset({SELECTOR, "tests/p05_pc026_governance.py",
     "tests/p05_selector_readonly.py", "tests/p06_pc021_consumer.py",
     "mcp_velociraptor_bridge.py", "velociraptor_api.py",
+    "velo_transfer/adapters.py", "velo_transfer/wire.py",
+    "tests/test_p05_pc020_activation.py",
     "tests/test_p05_pc026_governance.py", "tests/pc026_governance_fixture.py",
     "tests/test_p05_selector_schema6.py", "tests/test_p05_pc021_transition_output.py"})
 RESOURCES = frozenset({"requirements.txt", "requirements.lock",
+    "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
     "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
     "tests/p05_service_install.ps1", "docs/p05-security-receipt.schema.json",
@@ -56,6 +59,89 @@ RESOURCES = frozenset({"requirements.txt", "requirements.lock",
     "tests/scenarios/representative/p05-flow-triage-repair-candidate.json"})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
     if path.startswith(("tests/data/", "tests/scenarios/")))
+
+# Reviewed local module catalog: omissions cannot be mistaken for installed
+# third-party imports when this reader itself runs in an incomplete tree.
+# Includes parent __init__ files, the fixture's path-read test helper, and
+# PS1 service installer -> service host -> path-selected dispatch observer.
+LOCAL_MODULES = frozenset({
+    'PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py',
+    'mcp_velociraptor_bridge.py',
+    'tests/__init__.py',
+    'tests/p05_baseline_adoption.py',
+    'tests/p05_candidate_creation.py',
+    'tests/p05_four_chain_evidence.py',
+    'tests/p05_http_evidence.py',
+    'tests/p05_network_window.py',
+    'tests/p05_pc020_activation.py',
+    'tests/p05_pc020_creation.py',
+    'tests/p05_pc020_evidence.py',
+    'tests/p05_pc020_restore.py',
+    'tests/p05_pc020_transition.py',
+    'tests/p05_pc021_activation_writer.py',
+    'tests/p05_pc021_issuer.py',
+    'tests/p05_pc021_package.py',
+    'tests/p05_pc021_readback.py',
+    'tests/p05_pc021_readonly.py',
+    'tests/p05_pc021_stage_rules.py',
+    'tests/p05_pc021_streaming.py',
+    'tests/p05_pc021_transition_evidence.py',
+    'tests/p05_pc026_governance.py',
+    'tests/p05_pc026_profile.py',
+    'tests/p05_process_parent.py',
+    'tests/p05_ready_evidence.py',
+    'tests/p05_real_acceptance.py',
+    'tests/p05_security_receipt.py',
+    'tests/p05_service_host.py',
+    'tests/p05_service_observation.py',
+    'tests/p05_sdk_capture.py',
+    'tests/p05_selector_readonly.py',
+    'tests/p05_snapshot_raw.py',
+    'tests/p06_aggregate_reports.py',
+    'tests/p06_evidence.py',
+    'tests/p06_package.py',
+    'tests/p06_pc021_consumer.py',
+    'tests/p06_receive.py',
+    'tests/p06_resource_gate.py',
+    'tests/p06_resource_policy.py',
+    'tests/pc020_activation_fixture.py',
+    'tests/pc022_windows_refresh.py',
+    'tests/pc026_governance_fixture.py',
+    'tests/scenario_runner.py',
+    'tests/test_p05_pc020_activation.py',
+    'tests/test_p05_pc020_evidence.py',
+    'tests/test_p05_pc020_restore.py',
+    'tests/test_p05_pc021_activation_writer.py',
+    'tests/test_p05_pc021_capability.py',
+    'tests/test_p05_pc021_transition_output.py',
+    'tests/test_p05_pc026_governance.py',
+    'tests/test_p05_recovery_contract.py',
+    'tests/test_p05_selector_schema6.py',
+    'velo_transfer/__init__.py',
+    'velo_transfer/adapters.py',
+    'velo_transfer/bundle.py',
+    'velo_transfer/connection.py',
+    'velo_transfer/errors.py',
+    'velo_transfer/filesystem.py',
+    'velo_transfer/guest_service.py',
+    'velo_transfer/guest_worker.py',
+    'velo_transfer/http_budget.py',
+    'velo_transfer/http_wire.py',
+    'velo_transfer/manifest.py',
+    'velo_transfer/mcp_tools.py',
+    'velo_transfer/policy.py',
+    'velo_transfer/protocol.py',
+    'velo_transfer/storage.py',
+    'velo_transfer/windows_commands.py',
+    'velo_transfer/windows_platform.py',
+    'velo_transfer/wire.py',
+    'velociraptor_api.py',
+    'velociraptor_dynamic_artifacts.py',
+    'velociraptor_env.py',
+    'velociraptor_fixed_tools.py',
+    'velociraptor_mcp_core.py',
+    'velociraptor_transport.py',
+})
 
 
 class GovernanceError(evidence.Pc020EvidenceError):
@@ -204,7 +290,11 @@ class GovernedGroup:
 
 
 def implementation_closure(group):
-    pending, found = list(ENTRIES), set(RESOURCES)
+    pending, found = list(ENTRIES | LOCAL_MODULES), set()
+    for path in sorted(RESOURCES):
+        require(path in group.freeze_refs, "implementation freeze omits required resource: " + path)
+        group.read(group.freeze_refs[path])
+        found.add(path)
     while pending:
         path = pending.pop()
         if path in found:
@@ -225,13 +315,14 @@ def implementation_closure(group):
             for name in names:
                 candidate = name.replace(".", "/") + ".py"
                 package = name.replace(".", "/") + "/__init__.py"
-                # Only code-owned local modules, never scan a caller directory.
+                # Resolve only the reviewed catalog, never caller-directory discovery.
                 for local in (candidate, package):
-                    if (REPOSITORY / local).is_file() and local not in found:
+                    if local in LOCAL_MODULES and local not in found:
                         pending.append(local)
     require(found <= set(group.freeze_refs), "implementation freeze omits required resources")
     require(any(path.startswith("tests/test_") for path in group.freeze_refs),
             "implementation freeze omits verification tests")
+    return frozenset(found)
 
 
 def _model(group, value, name):
