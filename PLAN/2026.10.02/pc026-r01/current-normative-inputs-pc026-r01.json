@@ -1,0 +1,337 @@
+{
+  "schema_version": 1,
+  "kind": "pc026-normative-inputs-v1",
+  "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+  "adoption": "EXTERNAL_CONTROLLER_RECORD",
+  "formal_root": "PLAN/2026.10.02/pc026-r01",
+  "normative_inputs": [
+    {
+      "id": "requirement",
+      "version": "v14",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-requirement",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+        "size": 420287,
+        "sha256": "e946243295aeb15479ce1543e79dd0f1d5f734f458b09c879c00c9c3ff3cb91a"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 447592,
+      "sha256": "34857888c66ec5f17c0150ebcb446821384dafff79952a30e9957750db74e12a"
+    },
+    {
+      "id": "master",
+      "version": "v26",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-master",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+        "size": 137946,
+        "sha256": "8e5b9f6e53d7c31cbddc69180415597ad245c0220df3a69ee7ffa3a22cc67fd6"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 165244,
+      "sha256": "59fa367bbc64028d571c2be1e3e1a368b12c74750731acf0693e94485367bebf"
+    },
+    {
+      "id": "P01",
+      "version": "v5",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P01",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+        "size": 46989,
+        "sha256": "ed6d9b60148462766df57cdf35ed3ed86ca38c30de6474e67ea001f5b5f3f6cb"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 74294,
+      "sha256": "8828fcfbc9a3ea34d9688f648c9a65891567d405c38d9c7d866b7c241bb69a4b"
+    },
+    {
+      "id": "P02",
+      "version": "v9",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P02",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+        "size": 48669,
+        "sha256": "bc9dcb0af136d3e762dc114509720f15a1fc9a6102129e877c74fe49842cd90d"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 76008,
+      "sha256": "9ca946f401b328058af752f79bab35bca975de6d62741027bd550f809b347bc0"
+    },
+    {
+      "id": "P03",
+      "version": "v5",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P03",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+        "size": 37607,
+        "sha256": "942fcfe69600155dafc5cb706160df97043902ba13a18568fcbd973c8dd6cc13"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 64913,
+      "sha256": "8b3779c61db39ac996281d3cb5ecb2c239763e83fa20031bf79b16d387800ad7"
+    },
+    {
+      "id": "P04",
+      "version": "v14",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P04",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+        "size": 47723,
+        "sha256": "7a0fa5cbe9fdd6c5efd497729d146a846e6a621f5893bf6c318cd7652e42f5b1"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 75066,
+      "sha256": "796ca926bda2af4c8ad6823785e49f7b8a07ea171567be66e284bf54927c4022"
+    },
+    {
+      "id": "P05",
+      "version": "v22",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P05",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+        "size": 187878,
+        "sha256": "1ec8921dbd03688c07dac3a7b993861f5433c98fd45b2dde3fdb277e5b0b5b54"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 215309,
+      "sha256": "2279cafc0c3efaf5f1bd0feb7bb46f6c1a5e7db37b55fd3c44a5f691097d9949"
+    },
+    {
+      "id": "P06",
+      "version": "v24",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P06",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+        "size": 81029,
+        "sha256": "6f5db453529d3d8b424e9f4d31bbd0b0c7fcd18590ec2aa37c9ef80992bce347"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 108378,
+      "sha256": "a0213dbf09959ebbf187e88a7f0d1565604d96e53e9de333ba1741e04ecc457f"
+    },
+    {
+      "id": "P07",
+      "version": "v20",
+      "status": "ADOPTED_FOR_SCOPED_IMPLEMENTATION",
+      "priority_anchor": "PC026-PRIORITY-P07",
+      "inherited_source": {
+        "path": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+        "size": 40223,
+        "sha256": "71e4bf65e9c4223116fa2012fcba5601389e1038e510f2827d0e8fe71bf1cd61"
+      },
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 67592,
+      "sha256": "5c0789a3dc7b2867d00850d040e8e3f8d786c90b29f916e49f56a30b4f1ef4c7"
+    }
+  ],
+  "inherited_attachments": [
+    {
+      "path": "PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md",
+      "size": 14684,
+      "sha256": "e468e5d126287c055d7c0256023d9d3eb43c24b15cd04a737527c44415135d7b",
+      "status": "INHERITED_EFFECTIVE_SUBJECT_TO_FIELD_OVERRIDES"
+    },
+    {
+      "path": "PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md",
+      "size": 2921,
+      "sha256": "29e10202753943548af224d8c017fa28bebc7870e455775ced22f3c29628e1ac",
+      "status": "INHERITED_EFFECTIVE_SUBJECT_TO_FIELD_OVERRIDES"
+    },
+    {
+      "path": "PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md",
+      "size": 9132,
+      "sha256": "db8bda98e753f093ee688c13645c86e5e3ca51f709a340086fc66e90afc1644b",
+      "status": "INHERITED_EFFECTIVE_SUBJECT_TO_FIELD_OVERRIDES"
+    },
+    {
+      "path": "PLAN/2026.09.26/transfer-six-schema.json",
+      "size": 28521,
+      "sha256": "580f604d290084e2a575e3b82e3122e397efcc42bc755997474c7b06eb30df4c",
+      "status": "INHERITED_EFFECTIVE_SUBJECT_TO_FIELD_OVERRIDES"
+    },
+    {
+      "path": "PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json",
+      "size": 2872,
+      "sha256": "c61b54e740ea62dd6fca9d5e056efce8857e21b3392b0f7ebee8d07bf4d1d994",
+      "status": "INHERITED_EFFECTIVE_SUBJECT_TO_FIELD_OVERRIDES"
+    }
+  ],
+  "candidate_payloads": [
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/acceptance-matrix.json",
+      "size": 48877,
+      "sha256": "87cd213588cd8bff8753c037609ccedcc12a3ea869851d1c8930e1f7b759eb8b"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/bootstrap-publication-manifest.json",
+      "size": 144285,
+      "sha256": "4a0a2c59ded73d78f7f3f08873877043ba523165472d8e76e32f2e03e353aa5b"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/controller-model.schema.json",
+      "size": 21229,
+      "sha256": "9958c6f62a506e4833800ee8d6da4180aba5c81ec4d28bad443a47a302221474"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/controller-review-corrections.md",
+      "size": 3114,
+      "sha256": "b74cfef00376fc686f07e786d2d42fcbf8529c49b9823fb7c75027b66faf4bff"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/dependency-precedence.md",
+      "size": 2309,
+      "sha256": "30d264ce6f7fba5b811bcfa2d514ffd4e6dee6e49e0e50c32f598826ce287666"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/error-catalog.json",
+      "size": 10401,
+      "sha256": "fc37b678aad367b9bf8c370005215b1381bd3a30d8d6977ddb46b2fa1d689206"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/governance-contract.md",
+      "size": 6395,
+      "sha256": "1f9f895c2d73116e01f930ed83326039479db1050c06a1b239cc9c0664e3c5c7"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/seven-tool-contract.schema.json",
+      "size": 1551010,
+      "sha256": "54367df92b49afcf147a984dcd9d86802ac2d1c9c00e7841c46834881464fbb8"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/stage-table.json",
+      "size": 3890,
+      "sha256": "46d49500efadface37def54683eb598323a9ea22fc6afd316f9347ff47411ebf"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/vbt1-wire.schema.json",
+      "size": 18139,
+      "sha256": "9dbdf217e9f281e352bac865b5eb5d0dc786fb8c3d52540455905d20c8d7b841"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/attachments/wire-contract.md",
+      "size": 8169,
+      "sha256": "4c59d5fc38e1bf589240e77d893b83acbf6d646cf02c642ffbb6ae20e4be0a67"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 447592,
+      "sha256": "34857888c66ec5f17c0150ebcb446821384dafff79952a30e9957750db74e12a"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 165244,
+      "sha256": "59fa367bbc64028d571c2be1e3e1a368b12c74750731acf0693e94485367bebf"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 74294,
+      "sha256": "8828fcfbc9a3ea34d9688f648c9a65891567d405c38d9c7d866b7c241bb69a4b"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 76008,
+      "sha256": "9ca946f401b328058af752f79bab35bca975de6d62741027bd550f809b347bc0"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 64913,
+      "sha256": "8b3779c61db39ac996281d3cb5ecb2c239763e83fa20031bf79b16d387800ad7"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 75066,
+      "sha256": "796ca926bda2af4c8ad6823785e49f7b8a07ea171567be66e284bf54927c4022"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 215309,
+      "sha256": "2279cafc0c3efaf5f1bd0feb7bb46f6c1a5e7db37b55fd3c44a5f691097d9949"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 108378,
+      "sha256": "a0213dbf09959ebbf187e88a7f0d1565604d96e53e9de333ba1741e04ecc457f"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 67592,
+      "sha256": "5c0789a3dc7b2867d00850d040e8e3f8d786c90b29f916e49f56a30b4f1ef4c7"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/155-self-review-support.json",
+      "size": 777248,
+      "sha256": "c38b5faffa099652d3c52fc1a14dabc78ec5ef739ee82478397f3d76c59746b7"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/155-self-review-support.md",
+      "size": 138798,
+      "sha256": "e387ce40c1b7935292ee149eff90a9305eb05cae1cd11128175cc43d11860d2e"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/body-preservation.json",
+      "size": 5624,
+      "sha256": "60f65c1a6658725f50ede4cba23accc060f659cb6d0c49c05dbefa641ac0171e"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/clause-conflicts.json",
+      "size": 79992,
+      "sha256": "2f0812550827c1bd19847ec965628361c2f606ed2e32848404647bc32bc22283"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/controller-author-v1.md",
+      "size": 15231,
+      "sha256": "7a47bfab2667f0aa737534d53a09b99bd1a59e80925112ce4f8fb7ee406d8e9f"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+      "size": 8756,
+      "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions.json",
+      "size": 3763,
+      "sha256": "f27be988ee18e8ca662c4e5c8dbc23af8a6efc4f53c284fb0338361bfdfa2c7a"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/controller-self-review-index.md",
+      "size": 2708,
+      "sha256": "0c20f930b7433edc468433dd9e4e01d06215d3bd7105d195e63f9cfbb17a0bb9"
+    },
+    {
+      "path": "PLAN/2026.10.02/pc026-r01/support/controller-self-review.json",
+      "size": 369976,
+      "sha256": "1792844f855d8c79fae370b77c9370ba21c2b64659db1be1ddb4df93d20ce782"
+    }
+  ],
+  "self_review_index": {
+    "path": "PLAN/2026.10.02/pc026-r01/support/controller-self-review-index.md",
+    "size": 2708,
+    "sha256": "0c20f930b7433edc468433dd9e4e01d06215d3bd7105d195e63f9cfbb17a0bb9"
+  },
+  "publication_history_inputs": {
+    "path": "PLAN/2026.10.02/pc026-r01/attachments/bootstrap-publication-manifest.json",
+    "size": 144285,
+    "sha256": "4a0a2c59ded73d78f7f3f08873877043ba523165472d8e76e32f2e03e353aa5b"
+  },
+  "fingerprint_rule": "SHA256 exact bytes; this manifest excluded from its own members. No approval/receipt back-binding. External adoption pins this manifest after controller self-review.",
+  "formal_Windows": "NOT_VERIFIED",
+  "group": "CURRENT-PC026-R01",
+  "controller_self_review": {
+    "path": "PLAN/2026.10.02/pc026-r01/support/controller-self-review.json",
+    "size": 369976,
+    "sha256": "1792844f855d8c79fae370b77c9370ba21c2b64659db1be1ddb4df93d20ce782"
+  },
+  "controller_corrections": {
+    "path": "PLAN/2026.10.02/pc026-r01/attachments/controller-review-corrections.md",
+    "size": 3114,
+    "sha256": "b74cfef00376fc686f07e786d2d42fcbf8529c49b9823fb7c75027b66faf4bff"
+  }
+}

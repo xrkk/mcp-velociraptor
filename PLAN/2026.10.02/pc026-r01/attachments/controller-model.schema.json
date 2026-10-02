@@ -1,0 +1,785 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Controller OD04/05 precise schema-only model; no approval/receipt/observation instances generated.",
+  "$defs": {
+    "Ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ]
+    },
+    "root_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host_governance_root": {
+          "const": "Logs/P05/wf-01a05d1d-p05"
+        },
+        "guest_project_coordinate": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+        },
+        "guest_evidence_root": {
+          "const": "Logs/P05/wf-01a05d1d-p05"
+        },
+        "guest_canonical_coordinate": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+        },
+        "deployment_configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        }
+      },
+      "required": [
+        "host_governance_root",
+        "guest_project_coordinate",
+        "guest_evidence_root",
+        "guest_canonical_coordinate",
+        "deployment_configuration"
+      ]
+    },
+    "publication_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "pc026-dual-publication-receipt-v1"
+        },
+        "publication_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "workflow_id": {
+          "const": "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2"
+        },
+        "profile_id": {
+          "const": "pc026-snapshot191-v1"
+        },
+        "normative_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "implementation_freeze": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "bootstrap_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "root_mapping_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "vm_uuid": {
+          "const": "55804d56-262e-33b0-9e8f-fa0bb583b865"
+        },
+        "server_instance_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guest_principal_sid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "relative_path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "host_identity": {
+                "$ref": "#/$defs/HostIdentity"
+              },
+              "guest_identity": {
+                "$ref": "#/$defs/GuestIdentity"
+              }
+            },
+            "required": [
+              "relative_path",
+              "size",
+              "sha256",
+              "host_identity",
+              "guest_identity"
+            ]
+          },
+          "minItems": 1
+        },
+        "published_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "guest_directory_fsynced_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "guest_readback_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "host_readback_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "status": {
+          "const": "VERIFIED"
+        },
+        "error": {
+          "const": null
+        },
+        "identity_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "publication_id",
+        "workflow_id",
+        "profile_id",
+        "normative_manifest",
+        "implementation_freeze",
+        "bootstrap_manifest",
+        "root_mapping_sha256",
+        "vm_uuid",
+        "server_instance_id",
+        "guest_principal_sid",
+        "members",
+        "published_at",
+        "guest_directory_fsynced_at",
+        "guest_readback_at",
+        "host_readback_at",
+        "status",
+        "error",
+        "identity_evidence"
+      ]
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "pc026-controller-approval-v1"
+        },
+        "approval_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "workflow_id": {
+          "const": "wf-01a05d1d-9e2b-7f41-b936-536d20ce55a2"
+        },
+        "profile_id": {
+          "const": "pc026-snapshot191-v1"
+        },
+        "normative_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "implementation_freeze": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "bootstrap_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "root_mapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "host_governance_root": {
+              "const": "Logs/P05/wf-01a05d1d-p05"
+            },
+            "guest_project_coordinate": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "guest_evidence_root": {
+              "const": "Logs/P05/wf-01a05d1d-p05"
+            },
+            "guest_canonical_coordinate": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "deployment_configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "path",
+                "size",
+                "sha256"
+              ]
+            }
+          },
+          "required": [
+            "host_governance_root",
+            "guest_project_coordinate",
+            "guest_evidence_root",
+            "guest_canonical_coordinate",
+            "deployment_configuration"
+          ]
+        },
+        "publication_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "status": {
+          "const": "READY"
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "approval_id",
+        "workflow_id",
+        "profile_id",
+        "normative_manifest",
+        "implementation_freeze",
+        "bootstrap_manifest",
+        "root_mapping",
+        "publication_receipt",
+        "status"
+      ]
+    },
+    "HostIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "posix"
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "inode": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "owner_uid": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "owner_gid": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "principal_uid": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "mode": {
+          "type": "string",
+          "pattern": "^[0-7]{4}$"
+        },
+        "acl_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "platform",
+        "device",
+        "inode",
+        "owner_uid",
+        "owner_gid",
+        "principal_uid",
+        "mode",
+        "acl_sha256"
+      ]
+    },
+    "GuestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "const": "windows"
+        },
+        "volume_serial": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "file_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "owner_sid": {
+          "type": "string",
+          "pattern": "^S-1-(0|[1-9][0-9]*)(-(0|[1-9][0-9]*)){1,15}$"
+        },
+        "principal_sid": {
+          "type": "string",
+          "pattern": "^S-1-(0|[1-9][0-9]*)(-(0|[1-9][0-9]*)){1,15}$"
+        },
+        "acl_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "platform",
+        "volume_serial",
+        "file_id",
+        "owner_sid",
+        "principal_sid",
+        "acl_sha256"
+      ]
+    },
+    "identity_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "pc026-identity-evidence-v1"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "relative_path": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+              },
+              "endpoint": {
+                "enum": [
+                  "host",
+                  "guest"
+                ]
+              },
+              "identity": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/HostIdentity"
+                  },
+                  {
+                    "$ref": "#/$defs/GuestIdentity"
+                  }
+                ]
+              },
+              "observation_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "path",
+                  "size",
+                  "sha256"
+                ]
+              }
+            },
+            "required": [
+              "relative_path",
+              "endpoint",
+              "identity",
+              "observation_ref"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "endpoint": {
+                      "const": "host"
+                    }
+                  },
+                  "required": [
+                    "endpoint"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "identity": {
+                      "$ref": "#/$defs/HostIdentity"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "identity": {
+                      "$ref": "#/$defs/GuestIdentity"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "members"
+      ]
+    },
+    "identity_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "pc026-identity-observation-v1"
+        },
+        "relative_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+        },
+        "endpoint": {
+          "enum": [
+            "host",
+            "guest"
+          ]
+        },
+        "identity": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/HostIdentity"
+            },
+            {
+              "$ref": "#/$defs/GuestIdentity"
+            }
+          ]
+        },
+        "acl_original": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\:\\u0000])(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+(?<!/)$"
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "size",
+            "sha256"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+        },
+        "method": {
+          "enum": [
+            "posix_fstat_full_acl",
+            "windows_same_handle_fileid_security_descriptor"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "relative_path",
+        "endpoint",
+        "identity",
+        "acl_original",
+        "observed_at",
+        "method"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "endpoint": {
+                "const": "host"
+              }
+            },
+            "required": [
+              "endpoint"
+            ]
+          },
+          "then": {
+            "properties": {
+              "identity": {
+                "$ref": "#/$defs/HostIdentity"
+              },
+              "method": {
+                "const": "posix_fstat_full_acl"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "identity": {
+                "$ref": "#/$defs/GuestIdentity"
+              },
+              "method": {
+                "const": "windows_same_handle_fileid_security_descriptor"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/approval"
+}

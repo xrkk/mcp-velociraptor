@@ -1,0 +1,790 @@
+[
+  {
+    "id": "requirement",
+    "source": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "limited_override": "REQ-006/017/018/020–028、RACC-006/013/017/018/020–029及CON/NON/CUM对应行",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 11,
+        "text": "> **当前九对象组（主方已签发）**：`CURRENT-TRANSFER-001-R02`；需求`v13`、总纲`v25`、P01`v4`、P02`v8`、P03`v4`、P04`v13`、P05`v21`、P06`v23`、P07`v19`。正式字节由`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`绑定；直接来源为已验T002/R05冻结候选及T004/R02提案，PC022、PC023与P04-UPLOAD-SIZE-R01有效来源保留。主方采纳及87/68完整保真自评见`PLAN/2026.09.26/2026.09.26-07-PC024主方采纳与完整保真自评.md`；规范允许依原阶段门推进受限实施，真实产品/Windows/VM验收未由此通过。"
+      },
+      {
+        "line": 16,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 18,
+        "text": "- **REQ-027｜本机 guest 文件传输六工具**：同一 MCPServer 注册 `transfer_capabilities/begin/status/chunk/finish/abort`，只服务本 Windows guest 的 policy 授权根，不接受 `client_id`/`target_context`，不增加 Velociraptor endpoint。原118动态＋12固定入出 schema、唯一 client、PacketCapture 排除均保留。精确原 wire、输入输出、状态和失败语义见附件；出处 09.14-08 互传授权仅覆盖行为，新增接口须由主方签发采纳决定。"
+      },
+      {
+        "line": 21,
+        "text": "- **NON-014｜不扩张目标或降级**：六工具无第二 VM/Velociraptor endpoint 选择，不允许无认证或坏 policy fallback；Velo→Windows 仅在 begin 前确认连接拒绝、缺新工具或 `enabled=false`，坏认证/Host/协议/身份/单超时不触发。"
+      },
+      {
+        "line": 22,
+        "text": "- **RACC-027｜六工具资格**：在目标 Windows 正式 SDK 验 136 schema 与原130兼容，并按独立六工具双向状态/负例矩阵逐项保留原 wire、状态、物理副作用；skip/未运行不计。"
+      },
+      {
+        "line": 25,
+        "text": "- **累计有效结论68（本组已采纳）**：09.14-08 互传授权和 09.26 hash 减省要求经主方本次产品方向具体化为六工具与内部完整性并存；采纳后登记取舍、适用条件及触发重裁，旧1–67不重编号。"
+      },
+      {
+        "line": 50,
+        "text": "- Windows 上 P05 所称父目录同步必须在本地 NTFS、同一生产身份与已验证无 reparse 路径下，以 `CreateFileW(GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS|FILE_FLAG_OPEN_REPARSE_POINT)` 打开目录，核 handle/path 的 volume+file identity 和目录/non-reparse 属性，实际取得 `FlushFileBuffers!=0` 且 `CloseHandle!=0`（主句柄与前置/后置比对句柄各有恰一次关闭尝试），关闭后 identity 仍相等；普通文件 flush/fsync/close 保持。新建层级逐级同步，package 发布、root/receipt、epoch6→7 migration 与 epoch7→8 activation 的每个规定同步点均适用。权限、卷型、身份、refresh/close 不成立即 fail closed，不自动提权、volume flush、fallback、重试或清理不确定现场。"
+      },
+      {
+        "line": 52,
+        "text": "- 能力绑定workflow/issuance及epoch7/root/receipt三哈希，在writer首个副作用前由单一临界区原子置为`SPENT`。失败、崩溃、重启或能力丢失均不得从磁盘重建、复用、回退旧bundle或自动重签发；只保全现场并交作者裁决。"
+      },
+      {
+        "line": 53,
+        "text": "- epoch7→8保持`.next → durable v2 intent → canonical再比较 → replace → v2 receipt`顺序。v2 intent为10键，receipt为15键；仅`COMMITTED`且canonical实际为H8允许P06/P07接续。两原件位于activation根，由既有`activation_evidence`递归归档，不新增第九种restore record kind；epoch6→7 v1历史语义不改。"
+      },
+      {
+        "line": 64,
+        "text": "- 新代固定为schema6：epoch7/`PREPARATION_BASELINE`/`Snapshot 187-固定IP+WindowsMCP开机自启`，继而epoch8/`NETWORK_ACTIVE`/`Snapshot 189-Velociraptor-MCP可恢复验收基线`。189创建前实时零匹配，创建一次后恰一匹配并从metadata实读marker；不得覆盖/改名188、自动选择190或删除187/188。"
+      },
+      {
+        "line": 65,
+        "text": "- canonical精确十根键为`schema_version/workflow_id/epoch/phase/active_snapshot/automatic_restore_allowlist/retired_snapshots/migration_evidence/preparation_evidence/activation_evidence`。设唯一active名为`a`、allowlist为`L`、retired名称为`R`：`L={a}`、`L∩R=∅`、`R`无重复；active必在allowlist中，不要求二者互斥。epoch7 retired按前驱顺序移除187并追加188，得到183/184/Snapshot1/186/188；epoch8再追加187。"
+      },
+      {
+        "line": 66,
+        "text": "- 恢复前preparation admission只证明187当前唯一名称/marker/VM身份、保全条件和P05准备例外，不包含revert、恢复后ready、Flow、Triage/file或产品通过。先签发准入，再签发引用它的migration，再原子写epoch7；恢复后的事实不得回填前置准入。"
+      },
+      {
+        "line": 69,
+        "text": "- 新189 activation root `snapshot189-activation-evidence-v1`的exact keys必须包含required `issued_at`。该值是cycle2完成并验证后、epoch8 `.next`前实际签发时的合法UTC RFC3339 Z字符串，并受根SHA覆盖；canonical `activation_evidence.activated_at`必须与其逐字相等。缺失、null、非法、不等或从mtime/当前时钟/receipt补值均拒绝；不新增跨机时钟同步或额外精度。"
+      },
+      {
+        "line": 73,
+        "text": "- **REQ-013/RACC-013**：`collect_forensic_triage()`产品契约仍为完整`_BasicCollection`、2400秒、仅该入口请求4 GiB以及真实FINISHED+results+files。P05在epoch7下完成一次187 initial和两次189 candidate独立真实Triage/file；三次均通过后才可激活epoch8。旧188报告、跨轮Flow/raw/ready、ERROR/取消/超限或只含rows/uploads均失败。"
+      },
+      {
+        "line": 74,
+        "text": "- **REQ-020/RACC-020**：固定可恢复状态由“恢复前准入→一次实际187恢复与准备→initial→零到一创建189→两次完整189恢复→cycle2完成并验证→签发含required `issued_at`的activation root→epoch8”形成。epoch7只授予P05准备资格，不授予P06资格；任一步身份、fixture、依赖、安全、资源或恢复不成立均停留安全状态并重新裁决，不选择旧188 fallback。"
+      },
+      {
+        "line": 79,
+        "text": "  | `P05_REPAIR_INITIAL` | `Snapshot 187-固定IP+WindowsMCP开机自启` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 |"
+      },
+      {
+        "line": 80,
+        "text": "  | `P05_REPAIR_CANDIDATE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 |"
+      },
+      {
+        "line": 81,
+        "text": "  | `P06_ACTIVE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch8 / `NETWORK_ACTIVE` / active snapshot 189 |"
+      },
+      {
+        "line": 84,
+        "text": "- **REQ-026/RACC-026**：host-only 28790、Bearer/Host/Origin、专用服务、ACL/防火墙和双传输同一性保持。唯一业务顺序扩展为：保全与准入→migration→epoch7→187恢复/部署/ready/initial→189创建→cycle1→cycle2完成并验证→签发activation root `issued_at`→epoch8 `.next`→P06/P07。P05不把旧activation、未激活189或用户恢复冒充正式周期。"
+      },
+      {
+        "line": 95,
+        "text": "- 59与62保留官方SDK、HTTP/stdio同一性、声明式runner和快照间恢复；其当前source/index/restore身份改由PC020 epoch7/8图提供。"
+      },
+      {
+        "line": 295,
+        "text": "- **v6｜2026-09-20｜作者修订**：承接PLAN-CHANGE-018请求上下文内offset语义及PLAN-CHANGE-019四固定启动真实Flow状态字段；当前九规范组切换为`CURRENT-PC017-018-019`，旧PC017组降为历史，完整自评与产品实施门仍关闭。"
+      },
+      {
+        "line": 296,
+        "text": "- **v7｜2026-09-20｜作者修订**：承接PC018终页勘误，明确适用分页时`next_cursor`为必需nullable字段（终页JSON `null`），非分页操作才省略整个`pagination`；当前组切换为`CURRENT-PC017-018-019-R02`，完整自评与产品实施门仍关闭。"
+      },
+      {
+        "line": 578,
+        "text": "68. **[09.14-08互传授权；2026-09-26 T002产品方向，候选]** 来源分别是用户对本项目宿主与目标虚拟机文件互传的持续授权（限指定 VM、已核身份、无秘密外传或任意覆盖删除）、本轮要求的六个本机 guest MCP 工具及双向完整交付、以及 AI 不额外执行传输前后全量 SHA 命令/读取 hash 列表的取舍；这些来源不自行证明六接口已被正式采纳。**采纳理由和代价**：原临时搬运不能提供同一任务可恢复、两端清理和可审计的全局完成；以同一 MCPServer 上六个精确 wire 工具及 host coordinator/CLI 承接，增加受保护 policy、任务持久状态和独立验收成本，但不增加 Velociraptor endpoint、目标选择或旧五场关系。AI 只消费紧凑 outcome/错误码/必要引用，不能省程序内部 chunk、package、manifest、source/destination、request、receipt 的 hash 与身份校验；完整证据存保护目录。**参与者/接口/顺序**：宿主操作者/host coordinator 持久化 request/intent/transfer_id/VM UUID/boot/epoch/channel/deadline/K，经现有正式 MCP 28790/mcp 的认证和同实例六工具 `capabilities→begin→status/chunk→finish prepare/commit/release` 与 Windows guest service 交互，分别执行 push 或 pull；guest 的局部成功后，host 仍须真实验证目的、两端 cleanup、绑定收据并持久化 canonical result，最后才输出 summary/exit 0。stdio 仅内部同注册适配器，控制面 28787 仅执行固定 guest CLI。**状态、不变量与错误结束**：同 ID 同不可变意图/收据/原 deadline 幂等恢复；身份、授权根、ACL、raw wire、预算、生产者静止、路径/链接、未知同名对象均在各自门校验；释放只清已登记 owned 临时项，`published_ever` 的成果在失败后不回滚删除。缺 policy 仍注册六名但 `capabilities.enabled=false`，五动作拒绝且不创建 guest identity/ACL provider；坏 policy/身份/认证/Host/协议/单超时不触发静默 fallback，也不额外关闭原130（其自身启动前提仍适用）。响应丢失先在原 journal/status 对账；无法证实完成以 rejected/incomplete/conflict/cleanup_pending 等持久状态及非零 exit 结束，不把 guest success/结构合法 result 当全局 COMPLETE。**适用前提与失效重裁**：仅单一指定 Windows VM、合法 host-only 网络/secret、已核 VM/boot/epoch、受保护 policy/ACL、既有 begin 前 adapter 探测条件；增加第二 VM、变更工具 schema/注册/服务来源、改变根/权限/完整性判据/预算/cleanup/fallback 或客户端不能满足认证时，停受影响项并重新裁决，不降级。**可观察验收**：正式目标 Windows 同一制品的 HTTP/stdio 136 清单与旧130全量不意外漂移；六工具逐方向正反/恢复矩阵、raw wire handler 前拒绝且无非法副作用、双端物理目的与 cleanup/receipt K/journal/result/exit 一致，旧129+1和645另算；P05/G14是否重绑按实际部署闭包证明。完整落点为 REQ-027、REQ-028、CON-016、NON-014、RACC-027、RACC-028、RACC-029（对应 OUT-055/056/057、ACC-027/028/029，P02–P07）；前67条身份和原义不重编号。"
+      },
+      {
+        "line": 2087,
+        "text": "- **选项 A（推荐）**：采用上述 18 个改为动态工具、22 个完全丢弃的清单；预计动态 artifact 工具由 118 个增加到 136 个。两个通用入口只允许最终动态清单中的 artifact 以及另行明确保留的固定流程，不允许调用22个丢弃项。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1–6；137、新191 profile、bootstrap/current分层与645独立；155原ID不变。"
+  },
+  {
+    "id": "master",
+    "source": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+    "limited_override": "§0/0.1 PC020/PC021、OUT/ACC数量/快照/角色/交接条款",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 9,
+        "text": "> **当前九对象组（主方已签发）**：`CURRENT-TRANSFER-001-R02`；需求`v13`、总纲`v25`、P01`v4`、P02`v8`、P03`v4`、P04`v13`、P05`v21`、P06`v23`、P07`v19`。正式字节由`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`绑定；直接来源为已验T002/R05冻结候选及T004/R02提案，PC022、PC023与P04-UPLOAD-SIZE-R01有效来源保留。主方采纳及87/68完整保真自评见`PLAN/2026.09.26/2026.09.26-07-PC024主方采纳与完整保真自评.md`；规范允许依原阶段门推进受限实施，真实产品/Windows/VM验收未由此通过。"
+      },
+      {
+        "line": 14,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 16,
+        "text": "`OUT-055` 承接 REQ-027/NON-014，由 P02 同实例安全启动、P03 原118保持、P04 原12保持、P05 guest policy/ACL、P06 六项独立矩阵承担；`ACC-027` 要求 136 精确名称和 input/output 真实 HTTP/stdio 一致、旧130 schema 零意外改变、六项 wire/缺 policy/双向正反例完整。`OUT-056` 承接 REQ-028，由 host coordinator/P05部署及P06真实传输负责；`ACC-028` 要求同ID原 deadline恢复、目的验证与双 cleanup、receipt/K和持久result闭合，失败 exit/published_ever准确。`OUT-057` 承接 CON-016，由 P02/P05 安全门、P06拒绝与P07最终成本/文档负责；`ACC-029` 要求认证、VM/boot/epoch、policy/ACL/raw wire、内部完整性、紧凑模型摘要和无非法副作用。各项具体输入、响应、拒绝门及重裁见 PLAN-CHANGE-024 §1.1 和独立矩阵。"
+      },
+      {
+        "line": 22,
+        "text": "| OUT-055 | ACC-027 | REQ-027/NON-014/RACC-027 | P02/P03/P04/P05/P06 | 六工具独立矩阵 T00–T14、正式 136 同一性 |"
+      },
+      {
+        "line": 26,
+        "text": "总注册分母136＝118动态＋12原固定＋6传输；原DFIR逐项129＋PacketCapture排除1、五场645关系仍独立成立，不机械六乘五，不写136业务全部通过。最终通过须两切片及 host 全局结果、P07成本/追溯和独立核验共同闭合。旧80/67加本组7/1已形成当前87/68；签发前旧分母只作历史来源。PC014/017–023 与 P04-UPLOAD-SIZE-001 不因新增工具失效。P05 G14 初始/189证据适用性按实际冻结部署/source 闭包判断，不自动复用或重置。现行治理按09.13-19由主方完整保真自评开实施门，不新派方案第三方复审；实施后独立核验保留。"
+      },
+      {
+        "line": 30,
+        "text": "本版把PC021落实到既有`OUT/ACC-013、020、023、026`及`OUT-053`链，不增加稳定ID或Pxx数量。P04给出真实list/download字段和安全单文件交付；P05负责三个Phase的真实Triage与两fixture下载、最终报告冻结、确定性成员、5/4键manifest、issuer/13键receipt/一次性能力及epoch7→8 v2 transition；P06递归接收并逐字验证完整图；P07从归档原件终检，不依赖旧`local_path`或进程内能力。"
+      },
+      {
+        "line": 36,
+        "text": "来源/路径/链接、碰撞/漂移、I/O持久性、exact schema/set、能力或transition状态任一不成立即停止，不以旧bundle、旧receipt、旧188、重签发或重试绕过。正式来源要求Triage上传下载、字段语义变化、安全原语不足或因果图不能去环时回作者重裁。`CURRENT-PC022-R01`只冻结本轮完整同步后的作者稿，待主方完整保真自评，实施门关闭。"
+      },
+      {
+        "line": 44,
+        "text": "唯一入口是canonical原字节SHA-256 `2d5f378d20c163401b1c4ce7087db102a4719b394fc7a9408baa7d63d7ca4385`的schema5/epoch6/`NETWORK_ACTIVE`/188；仅准许一次PC020 migration，普通selector拒绝旧188，漂移返回主方。新状态为schema6 epoch7/`PREPARATION_BASELINE`/187和schema6 epoch8/`NETWORK_ACTIVE`/189。189全名固定`Snapshot 189-Velociraptor-MCP可恢复验收基线`，必须现场零匹配→一次创建→恰一匹配→实读marker；187/188保留，不覆盖、改名、删除或自动选190。"
+      },
+      {
+        "line": 50,
+        "text": "migration Ref exact keys为`kind/source/evidence_path/evidence_sha256/predecessor_sha256/migrated_at`，kind=`pc020-requalification-migration-v1`、source=`pc020-migration`；preparation Ref exact keys为`kind/source/evidence_path/evidence_sha256/qualified_at`，kind=`pc020-snapshot187-preparation-v1`、source=`pc020-preparation-admission`；activation Ref仍为`source/evidence_path/evidence_sha256/activated_at`，source=`snapshot189-activation`，根kind=`snapshot189-activation-evidence-v1`。目录分别是P05固定证据根下`pc020-migration/<uuid>/`、`pc020-preparation/<uuid>/`、`activation-189/<uuid>/`。 新189 activation根exact keys增加required `issued_at`；它是cycle2完成验证后、epoch8 `.next`前实际签发时的合法UTC RFC3339 Z字符串并受根SHA覆盖。canonical `activated_at`与root `issued_at`逐字相等；缺失、null、非法、不等或从mtime/当前时钟/receipt补值均拒绝。"
+      },
+      {
+        "line": 52,
+        "text": "设active名`a`、allowlist集合`L`、retired集合`R`：`L={a}`、`L∩R=∅`、retired唯一。active在allowlist中，不要求二者互斥。epoch7从前驱retired按原序移除187后追加188，得到183/184/Snapshot1/186/188；epoch8再追加187。所有Ref时间只表示不可变证据签发时间，不冒充canonical提交时间；尤其activation `issued_at`不等于未来replace完成时间，且不引入跨机时钟比较或额外精度。"
+      },
+      {
+        "line": 58,
+        "text": "恢复前preparation admission只含当前187唯一名称/marker/VM身份、非秘密证据保全和retired准备例外，不含revert、恢复后ready、Flow、报告或Triage/file。因果顺序固定为：冻结规范/产品source→原始tree/metadata/VM观察与保全→preparation package/admission→递归复制历史旧canonical/baseline/activation和preparation→migration package/record→原子epoch7→一次实际187恢复→部署/依赖/fixture→ready/security/resource+initial正式报告/Triage/file→189零到一创建→candidate cycle1完整返回→cycle2完整返回并验证→以required `issued_at`签发activation graph→校验canonical `activated_at`逐字等值→原子epoch8→P06→P07。任何后置事实不得回填前置准入，activation不得引用epoch8或其transition receipt。"
+      },
+      {
+        "line": 70,
+        "text": "| `P05_REPAIR_INITIAL` | `Snapshot 187-固定IP+WindowsMCP开机自启` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 | `snapshot_metadata/revert_operation/pre_start_marker/post_restore_hostname/canonical_readback/pc020_migration/pc020_preparation` |"
+      },
+      {
+        "line": 71,
+        "text": "| `P05_REPAIR_CANDIDATE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 | 同上七类 |"
+      },
+      {
+        "line": 72,
+        "text": "| `P06_ACTIVE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch8 / `NETWORK_ACTIVE` / active snapshot 189 | 上述七类加`activation_evidence` |"
+      },
+      {
+        "line": 77,
+        "text": "- **ACC-020**通过需固定前驱保全、preparation/migration、一次187恢复准备、零到一创建189、两个完整189恢复、含合法`issued_at`的activation根签发、canonical `activated_at`逐字等值和epoch8读回；epoch7不是P06入口。"
+      },
+      {
+        "line": 83,
+        "text": "因此FB-014对PC020的当前行为是fail-closed保全，而非“继续以旧active为常规恢复基线”。固定前驱漂移、来源或图不闭合、189冲突、原子性不明、任一Phase/安全/资源失败均停止在当前安全状态；旧188、未激活189、epoch7及历史包均不产生P06/P07正式覆盖。"
+      },
+      {
+        "line": 89,
+        "text": "> 4. 原DFIR注册面 130 不变（候选新增六项后总面136）；逐工具 129 实测 + 1 登记排除（Windows.Network.PacketCapture，排除原因=网络抓包职能划归 FakeNet-NG 域且本 VM netsh 机制异常）；覆盖关系 650→645；资源 admission 13→11。"
+      },
+      {
+        "line": 110,
+        "text": "| 正式需求基底（历史输入） | PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md；正式版本v2；Git blob `4906941e0698ffe7476838c4479ce344ce30ef27` | 保留正式基底身份与历史追溯；当前执行引用须使用页首`CURRENT-PC017-018-019-R02`组中的需求v7及`PLAN/2026.09.20/current-normative-inputs-pc019-r02.json`，不以本行旧blob覆盖作者修订增量 |"
+      },
+      {
+        "line": 138,
+        "text": "| v6 | 2026-09-05 | 引入全面复审AUD-001～008并保持未审核：补正Snapshot186创建/两次恢复/激活顺序、REQ-001与RACC-018反向追溯、Origin缺失语义；要求P05冻结schema3/epoch4状态迁移、HTTP报告schema v2、服务/API最小权限和可执行的非允许来源防火墙负例；要求P06逐项清除未来Snapshot185动作。方向、端口、路径、工具面和Pxx顺序不变，待全面复审。 |"
+      },
+      {
+        "line": 165,
+        "text": "- `Snapshot 186-Velociraptor-MCP网络部署基线` 候选语义不变：P05 在本实例上完成服务/防火墙/外部验收后创建候选、连续两轮恢复验证并按 schema2/epoch3→schema3/epoch4 唯一协议原子激活；实际 `.vmsn` 标记只记录实值。P06 全部情景从激活后的 Snapshot186 执行。"
+      },
+      {
+        "line": 174,
+        "text": "- Snapshot186/schema3/epoch4 保持 canonical 当前字节，但因 fixture/父进程前提失败，不能进入 P06。它仅为本次获授权 P05 修复的 predecessor；恢复仍按唯一匹配、单次 revert、精确 marker 后单次 `vmware -x`、hostname/API 门，绝不冷启动或以 Snapshot187 替代。"
+      },
+      {
+        "line": 177,
+        "text": "- 唯一新状态迁移为 schema3/epoch4/NETWORK_ACTIVE/Snapshot186 → schema4/epoch5/NETWORK_ACTIVE/Snapshot188。状态对象仍用原 exact keys；retired 列表保留原183/184/Snapshot1顺序并追加186，全部 manual-only；187不在本工作流候选或自动集合。候选期间 canonical 不变；双周期全链证据通过后才按排他 `.next`、完整写/fsync、严格验证、原子 replace/目录 fsync 激活。失败不激活、不删快照、不改旧证据，只隔离有当前 attempt 所有权的 `.next`。迁移和报告配对由 P05 §0.6 唯一负责，P06/P07只能消费，不另设 fallback。"
+      },
+      {
+        "line": 187,
+        "text": "- 当前工作树canonical schema3/epoch4/186与实物树不匹配，原件保留但禁止据此自动恢复或进入P06。不得简单替换快照名/marker伪造激活；既有188候选设施暂存为未验证实现，不执行旧186初验或旧迁移。"
+      },
+      {
+        "line": 196,
+        "text": "P05 v9 §0.8为新状态格式、接纳、准备、初验、候选及报告配对的唯一负责规范，覆盖§2.0～2.0.2和全部旧未来快照指令。用户唯一187先以完整原始tree/metadata/MAC/IP及旧canonical归档显式接纳为schema5/epoch5/PREPARATION_BASELINE；activation_evidence必须null，不是产品通过。旧schema3/epoch4/186原字节保留，旧schema4/epoch5候选不得执行。"
+      },
+      {
+        "line": 402,
+        "text": "Snapshot185→186选择器的唯一迁移为schema2/epoch3/`DEPENDENCIES_ACTIVE`→schema3/epoch4/`NETWORK_ACTIVE`。候选及两轮恢复期间canonical继续唯一输出Snapshot185；只有两轮全链通过才用同目录排他`.next`、完整写与fsync、严格候选验证、原子replace和目录fsync激活Snapshot186。成功后active/automatic allowlist只含186，183/184/185均manual-only；任何失败仅隔离可证明属于current attempt的`.next`并证明canonical仍为185，不冷启动、不删除快照。"
+      },
+      {
+        "line": 408,
+        "text": "正式报告另以必需根`snapshot_evidence_sha256`绑定同run `snapshot-evidence.json`及其逐项哈希校验的原始恢复记录。P05负责固定index的三种配对：初验185且canonical为schema2/epoch3；候选恢复186但canonical仍为schema2/epoch3的185；P06只用已激活186且canonical为schema3/epoch4。scenario/index的required_snapshot与实际snapshot名称/marker、restore_attempt_id、报告run_id/session/服务观察必须可机械关联；字段/算法/固定路径详见P05第0.5节，由P06复用。缺证据、185报告冒充186、跨attempt拼接、候选未激活即进入P06均失败；这一关联是ACC-020/023/026证据的必需组成，不改变恢复操作或激活顺序。"
+      },
+      {
+        "line": 533,
+        "text": "- 职责：保留fixture、样本哈希、四项依赖预置和声明式runner；将runner增加正式Streamable HTTP客户端模式并冻结共享report schema v2。以部署者提供的token和安装时实测的guest/host host-only地址配置专用虚拟服务账户、单进程Windows服务和防火墙，只允许宿主机来源访问TCP28790；一次性安装身份与运行身份分离，正式服务不得复用安装期SERVER_ADMIN配置。P05在取得单独凭据/权限授权后创建API principal并以130工具权限矩阵实测；实测证明最低内置角色(reader/analyst/investigator)均无法启动全部130工具后，允许在用户明确接受风险的前提下使用administrator角色，但须固定缓解条件(principal仅经VM内服务进程使用不出VM、网络边界不降级、管理面VQL不经产品130工具暴露、每次验收记录须注明该风险接受及缓解事实)并登记重新降权裁决条件(PLAN-CHANGE-007)。从虚拟机外直接验证认证、initialize、tools/list、无破坏性tools/call、拒绝路径、真实HTTP会话/服务实例身份join和HTTP/stdio工具/schema同一性。全部通过后创建`Snapshot 186-Velociraptor-MCP网络部署基线`候选，连续完成两次恢复验证，再按schema2/epoch3→schema3/epoch4唯一协议原子激活；实际vmsn标记只记录实值。"
+      },
+      {
+        "line": 535,
+        "text": "- 产出：可恢复测试状态、Windows服务/最小运行权限/ACL和防火墙证据、正式/stdio runner、report schema v2、两次代表报告、外部网络正负验收、Snapshot186身份、两次恢复证据与schema3/epoch4原子激活记录。"
+      },
+      {
+        "line": 761,
+        "text": "- 实际动作：从canonical schema2/epoch3的Snapshot185恢复，按记录步骤生成/确认文件、进程、日志和痕迹，安装依赖、专用身份的正式服务与防火墙；完成ACC-026后创建Snapshot186候选，canonical仍保持185，并按唯一匹配、checkpoint marker、`vmware -x`、hostname、API及28790连通性连续完成两次恢复验证；最后按排他`.next`、fsync、严格候选验证、原子replace及目录fsync迁移到schema3/epoch4/`NETWORK_ACTIVE`；扫描Git对象与工作树。"
+      },
+      {
+        "line": 821,
+        "text": "- 实际动作：P05以`NT SERVICE\\mcp-velociraptor`专用虚拟账户安装单进程服务，分离安装期SERVER_ADMIN身份与运行API principal（PLAN-CHANGE-007修订后允许administrator+缓解条件），限定API配置/token只允许服务身份与必要管理员读取、下载根只允许服务身份必要写入；以130工具正向矩阵和管理面超权负例验证权限。服务只绑定实测guest host-only地址的28790和`/mcp`，防火墙只接受实测host来源；非允许来源验证按PLAN-CHANGE-006修订：在host OS网络栈不允许跨接口源发包的确定环境中，以(a)host侧绑定源地址连接失败实测+(b)双端口对照(受规则保护28790与不受保护端口同时不可达)+(c)防火墙规则verify(唯一规则、精确RemoteAddress)三要素闭合；guest WFP日志在此拓扑下不可达不构成自动阻断(PLAN-CHANGE-006)。正式SDK正向请求可无Origin；另测显式允许Origin成功、未允许Origin拒绝。缺/错Bearer、缺/错Host均拒绝且不进入handler。正式报告按schema v2绑定本会话真实tools/list的`tools_schema_sha256`，从真实`Mcp-Session-Id`和`X-MCP-Server-Instance`取身份并与guest服务观察作hash join。首次外部正负验收全部通过后创建Snapshot186候选，再按用户runbook对候选连续两次恢复验证，最后以schema2/epoch3→schema3/epoch4唯一状态迁移激活。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1–6；统一stage/外部批准、唯一guest writer及host镜像、全阶段接续与最后独立核验。"
+  },
+  {
+    "id": "P01",
+    "source": "PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+    "limited_override": "§1–5原历史阶段0范围不重写；历史事实不得变当前源运行成功",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1/3/6；旧P01/78成本对象保留，不重跑183；新source闭包下按实际影响复核底座。"
+  },
+  {
+    "id": "P02",
+    "source": "PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+    "limited_override": "§0.T/4共享启动、HTTP与raw wire、输出/错误/依赖门，原130参数不变",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 9,
+        "text": "> 当前规范来源：`CURRENT-TRANSFER-001-R02`，九对象版本及字节见`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`；主方采纳与完整自评已由07签发，旧PC022及增量原件保留。"
+      },
+      {
+        "line": 23,
+        "text": "## 0.T 六工具共享启动、安全与 raw wire（正式采纳；产品门未验）"
+      },
+      {
+        "line": 25,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 27,
+        "text": "P02 对同一 MCPServer 在开放前只校验既有 transport 配置、原130自身 API/metadata 前提以及合并后的136名称、input/output schema和冲突；不把传输 policy/VM/ACL 新增为全服务启动门。`create_server()` 注册六工具和完整表，但 `TransferToolService` 只在调用时懒创建 `GuestTransferService`。缺 policy 时六名仍列出，`capabilities` 返回 `enabled=false`，其他五动作 `transfer_disabled`，不得创建 guest identity/ACL provider；原130仍按自身原有前提启动并可调用。传输 policy 已配置但无效、VM/boot/epoch或ACL不合格时，相关传输动作在其授权门拒绝且不 fallback，不因这类故障关闭整个 server 或改变原130可用条件。正式28790/mcp 的既有 Bearer/Host/Origin/session/来源门与 stdio 内测同注册实例；非法原 wire 在 SDK/Pydantic 转换或 handler/guest factory 前拒绝并证明无任务副作用。Velo 连接拒绝/缺六工具/enabled=false 只可在 begin 前经既有只读探测考虑 Windows 通道；错认证/Host/协议/身份/单超时不得 fallback。静态 golden 仅原件，需 Windows/正式 SDK 双通道完整136比较。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§4/5/6；同Windows server、Bearer→Host/Origin→session/instance→实际body硬预算→strict frame→业务；137公开集合。"
+  },
+  {
+    "id": "P03",
+    "source": "PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+    "limited_override": "§0.T/4/附录A；只覆盖六/136计数，不改118定义/名单/参数",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 7,
+        "text": "> 状态：主方已采纳并完成本版规范保真自评；既有 v3 历史审核不扩展为六工具产品通过。"
+      },
+      {
+        "line": 9,
+        "text": "> 当前规范来源：`CURRENT-TRANSFER-001-R02`，九对象版本及字节见`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`；主方采纳与完整自评已由07签发，旧PC022及增量原件保留。"
+      },
+      {
+        "line": 23,
+        "text": "## 0.T 动态118与六工具注册边（正式采纳；产品门未验）"
+      },
+      {
+        "line": 25,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 27,
+        "text": "P03 保留118动态 artifact 的 root Org/唯一 Windows client、metadata-to-schema 与原子注册；六工具是同一 server 上不经 Velociraptor target_context 的独立本机固定扩展。动态118真实 schema 由部署 metadata 决定，不以旧快照静态比较冒充当前运行事实。原130输入输出逐项和可信前态比较，六项与附件 schema 精确匹配；任何名称冲突、缺项、字段漂移或部分注册均使启动失败，不能提供残缺工具表。P03 原 ACC-P03-001～008 义务和旧历史通过记录不改。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1/5/6；118 CLIENT准确原名/strict参数及一次collection即Flow不变；公开面含独立7 transfer=137。"
+  },
+  {
+    "id": "P04",
+    "source": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "limited_override": "§0.T隔离/3十二schema与Flow/file输出原义，六/136增量覆盖为七/137，不强套DFIR130 response",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 5,
+        "text": "> 当前规范来源：`CURRENT-TRANSFER-001-R02`，九对象版本及字节见`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`；主方采纳与完整自评已由07签发，旧PC022及增量原件保留。"
+      },
+      {
+        "line": 10,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 12,
+        "text": "本版父态为 P04 v12 上传尺寸增量：无 idx 尺寸差异保留清单 warning、差异项下载在内容 I/O/建目录前拒绝、稀疏严格配对与安全发布原义均保持。新增六工具不复用 `download_flow_file` 的大小豁免、Flow 身份或 Velociraptor target_context；原12 wire schema 不变，需逐项静态与真实双通道核。G04 FileIdInfo→BY_HANDLE 勘误未由本候选采纳。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1/5/6；12职责/Hunt/VQL/完整download原义保留，transfer原wire另层；host目的只经正式transfer。"
+  },
+  {
+    "id": "P05",
+    "source": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+    "limited_override": "§0.T、0.PC021/0.PC020：189 kind/ref/stage、原树2→3、历史34+11同policy、旧恢复/准备门被精确新分层/四→五树覆盖；完整业务和持久化谓词不减",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 7,
+        "text": "> **当前九对象组（主方已签发）**：`CURRENT-TRANSFER-001-R02`；需求`v13`、总纲`v25`、P01`v4`、P02`v8`、P03`v4`、P04`v13`、P05`v21`、P06`v23`、P07`v19`。正式字节由`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`绑定；直接来源为已验T002/R05冻结候选及T004/R02提案，PC022、PC023与P04-UPLOAD-SIZE-R01有效来源保留。主方采纳及87/68完整保真自评见`PLAN/2026.09.26/2026.09.26-07-PC024主方采纳与完整保真自评.md`；规范允许依原阶段门推进受限实施，真实产品/Windows/VM验收未由此通过。"
+      },
+      {
+        "line": 12,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 14,
+        "text": "P05 在授权 `.232` 上核实际 VM/boot/epoch、guest service 根、protected policy/ACL、服务与来源闭包；PC023 Linux receiver 观察继续有效。若冻结189不含六工具且原 Phase 仅依130，先以实际制品/hash/schema/source 和阶段条款证明旧 initial 是否可承接；若六工具与修复同制品改变注册、配置或服务身份，受影响 Phase 的工具表、安全与 source 真实重绑复测。旧 G13 initial 与189创建是历史事实，G14 cycle1 失败保留；4553cb3 未部署/复跑，两 candidate/epoch8 未因此放行。不能把整个传输全完成设为无条件 G14 前置，也不能自动复用旧 initial。"
+      },
+      {
+        "line": 26,
+        "text": "- `A`：`activation-189/<activation_uuid>/`；`R = A/activation-evidence.json`；`S = A/issuance-receipt.json`。"
+      },
+      {
+        "line": 77,
+        "text": "`schema_version/kind/workflow_id/issuance_id/operation/source/epoch7/cycle2/activation_root/issued_at/events/status/error`"
+      },
+      {
+        "line": 81,
+        "text": "- 未来按 PC022 产生的 `S` 使用 `schema_version=2`、`kind=\"snapshot189-activation-issuance-receipt-v2\"`；v1 字节保全为历史，不得通过新 verifier；`workflow_id` 等于固定 P05 workflow；`issuance_id` 是等于 `<activation_uuid>` 的 canonical lowercase UUID；"
+      },
+      {
+        "line": 84,
+        "text": "- `epoch7` exact keys 为 `canonical_sha256/schema_version/epoch/phase/active_snapshot`；值分别为 `H7`、整数 6、整数 7、`PREPARATION_BASELINE`、`Snapshot 187-固定IP+WindowsMCP开机自启`；"
+      },
+      {
+        "line": 98,
+        "text": "1. 要求 `A` 及其祖先为批准的普通非 reparse 目录；`A` 按新建层级算法建立或验证；以 no-follow/lexists 证明 `R/S` 均不存在并核同卷边界。一次读取 `C7`，验证 schema6/epoch7 固定状态并保存 `H7`；冻结除 `issued_at` 外的 root 输入；私有 pre-issue predicate 完整验证 preparation/migration/creation、initial/cycle1/cycle2、三 Phase manifest、runtime/business predicate 和所有 Source；不接受 caller \"已验证\"断言且不写文件。生产平台若不能提供文件 flush 与父目录持久性（含 Windows 目录持久性）则在创建 root 前 fail closed，测试 seam 不得把 mock 当成生产成功。"
+      },
+      {
+        "line": 125,
+        "text": "`implementation_sources` 必须在 pre-issue 前纳入实际 issuer、complete verifier、download preserver 及其直接 helper/tests；root、receipt、live report、下载字节、输出 manifest/result、future transition 都是输出，不得作为 implementation source 形成循环。PC021 作者决定在正式执行冻结时进入 `source_inputs`；正式采纳必须生成新的 current-manifest identity，历史 `CURRENT-PC020-R01` 原字节不改。本节是待主方完整保真自评的正式作者稿；历史 candidate、自检和 result 仅为过程证据，不替代本节正式正文。"
+      },
+      {
+        "line": 131,
+        "text": "一次调用必须从 `A` 验证固定同层 `R/S`、既有 root/Phase/Source/epoch7 predicate、receipt exact keys/事件和全部 cross-binding，并执行 §3 的 package 规则。它可返回 `content_graph_valid=true`，但不得返回 `operationally_issuable=true`、caller bool 授权、可序列化 token 或从磁盘恢复的许可；它明确不能判断历史 receipt fsync 是否曾失败。"
+      },
+      {
+        "line": 140,
+        "text": "- `epoch7_sha256 = H7`；"
+      },
+      {
+        "line": 331,
+        "text": "PC022 之后 epoch7→8 receipt 根对象必须且只能有 **15 键**（历史通用 kind `pc020-canonical-transition-receipt-v2` 保全为历史，不得满足 PC022 新入口）："
+      },
+      {
+        "line": 385,
+        "text": "- v2 intent 和 `COMMITTED` v3 receipt（`pc021-epoch8-activation-transition-receipt-v3`）的 exact schema、相互绑定以及 `H7/H8/HR/HS`，外加 13键 `pc020-epoch7-migration-transition-receipt-v2`；"
+      },
+      {
+        "line": 467,
+        "text": "`Snapshot 189-Velociraptor-MCP可恢复验收基线`. The retained objects 187 and"
+      },
+      {
+        "line": 479,
+        "text": "- **guest preparation and runners** operate only after epoch7 authorizes one"
+      },
+      {
+        "line": 487,
+        "text": "migration package, an epoch7 canonical plus transition receipt, three complete"
+      },
+      {
+        "line": 579,
+        "text": "`snapshot189-activation`, evidence path is under"
+      },
+      {
+        "line": 580,
+        "text": "`activation-189/<uuid>/activation-evidence.json`, and `activated_at` equals that"
+      },
+      {
+        "line": 583,
+        "text": "defaulted-from-mtime/current-clock/receipt values fail. It is null at epoch7 and"
+      },
+      {
+        "line": 606,
+        "text": "- migration and preparation references: byte-for-byte unchanged from epoch7;"
+      },
+      {
+        "line": 608,
+        "text": "- retired list: copy epoch7 retired entries unchanged and append 187, yielding"
+      },
+      {
+        "line": 679,
+        "text": "time. The migration record does not contain or reference epoch7 canonical"
+      },
+      {
+        "line": 749,
+        "text": "4. derive the one exact epoch7 state and its canonical bytes;"
+      },
+      {
+        "line": 759,
+        "text": "   via the PC022 helper, reread and validate epoch7;"
+      },
+      {
+        "line": 767,
+        "text": "`pc020-epoch7-migration-transition-receipt-v2` with the same 13 exact keys;"
+      },
+      {
+        "line": 796,
+        "text": "### 6. Post-epoch7 P05 execution and activation"
+      },
+      {
+        "line": 798,
+        "text": "Only after a committed and verified epoch7 transition may P05 perform:"
+      },
+      {
+        "line": 815,
+        "text": "   byte-for-byte, then atomically transition the exact epoch7 bytes to epoch8"
+      },
+      {
+        "line": 818,
+        "text": "The activation directory is exactly `activation-189/<uuid>/`; root file is"
+      },
+      {
+        "line": 823,
+        "text": "Schema is 1, kind is `snapshot189-activation-evidence-v1`, candidate is the"
+      },
+      {
+        "line": 830,
+        "text": "migration and preparation packages; their bytes must equal the epoch7"
+      },
+      {
+        "line": 842,
+        "text": "epoch7 / `PREPARATION_BASELINE` / active snapshot 187. The two candidate"
+      },
+      {
+        "line": 844,
+        "text": "`Snapshot 189-Velociraptor-MCP可恢复验收基线`, while canonical still reads"
+      },
+      {
+        "line": 845,
+        "text": "schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 and the same"
+      },
+      {
+        "line": 886,
+        "text": "| `P05_REPAIR_INITIAL` | `Snapshot 187-固定IP+WindowsMCP开机自启` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 | `snapshot_metadata`, `revert_operation`, `pre_start_marker`, `post_restore_hostname`, `canonical_readback`, `pc020_migration`, `pc020_preparation` |"
+      },
+      {
+        "line": 887,
+        "text": "| `P05_REPAIR_CANDIDATE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch7 / `PREPARATION_BASELINE` / active snapshot 187 | same seven kinds |"
+      },
+      {
+        "line": 888,
+        "text": "| `P06_ACTIVE` | `Snapshot 189-Velociraptor-MCP可恢复验收基线` | schema6 / epoch8 / `NETWORK_ACTIVE` / active snapshot 189 | the same seven plus `activation_evidence` |"
+      },
+      {
+        "line": 897,
+        "text": "P06 cannot consume epoch7, old188, an unactivated 189, a missing/extra kind,"
+      },
+      {
+        "line": 915,
+        "text": "| 187 actual restore | One fresh attempt after committed epoch7, exact marker and identity | Proceed to deployment/ready only after successful readback. |"
+      },
+      {
+        "line": 921,
+        "text": "| Cross-attempt/generation splice | Reused restore-attempt/run/Flow/raw/ready or mismatched attempt/time/session/process binding; path/hash equality alone is not the predicate | Reject graph; keep epoch7; no activation. |"
+      },
+      {
+        "line": 922,
+        "text": "| Epoch8 activation | Exact epoch7 bytes, complete new graph, O_EXCL and readback succeed | Active/allowlist solely 189; 187 appended retired; P06 entry opens. |"
+      },
+      {
+        "line": 965,
+        "text": "9. preparation + migration records → epoch7 `.next`;"
+      },
+      {
+        "line": 966,
+        "text": "10. committed epoch7 → actual 187 restore;"
+      },
+      {
+        "line": 974,
+        "text": "15. activation root hash + canonical `activated_at` byte-equality → exact epoch7"
+      },
+      {
+        "line": 979,
+        "text": "migration cannot consume epoch7 or a transition receipt; activation cannot"
+      },
+      {
+        "line": 1011,
+        "text": "新candidate固定为schema3/epoch4/phase=`NETWORK_ACTIVE`，根exact keys继续为`schema_version/workflow_id/epoch/phase/active_snapshot/automatic_restore_allowlist/retired_snapshots/activation_evidence`；`active_snapshot` exact keys继续为`name/checkpoint_marker/purpose`，值为Snapshot186名称、从VMware metadata实际读回的非空新`.vmsn`、以及“已验证依赖/fixture/专用服务/28790安全边界与外部情景的唯一自动恢复基线”；allowlist恰含Snapshot186。retired精确按183/184/185升序，状态均为`MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION`。`activation_evidence` exact keys继续为`source/evidence_path/evidence_sha256/activated_at`，证据必须存在且hash一致。active、allowlist、retired名称互斥，禁止未知/缺失键、旧marker、跳epoch/降级、错误phase或重复/乱序retired。"
+      },
+      {
+        "line": 1013,
+        "text": "唯一允许迁移是有效schema2/epoch3→有效schema3/epoch4。Snapshot186候选创建和两轮恢复期间canonical保持schema2/epoch3且`--emit-active`只输出Snapshot185；只有两轮全部通过才排他创建`.next`。`.next`采用UTF-8完整写、flush+fsync、同目录不覆盖显现及目录fsync；存在时普通emit fail-closed。`--emit-next`验证上述全部不变量和证据hash后，以同目录原子replace canonical并fsync目录，再回读证明active唯一为186且183/184/185 candidate验证均退出3。"
+      },
+      {
+        "line": 1065,
+        "text": "| P06_ACTIVE | Snapshot 186-Velociraptor-MCP网络部署基线 | 186实际恢复完成；canonical为schema3/epoch4/NETWORK_ACTIVE且active/allowlist唯一186，激活证据hash有效。 |"
+      },
+      {
+        "line": 1086,
+        "text": "**唯一状态迁移与排除。** predecessor 必须精确为现存有效 schema3/epoch4/NETWORK_ACTIVE、active/allowlist 唯一 Snapshot186；新候选完整名称固定 `Snapshot 188-Velociraptor-MCP可恢复验收基线`。Snapshot187 属用户现场，不读取为测试来源、不恢复、不改名、不删除；186 只作本轮 P05 重建前驱，不允许新 P06 正式验收。新状态为 schema4/epoch5/NETWORK_ACTIVE，根及嵌套 exact keys 沿用0.2，active/allowlist 唯一188且 marker 来自其创建后 metadata 实测；retired 必须逐字保留前驱的183/184/Snapshot1各项及顺序并追加186，状态均 manual-only，不把187加入治理集合。任何前驱差异先阻断，禁止自动修正 canonical。"
+      },
+      {
+        "line": 1102,
+        "text": "| P05_REPAIR_INITIAL | Snapshot 186-Velociraptor-MCP网络部署基线 | 实际恢复186；schema3/epoch4/NETWORK_ACTIVE、唯一active186；本轮准备另有差集 |"
+      },
+      {
+        "line": 1144,
+        "text": "恢复治理新格式为schema_version=5。schema4仅属未激活的旧PC011候选设计，禁止作为新入口；此处不是声称旧schema3运行状态正常升级，而是对用户删除旧快照后的显式管理接纳。新canonical根exact keys为 `schema_version/workflow_id/epoch/phase/active_snapshot/automatic_restore_allowlist/retired_snapshots/baseline_evidence/activation_evidence`。active_snapshot/allowlist/retired的字段形状沿用§0.2；workflow保持本方案固定值。"
+      },
+      {
+        "line": 1155,
+        "text": "接纳记录固定存于P05证据根 `baseline-adoption/<uuid>/adoption.json`。根exact keys为 `schema_version/kind/workflow_id/adoption_id/vmx/snapshot_name/checkpoint_marker/old_canonical/snapshot_tree/metadata/guest_identity/source_inputs`；schema_version=1，kind=user187-preparation-adoption-v1。old_canonical/tree/metadata/guest_identity采用§0.7 Ref，目录自包含且拒绝链接/逃逸。old_canonical保留当前schema3/epoch4/186原字节，不要求其旧激活声明通过新验收；tree/metadata/identity必须来自本次真实只读请求、时间与退出码，不复制旧摘要。source_inputs采用Source形状，包含页首`CURRENT-PC017-018-019-R02`九规范与`PLAN/2026.09.20/current-normative-inputs-pc019-r02.json`、PC012登记、08号用户互传授权、本版完整自评及实际selector源码；旧需求/总纲/Pxx、旧作者组与PC017候选组仅可另列历史输入。"
+      },
+      {
+        "line": 1410,
+        "text": "- 落点：`Snapshot 186-Velociraptor-MCP网络部署基线`候选、两周期全链恢复/外部验收证据、0.2节schema3/epoch4状态及选择器反例。"
+      },
+      {
+        "line": 1411,
+        "text": "- 完成门：IMP-009/010及既有依赖/fixture全部通过才创建候选；候选验证期间canonical持续为schema2/epoch3/Snapshot185。每周期唯一匹配、一次revert、marker存在才一次`vmware -x`、hostname/API/service/firewall/28790正向调用和0.3节正式HTTP报告全部通过。第二周期成功后才以0.2节唯一`.next`协议原子激活Snapshot186，回读schema3/epoch4/`NETWORK_ACTIVE`、automatic allowlist恰含186，Snapshot183/184/185均manual-only；任何失败隔离本attempt的`.next`并证明canonical仍为185 active。"
+      },
+      {
+        "line": 1475,
+        "text": "- 预期：两轮全部一致；marker缺失绝不直接`-x`，不对运行VM追加revert；成功回读schema3/epoch4/`NETWORK_ACTIVE`，active/automatic唯一为186，183/184/185按序manual-only；旧marker、未知键、跳epoch、错误phase、错误hash、重叠集合和来源不明`.next`均fail-closed。"
+      },
+      {
+        "line": 1507,
+        "text": "| FB-P05-008 | Snapshot186创建/任一恢复周期/schema3 candidate/`.next`验证或原子切换失败 | 不激活、不删快照、不冷启动；canonical保持schema2/epoch3/Snapshot185；只隔离能证明属于current attempt的`.next`，保存hash并回读active仍为185 | 同一候选完成两个全链周期，schema3全部正反例通过并原子切换，回读active/allowlist唯一为186 |"
+      },
+      {
+        "line": 1561,
+        "text": "- v4：引入网络回流全面复审AUD-002/003/005/006/007/008。冻结schema2/epoch3/Snapshot185到schema3/epoch4/`NETWORK_ACTIVE`/Snapshot186的唯一原子迁移和`.next`失败隔离；冻结共享report schema v2、真实MCP会话/服务实例响应头与guest观察哈希join；分离安装身份、专用虚拟服务账户和最小运行API principal，要求独立凭据/ACL授权与130工具权限/超权矩阵；给出既有非允许源双端WFP负例及不可构造时的阻断；统一Origin语义；把25个稳定ID逐项列全。状态保持未审核。"
+      },
+      {
+        "line": 1573,
+        "text": "5. 已完成schema v1/epoch2→schema v2/epoch3历史与本轮schema2/epoch3→schema3/epoch4候选验证、marker门、`.next`隔离和原子切换是否清楚分离且fail closed；"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§2–4/6；真实initial187→创建191→2独立cycle→完整R/S→一次能力原子复核消费→guest native唯一C8写入。"
+  },
+  {
+    "id": "P06",
+    "source": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+    "limited_override": "§0.T/PC021/PC020入口/配对/封包/五场；旧188/schema5/epoch5或6、189及无快照baseline_binding不能当前接收",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 7,
+        "text": "> **当前九对象组（主方已签发）**：`CURRENT-TRANSFER-001-R02`；需求`v13`、总纲`v25`、P01`v4`、P02`v8`、P03`v4`、P04`v13`、P05`v21`、P06`v23`、P07`v19`。正式字节由`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`绑定；直接来源为已验T002/R05冻结候选及T004/R02提案，PC022、PC023与P04-UPLOAD-SIZE-R01有效来源保留。主方采纳及87/68完整保真自评见`PLAN/2026.09.26/2026.09.26-07-PC024主方采纳与完整保真自评.md`；规范允许依原阶段门推进受限实施，真实产品/Windows/VM验收未由此通过。"
+      },
+      {
+        "line": 12,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 14,
+        "text": "原129真实有效工具＋PacketCapture登记排除、每工具五场645有效关系、每场≥10次真实调用和失败整场零覆盖保持。六工具另以独立矩阵 T01–T14/T04a–c 计双向适用、拒绝/恢复、全局 CLI 完成；N/A、skip、未运行均不算成功，不机械乘五。receiver/package/selection/aggregate 分列两个分母，客观绑定正式136 tools/list、实际部署、VM/epoch、host result 与 guest tombstone；guest局部 success 和结构合法 result 不得进成功 selection。旧报告只历史可读，不改标签。"
+      },
+      {
+        "line": 54,
+        "text": "P06唯一入口是P05已原子提交并回读的schema6/epoch8/`NETWORK_ACTIVE`，active及allowlist唯一为`Snapshot 189-Velociraptor-MCP可恢复验收基线`，migration/preparation Ref与epoch7逐字节相同且activation Ref有效。selector、逐工具资格、资源资格、五个scenario/index、receiver、final-selection和aggregate都必须绑定这一身份。schema5/epoch6/188仅是精确migration历史前驱；schema6/epoch7/187只是P05准备；旧186、旧4/5、旧报告/预算、未激活189均产生零正式覆盖。"
+      },
+      {
+        "line": 56,
+        "text": "上游stage配对必须分开验证实际恢复snapshot与canonical读回：`P05_REPAIR_INITIAL`恢复187且读回schema6/epoch7/`PREPARATION_BASELINE`/active snapshot 187；`P05_REPAIR_CANDIDATE`恢复189但仍读回schema6/epoch7/`PREPARATION_BASELINE`/active snapshot 187；只有`P06_ACTIVE`恢复189并读回schema6/epoch8/`NETWORK_ACTIVE`/active snapshot 189。candidate canonical若提前成为epoch8或active snapshot 189，receiver、selection和aggregate必须拒绝。"
+      },
+      {
+        "line": 62,
+        "text": "PC022 Windows 刷新接收门：每个 P06_ACTIVE 入包必须递归验证 PC022 当前规范/source identity、activation root 的 exact implementation sources、v2 `snapshot189-activation-issuance-receipt-v2`、13键 `pc020-epoch7-migration-transition-receipt-v2` 及 15键 `pc021-epoch8-activation-transition-receipt-v3` `COMMITTED` receipt；`ROOT_DIRECTORY_FSYNCED` 与 `directory_fsynced_at` 仅在各自新版本中表示 P05 controller 按 PC022 helper 观察到实际成功。旧 v1 issuance、epoch6→7 v1、epoch7→8 旧通用 v2、旧 implementation source 或非 COMMITTED 均产生零覆盖。P06 只读验证/归档这些操作事实和内容图，不接收进程能力、不重跑刷新、不从当前可读性推断历史 API 成功或掉电持久性；失败回 P05 或主方，不改原件、不自动重试。"
+      },
+      {
+        "line": 74,
+        "text": "3. receiver只接收完整immutable package并逐成员反算；账本只追加。final-selection每scenario只选唯一完整成功run，显式拒绝旧188、epoch7、缺任一PC020图、旧source/budget、重复attempt或status非success的包。"
+      },
+      {
+        "line": 87,
+        "text": "历史v10/v9配对文字仅追溯其形成过程；当前执行引用只接受上述`CURRENT-PC017-018-019-R02`组及`PLAN/2026.09.20/current-normative-inputs-pc019-r02.json`，并消费当前总纲v20 §2.0.3/2.0.4/2.0.5和P05 v16 §0.8/§1.0.1。P06_ACTIVE必须为已激活188、canonical schema5/epoch6/NETWORK_ACTIVE；schema5/epoch5/187仅供P05准备，不能进入本阶段。所有资格/逐工具/五场/index/scenario/策略/预算/接收/选择/聚合同时冻结此身份并重算源hash，不允许CLI替换。恢复原六类原件新增baseline_adoption，完整接纳目录与activation目录按原字节递归封包、去重和校验，引用路径不改写。旧186、4/5、准备5/5、跨代次、缺接纳原件或只含passed摘要均拒绝。P05源或配对改变时旧资格预算失效，重新完整资格和受影响整场执行。P06仍不修环境、不补fixture、不改时钟或网络来满足恢复门；失败回P05。"
+      },
+      {
+        "line": 89,
+        "text": "交P07只固定当前`CURRENT-PC017-018-019-R02`九规范组、`PLAN/2026.09.20/current-normative-inputs-pc019-r02.json`及其未来完整自评/实施/原件核对身份；旧`CURRENT-PC017-018-019`、旧“当前需求、总纲v13、P05v9、本P06v10”、旧作者组及PC017候选组仅为历史输入，不再共同指导执行，也不能以20号或旧版14/14计数替代。字段形状只消费当前P05 §0.8，不再以旧“六类”文字漏掉第七类。PC017的有向入口明确为P05初验与两个候选恢复周期已完成真实Triage回填、随后P05原子激活；P06只从该已激活基线执行正式资格/逐工具/情景，完成后才交P07。r3证据根、130工具、PC014 129+1/645关系、正负安全回归与其他阶段顺序不变。"
+      },
+      {
+        "line": 91,
+        "text": "PLAN-CHANGE-012 最高优先门禁：用户已删除旧快照并恢复唯一 `Snapshot 187-固定IP+WindowsMCP开机自启`。当前总纲 v12 §2.0.2、P05 v8 及 `2026.09.14-01` 覆盖本文 §1.0 和所有旧未来执行指令。旧186/schema3/epoch4及旧186→188/schema4/epoch5迁移均不得执行，不能仅替换名称来伪造新激活；用户恢复不计入执行方恢复验收周期。必须先由P05完成新起点/候选/状态配对契约、主会话完整保真自评和真实激活证据，再同步P06所有消费者并重新自评。本文14/14旧计数不证明v9已通过。五情景650关系、真实成功链、资源资格、原始证据和失败整场重跑要求不减少。"
+      },
+      {
+        "line": 109,
+        "text": "- `tests/p06_individual_acceptance.py`：核对正式136 tools/list与原DFIR130注册位及独立六传输位的拆分；原DFIR129适用项逐工具真实完整成功链、PacketCapture登记排除和12固定工具约定错误独立验收；六传输另按PC024矩阵真实验收。"
+      },
+      {
+        "line": 120,
+        "text": "来源为 `2026.09.13-07` 的 CHK-024/025 及 `2026.09.13-08` 的持续未闭合证据。旧账本、摘要恢复文件和占位 canonical SHA 不得修改成看似合格的历史。负责层为 P06，P05 的 schema-v2/schema3/epoch4/恢复协议不变；需求 v2 与总纲 v10 不变。"
+      },
+      {
+        "line": 147,
+        "text": "依据总纲v11 §2.0.1、P05 v7 §0.6及同目录19号用户授权，本文其余章节中的Snapshot186/schema3/epoch4作为未来P06入口统一被已激活的 `Snapshot 188-Velociraptor-MCP可恢复验收基线` / schema4/epoch5/NETWORK_ACTIVE 替代；186仅为P05重建前驱和历史证据，不能用于新P06常规恢复或fallback。183/184/Snapshot1/186退役顺序与状态逐项消费P05新canonical，不接管用户187。旧版本变更、失败attempt和历史引用不重写。"
+      },
+      {
+        "line": 158,
+        "text": "2. P05 v2的已证历史是Snapshot185/schema2/epoch3/`DEPENDENCIES_ACTIVE`及四条依赖链；它只是本轮P05网络部署的predecessor，不是P06入口。P06开始前必须实际读取P05回流完成记录及两轮证据，确认canonical精确为schema3/epoch4/`NETWORK_ACTIVE`、active与automatic allowlist唯一为`Snapshot 186-Velociraptor-MCP网络部署基线`、183/184/185均manual-only，并从metadata读回Snapshot186的实际非空`.vmsn` marker；这些值不得从旧证据或本文预填。"
+      },
+      {
+        "line": 163,
+        "text": "以上P06入口以P05回流完成记录、Snapshot186双周期激活证据和用户恢复规则为唯一规范来源；本节的Snapshot185文字仅陈述predecessor历史。若schema3/epoch4、selector、唯一匹配、marker、hostname、API、唯一client、权限、服务、防火墙、依赖或fixture任一不符，该attempt在任何正式调用前失败，不使用Snapshot183/184/185或冷启动fallback。"
+      },
+      {
+        "line": 214,
+        "text": "PC018/019新增正式矩阵：分页以两个合法Flow及同一Flow两个合法source分别复用`v1:1`并读取各自第二行，另测未知Flow、非法source、非法编码、超范围offset、多source省略和全页合并；分页输出另作三分断言：空源`offset=0`和`offset==len`的终页均要求`next_cursor`存在且为JSON `null`；正常非终页要求字段存在且为合法规范cursor字符串；无分页操作要求整个`pagination`不存在。调用方保持链上下文，产品不登记签发来源、不自动归零。四个固定启动分别覆盖WAITING、IN_PROGRESS、FINISHED、ERROR、其他非空新值、缺失、空值：collect_file/collect_forensic_triage/kill_process的required `state`和start_hunt的required `flow_state`必须逐字来自创建后立即回读，Hunt `state`保持Hunt语义。每次只创建一个Flow且不等终态；缺失/空值为BACKEND_ERROR，ERROR初值不贡献业务成功。准确output schema静态断言只允许PC019的三个`state`和一个`flow_state`四个新增输出字段；终页null是既有P04 `string|null`契约勘误，不是第五个新增字段；inputSchema、130注册面、动态工具outputSchema与PC014的129实测+1登记排除/645关系不得改变。Win10VM stdio诊断与正式HTTP必须得到同一新版tools/list hash；五场source/index/report绑定`CURRENT-PC017-018-019-R02`，旧hash或旧输出schema报告一律拒绝。"
+      },
+      {
+        "line": 252,
+        "text": "五个固定scenario及P06 index的required_snapshot必须全部为`Snapshot 186-Velociraptor-MCP网络部署基线`，index新增的snapshot_stage精确为P06_ACTIVE；按实际修改后的字节重算source/index哈希，不允许保留185值、CLI覆盖或运行时改写。P06按P05第0.5节的固定路径读取外层恢复记录，逐工具、资源资格和五情景报告都生成同run `snapshot-evidence.json`，根`snapshot_evidence_sha256`绑定该文件及原始恢复证据。接收账本在tools_schema_sha256之后增加snapshot_evidence_sha256，值只从报告转录；聚合器逐层重算，并把required_snapshot/index阶段、schema3/epoch4/NETWORK_ACTIVE、186 active/allowlist及激活证据、实际marker/hostname、restore_attempt_id、run_id/session/服务观察完整联结。"
+      },
+      {
+        "line": 310,
+        "text": "- 目标：接收账本和final-selection防篡改/防拼接；正式tools/list=136拆分原DFIR118动态＋12固定与六传输；原DFIR129成功＋PacketCapture登记排除、645/645有效关系；每适用工具5场、每情景≥10真实调用，五个相互独立的合法P06_ACTIVE恢复attempt及runner/HTTP会话生命周期，场内服务实例恒定并与guest观察join。内存快照恢复可使五场PID/start time/instance id重复，须与同一实际激活快照基线一致；场内重启或漂移失败。最终失败调用0、失败断言/不变量0、未执行0、unexpected ERROR 0、未闭合对象0、覆盖差集0；失败attempt覆盖另为零且不可替代最终终检门。六传输独立矩阵另验。"
+      },
+      {
+        "line": 333,
+        "text": "- 前置：P05通过；正式136 tools/list冻结，原DFIR130注册位及六传输位拆分双向差集0；PacketCapture为原DFIR唯一登记排除。"
+      },
+      {
+        "line": 404,
+        "text": "| FB-P06-004 | Snapshot186恢复、schema3/epoch4、marker、VMX、hostname/API/client/service/permission/firewall/fixture失败 | 本attempt不执行scenario；回P05修复其负责边界或按用户runbook从Snapshot186开新attempt，不冷启动、不恢复183/184/185 | selector schema3/epoch4/`NETWORK_ACTIVE`及完整恢复/正式网络门重新通过 |"
+      },
+      {
+        "line": 450,
+        "text": "- v4：引入网络回流全面复审AUD-001/003/005/008。逐项清除P06未来执行、资格、IMP和fallback中的Snapshot185目标，只允许其出现在P05 predecessor或历史版本/证据叙述；入口唯一为schema3/epoch4/`NETWORK_ACTIVE`的Snapshot186。正式报告严格消费P05 schema v2及真实`Mcp-Session-Id`、`X-MCP-Server-Instance`和guest观察hash，不再自定义服务身份；纠正内存快照可重复同一服务实例、但每场会话/runner必须独立的判据；补全14个稳定ID逐项追溯及Origin正反语义。状态保持未审核。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1/2/4/5/6；同批准束/191五独立restore/129成功+PacketCapture排除=645；拒绝schema3替代。"
+  },
+  {
+    "id": "P07",
+    "source": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+    "limited_override": "§0.T/PC021/PC020唯一入口/成本pair/终检；旧130/136计数和r232共享状态无恢复报告不能替正式资格",
+    "author_sections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "locations": [
+      {
+        "line": 5,
+        "text": "> **当前九对象组（主方已签发）**：`CURRENT-TRANSFER-001-R02`；需求`v13`、总纲`v25`、P01`v4`、P02`v8`、P03`v4`、P04`v13`、P05`v21`、P06`v23`、P07`v19`。正式字节由`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`绑定；直接来源为已验T002/R05冻结候选及T004/R02提案，PC022、PC023与P04-UPLOAD-SIZE-R01有效来源保留。主方采纳及87/68完整保真自评见`PLAN/2026.09.26/2026.09.26-07-PC024主方采纳与完整保真自评.md`；规范允许依原阶段门推进受限实施，真实产品/Windows/VM验收未由此通过。"
+      },
+      {
+        "line": 7,
+        "text": "> **PC020父来源（历史身份）**：`CURRENT-PC020-R01`；需求`v8`、总纲`v21`、P01`v4`、P02`v7`、P03`v3`、P04`v10`、P05`v17`、P06`v18`、P07`v15`。其历史身份由`PLAN/2026.09.20/current-normative-inputs-pc020-r01.json`描述；`CURRENT-PC017-018-019-R02`保留为更早历史起点。"
+      },
+      {
+        "line": 20,
+        "text": "本正式组按仓库根相对路径引用 `PLAN/2026.09.26/2026.09.26-01-PLAN-CHANGE-024-本机传输六工具与全局结果门.md`、`PLAN/2026.09.26/2026.09.26-02-传输规范治理与来源.md`、`PLAN/2026.09.26/2026.09.26-03-六传输工具独立验收矩阵.md`、`PLAN/2026.09.26/transfer-six-schema.json`、`PLAN/2026.09.26/2026.09.26-04-增量正式映射台账.json`；这些附件在同一正式来源图内，六工具 wire/schema、验收矩阵和新增映射台账均是规范内容，不以实现文档代替。"
+      },
+      {
+        "line": 22,
+        "text": "旧五 pair 双边成本仍以相同调查终点、当前 selected 子链与上游原样对应链比较；六工具 schema/调用/结构化字节/耗时及内部状态重试另列传输账，不虚造上游六项。最终双向追溯保留旧80/67原行，采纳候选后增7正式/1累计为87/68，并列 P07 14 项旧责任切片及新异常；CHK 只追加、作者不关闭。两 README 与工具手册同步当前136、旧130历史语境、尺寸 warning/下载拒绝、host全局结果，真实同一性与双端 cleanup 未证不报总通过。安全清理只删已证明替代且无引用的旧对象，不误删传输底座/已发布成果。"
+      },
+      {
+        "line": 26,
+        "text": "P07 只消费 P06 已接纳并归档的 PC022 内容图：逐字节复算 activation root、13键 v2 `snapshot189-activation-issuance-receipt-v2`、10键 epoch8 v2 intent、15键 `pc021-epoch8-activation-transition-receipt-v3` `COMMITTED` receipt、13键 `pc020-epoch7-migration-transition-receipt-v2` receipt、三个 Phase 的 5/4键 manifest 和全部成员，并核 current PC022 source/implementation identity、canonical H8 及 outer manifest 覆盖。下载成员只从归档 Phase 根的 `downloads/<flow_key>/<file_id>/content.bin` 读取；不可解引用报告中的旧 `local_path`，不可从进程内一次性能力推断已提交。每 Phase 真实 Triage 结果/list 和两个 fixture 实际下载链须完整，仍不下载 Triage upload。事件/时间字段是来源绑定的 controller 操作事实，不是跨进程能力、历史 API 的独立重放证明或硬件掉电保证。旧 receipt、旧 source、非 COMMITTED、缺件、extra、链接/reparse、hash/identity 不符均阻断 handoff；只回 P05/P06 或主方，不重签发、重试、刷新、回滚或选择旧 188。"
+      },
+      {
+        "line": 36,
+        "text": "P07只能消费P06基于schema6/epoch8/`NETWORK_ACTIVE`/`Snapshot 189-Velociraptor-MCP可恢复验收基线`生成并严格聚合的final-selection与handoff。每个selected run必须是独立189恢复、stage=`P06_ACTIVE`，含八类exact恢复records，并递归包含P05的PC020 migration、preparation和activation完整图；activation根必须含合法UTC RFC3339 Z `issued_at`、根SHA覆盖该字段，且canonical `activated_at`逐字等值。缺失、null、非法、不等、从mtime/当前时钟/receipt补值或不能以事件证据证明cycle2_done→root_issue→epoch8_next均拒绝；不以跨机时间戳大小替代顺序证据。P07逐字节重算所有Ref、manifest和普通成员；外层manifest必须覆盖嵌套manifest/root，固定`T/E`不得任意排除。旧188、epoch7、未激活189、旧source/budget/report、跨attempt拼接或缺任一图均拒绝。"
+      },
+      {
+        "line": 53,
+        "text": "历史v7/v6配对与需求v2、总纲v13 blob、P05v9/P06v10只追溯形成过程；该历史条款中的执行身份已由页首`CURRENT-TRANSFER-001-R02`组、`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`及§0/§0.1精确细化。成本current只取当前P06最终selection，上游五组均按当前P05唯一协议从schema6/epoch8/NETWORK_ACTIVE的189各自完整恢复；拒绝187准备状态、旧186、旧4/5、旧188及未激活189。交接包必须按§0/§0.1递归包含PC020 migration、preparation及PC021/PC022精确细化后的activation/issuance及v3 transition/三Phase完整原件图，P07逐字复算，不修改P06原件。hand-off实际绑定页首当前九规范组及新自评/实施/独立证据核对，不沿用旧20号许可。五组同目标/同fixture等价比较与CHK独立关闭规则不变；旧80/67保留、候选追溯为87/68；文件互传授权不解除P06前置门。"
+      },
+      {
+        "line": 55,
+        "text": "PLAN-CHANGE-012门禁继续有效；其中“当前需求v2、总纲v12（blob `222dad75f9e5e5a52d102ce867c8b8363e294ad1`）”现只作历史输入，当前规范边界由页首`CURRENT-TRANSFER-001-R02`组及`PLAN/2026.09.26/current-normative-inputs-transfer-r02.json`承接。用户已保留唯一187，旧§3.1的186→188/schema4/epoch5配对不得执行；此前自评与交接身份仅留历史，不能充当当前通过依据。先由当前P05完成新起点/候选配对及实际激活，当前P06完成新版全量及严格交接验证，再固定本版输入OID并完整自评。当前成本pair、恢复、终验均暂停，不以用户187恢复或新文件互传授权代替P05/P06门禁。五组同口径成本、旧80/67原行和当前87/68、14项责任切片、CHK只追加账本及全量回归边界不变。"
+      },
+      {
+        "line": 66,
+        "text": "## 2. 需求承接（历史需求v2/总纲v12、旧作者组及PC017候选组仅追溯；候选引用为CURRENT-TRANSFER-001-R02）"
+      },
+      {
+        "line": 88,
+        "text": "ACC-024 schema成本与ACC-025终检按已采纳本组只接受`CURRENT-TRANSFER-001-R02`九规范组、P04新golden及该当前组之后实际生成的stdio/HTTP同一tools schema hash；旧报告不得因文稿升版被重标为新版证据。终检静态差异断言四个固定启动outputSchema只新增三个`state`和一个`flow_state`字段；终页`next_cursor=null`是对既有nullable字段的勘误，不是第五个新字段。原130项inputSchema与动态输出以及PC014的129+1/645保持不变；当前总注册136且六项另验，并逐项关联P05启动/终态分账及P06分页/状态正反例。"
+      },
+      {
+        "line": 100,
+        "text": "PLAN-CHANGE-011下游覆盖：本节旧总纲v10/P06v7/12号复审以及“当前需求v2、总纲v11、P05v7、P06v8”固定身份只用于历史追溯；新交接必须绑定页首`CURRENT-TRANSFER-001-R02`九规范组及其manifest、正式采纳后的实际OID，以及新主会话自评、P05激活、P06实施提交/全量原件和独立证据核对记录。当前未形成的身份不得伪填或以旧审核代替。本文成本pair与恢复动作按§0.1使用P05验证激活后的 `Snapshot 189-Velociraptor-MCP可恢复验收基线`，按当前P05/P06契约完整恢复；旧186/188报告只为历史。current侧必须来自189的P06最终selection，upstream五条各从189独立恢复，双方fixture身份/参数/任务终点和原样上游规则不变。schema6/epoch8/NETWORK_ACTIVE与完整激活原件必须可复算；未激活189、旧186/188或旧资格均拒绝。正式外部HTTP与隔离VM内stdio差异继续如实披露，不新增同环境虚假承诺。其余第4～9节成本、80/67矩阵、CHK账本和完整回归门不变。"
+      },
+      {
+        "line": 185,
+        "text": "- 原 DFIR 130 项工具和单 Windows Velociraptor endpoint 不改；候选另增六个本机 guest transfer 工具，总注册136。旧五场645关系不变，六项走独立矩阵。"
+      },
+      {
+        "line": 214,
+        "text": "版本记录：v17（作者勘误，2026-09-21）按04号作者裁决冻结`CURRENT-PC021-R04`并消除旧身份/阶段歧义；固定r3证据根仍仅接收绑定当前身份的新证据。成本、清理、14职责、80/67、129+1/645、安全/残留规则与最终HEAD独立核验顺序不变；待主方完整保真自评，实施门关闭。"
+      },
+      {
+        "line": 216,
+        "text": "版本记录：v18（作者采纳，2026-09-22）按05号PLAN-CHANGE-022登记与用户采纳授权冻结`CURRENT-PC022-R01`：Windows刷新边界（三具名句柄有限生命周期、`MoveFileExW` flags 9、issuance v2/migration v2/activation v3 receipt版本门、FAILED_BEFORE_REPLACE按replace_attempted判定、source_inputs/implementation_sources分层）进入五规范；成本、清理、14职责、80/67、129+1/645、安全/残留规则与最终HEAD独立核验顺序不变；待主方完整保真自评，实施门关闭。"
+      }
+    ],
+    "unchanged_body": true,
+    "production_and_consumers": "作者稿§1/4/5/6；137面但645不变，transfer成本另列；P06门后清理及当前源全回归，最后未参与者独立核验。"
+  }
+]

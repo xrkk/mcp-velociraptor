@@ -1,0 +1,78 @@
+{
+  "status": "DRAFT_PENDING_CONTROLLER_SELF_REVIEW",
+  "decisions": [
+    {
+      "id": "OD01",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD01",
+      "producer_consumer": "velociraptor_transport._chunkbin_endpoint/parser → adapters._binary_push/pull",
+      "acceptance": "HTTP uniqueheaders/canonical numeric + framecontext/payload exhaust; badduplicate/whitespace/comma/format reject no handler"
+    },
+    {
+      "id": "OD02",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD02",
+      "producer_consumer": "guest_service.transfer_capabilities + MCP connection context → adapters.probe/negotiation",
+      "acceptance": "binary_wire required null/object, stdio null, no grant samechannel single, no speculative binary"
+    },
+    {
+      "id": "OD03",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD03",
+      "producer_consumer": "mcp_tools schemas/service mapping + GuestTerminal/worker → SDK parser/host coordinator",
+      "acceptance": "State/Terminal/operation phase/action/result equal; stable exactcatalog union3; SDK content equal mirror accepted, contradictory denied"
+    },
+    {
+      "id": "OD04",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD04",
+      "producer_consumer": "fixed controller loader/Ref producer → selector/runner/receiver/aggregate/P07",
+      "acceptance": "repo-root + fixed allowlist, exactpaths/no.tmp/no linkescape, same formal group/root binds"
+    },
+    {
+      "id": "OD05",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD05",
+      "producer_consumer": "dual publisher POSIX fstat/fullACL + Windows samehandle FileIdInfo/securitydesc → identity archive loader/controller",
+      "acceptance": "20keyreceipt/typedidentities+observationRefs actualmethod/time/ACL; complete unique2endpointcoverage; metadatahash never execution"
+    },
+    {
+      "id": "OD06",
+      "status": "CONTROLLER_DECIDED_NOT_GROUP_ADOPTED",
+      "source": {
+        "path": "PLAN/2026.10.02/pc026-r01/support/controller-decisions-od01-06.md",
+        "size": 8756,
+        "sha256": "9a1aef4bff9eeba3e3e0a78810483ea682b7b78550f648ab501157c5ada950ef"
+      },
+      "section": "OD06",
+      "producer_consumer": "guest verify_partial worker + protected TaskStore CAS → mcp State/host_coordinator reconcile/status/begin/store verifier",
+      "acceptance": "null or atomic success newnonce proof; offset/digest/chunkcount/ledger binding; begin lostreply newproof+stopped/freelease only; crash/oldproof/change/cancel invalidates; no deadline extension"
+    }
+  ],
+  "OPEN_OD01_06": []
+}

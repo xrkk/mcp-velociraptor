@@ -1,0 +1,2275 @@
+{
+  "schema_version": 1,
+  "kind": "pc026-bootstrap-publication-inputs-v1",
+  "status": "DRAFT_PENDING_CONTROLLER_SELF_REVIEW",
+  "publication_status": "NOT_PUBLISHED",
+  "evidence_root": "Logs/P05/wf-01a05d1d-p05",
+  "historical_recursive_member_count": 448,
+  "fixed_bootstrap_anchor_count": 4,
+  "members": [
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/bootstrap-pc020/epoch7/epoch7-canonical.json",
+      "size": 1707,
+      "sha256": "96afd802b2c1630f0a06f441e4ca6fa81cf8c448a6030f4c9d169595ab5ca500"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/bootstrap-pc020/epoch7/epoch7-intent.json",
+      "size": 383,
+      "sha256": "03644378e4e1bf45c5a2fea8c1c4843d2607a79046c7dfb7d521493837126d60"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/bootstrap-pc020/epoch7/epoch7-receipt.json",
+      "size": 645,
+      "sha256": "6e51668661bcb01518b1afe9be36c2e2a7c2cf1eb650c5a5509f4e3045ddbca4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/bootstrap-pc020/epoch7/historical-policy.json",
+      "size": 9754,
+      "sha256": "1d23c30546c6d838646c6cf608450c0ade05f2ff074d3a2e0d0456a81f2933f7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/activation-evidence.json",
+      "size": 25148,
+      "sha256": "ee70b84284eb8cdb5722c5a441074356939015b5b8effba0a326782b999958e6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/attestation.json",
+      "size": 651,
+      "sha256": "8fc0cfe14a124600f170ff2c3d07a65be0fbe6e6751851408a5f0bda7dcb5721"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/creation.json",
+      "size": 1013,
+      "sha256": "5f6caa061a36ada58831431b9221975752f91be067b1764372cc342c2f4ad893"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/g4c-completion-ledger.md",
+      "size": 4193,
+      "sha256": "3167755c681acc4de08fce6da87d7814ce95528f33a43e39b1c6341fe113b2ea"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/metadata-readback.json",
+      "size": 2221,
+      "sha256": "cfb40395a3b857bc96389103e35971a00341e69c18403cdaa2f6f1074bd69914"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/tree-after.json",
+      "size": 1017,
+      "sha256": "2ea9d9e482c2cfce10016cb26e05ca5e54950adf58e7b9c3cc0ddd4f4bd8a4ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/creation/tree-before.json",
+      "size": 964,
+      "sha256": "bb1c16f52bbbff74a04307dcac64706bca3e347910a24dabf9dd308b294aa536"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/dependency/dependency-acceptance.json",
+      "size": 711,
+      "sha256": "76bea00ad555337ce4f035a42eedff96c95cc0b6bd37286be0881627eff2851a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/dependency/three-chains.json",
+      "size": 108882,
+      "sha256": "78246c4b502ab39e832c12c5be9e475fe34b07d03e9a6c4d8804ddac73befb79"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate-doc.json",
+      "size": 1456,
+      "sha256": "11b488fe4693efd750540a708f1a39d32b580d3e42196e43242a52edd4dd1407"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/allowed_origin.json",
+      "size": 4551,
+      "sha256": "c44d06f50fc0af9cac8e784e2d3734b3ba6492bd4e979ffcb0be00e9023d4be6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/missing_bearer.json",
+      "size": 3851,
+      "sha256": "3e18cb8429efa934090a966db74ef34700df80fe3c996ac0ae44f82ed7fbad56"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/missing_host.json",
+      "size": 3722,
+      "sha256": "b920af0cbdb1e805345d8c4a950ddfe16d8d8a6d9dc9396f5eea7eaa0d1d0147"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/no_origin.json",
+      "size": 4471,
+      "sha256": "6b33c8233d8560df76b60e2a0d60fd1a1a560a9d4ee5d073e34c71d6f5d7ddcc"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/wrong_bearer.json",
+      "size": 3846,
+      "sha256": "7ac8c972c388c8044eb928c6254fc648f2b126367175104242a98b3bb6d76943"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/wrong_host.json",
+      "size": 3865,
+      "sha256": "4e5ca1c1df3ab9e66043a481a448107e8a877fcdd1b033f4efbdfb4361e795c7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/entry-gate/cases/wrong_origin.json",
+      "size": 3924,
+      "sha256": "bb8f34ffb891493c437d7d8f273912437b584384df980c43cf19ef9ca7924dd4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/fixture-instance.json",
+      "size": 3948,
+      "sha256": "72e0039df57b66dfb94454fd3780797633c2f7ec797ba7ff7e9ba4ac110de6c0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/http-headers.json",
+      "size": 4253,
+      "sha256": "6c93d70139f386447af2d040855ec6c369fd5e7acd68f92e58c42d25f4c5de5e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/network-evidence.json",
+      "size": 701,
+      "sha256": "9e773647e14d7404fca00f7ae61a03c37937537feb170333053cd93478447e41"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/network-window-facts.json",
+      "size": 1013,
+      "sha256": "d44eb18d58605d877855b83bffd65de2b1be77a75c28f9bd7912b9d8ecc7a178"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/network-window.txt",
+      "size": 656216,
+      "sha256": "317673073b24982922bfadc21a4c4ccc0ebabeb8237b0cbfdcab0a22b0e51d6a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/pc006.json",
+      "size": 360,
+      "sha256": "9d29c4fee3b3d6e2439a2cf156b2e1b1c1b17e081d9b35b57bf473549b94a228"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/service-observation.json",
+      "size": 317,
+      "sha256": "d856a90cdfafd9af943c5e0cfc4aaaee6e4a22d0c5eabec56e3f1f70235e5780"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/network/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/package-manifest.json",
+      "size": 6362,
+      "sha256": "54bb85b8d67272593e236b03a2f6f9e71e605cc992761710ee9556eb6bde72ed"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/acl.json",
+      "size": 20297569,
+      "sha256": "1d187fabcac1894652f2d35682c0f7423556ee323353b7e7fe5b80ad3ec1c84d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/dependencies.json",
+      "size": 115706,
+      "sha256": "0d6dae8baf3efe10db48341dba15de8587cd3eee078caf3748dd398c945ba147"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/firewall.json",
+      "size": 3470,
+      "sha256": "4aca71b4c70856899315859db517f4e1eb94c43227d53153af6043ba3301ce54"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/fixture_instance.json",
+      "size": 5484,
+      "sha256": "142eb11f3fe930ae5c5c5f23f209e9b0bbce26b03ec708c59fd75065a2244cac"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/fixture_static.json",
+      "size": 10642,
+      "sha256": "bfce7278aa1dcb421e1f2d2384f7ba34e3f8d616125db518e078192568b26ad2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/guest_identity.json",
+      "size": 1777,
+      "sha256": "13826530cf0c226adf2de03340cffb1f3d73de1626fce76530fb2836a8ca3784"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/guest_processes.json",
+      "size": 35426,
+      "sha256": "abbf1a6d63e9ccf8dc71a4b9001db2d2d4e03b113f1800d0384e8e96c2aed15a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/host_clock.json",
+      "size": 914,
+      "sha256": "f86022c886951cf52b2c17589c43c5c18d4615ec5f666b835dd102d52cc61460"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/host_processes.json",
+      "size": 1463,
+      "sha256": "722451a31cba73d7abd26f494e6f41b94ef7a1d537562780e494903efbae97f7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/parent_bindings.json",
+      "size": 8265,
+      "sha256": "aacecc9d32a9c378c4c1f96a0a09af3638565f78903dc98114e78f2608e815da"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/resources.json",
+      "size": 8503,
+      "sha256": "d8e8babba79ea5202b21b3f5731806379b66b78e3068deb8226fa66910037aea"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/raw/service.json",
+      "size": 4973,
+      "sha256": "bef47d0c09f0147578aafa1d6719c5194343218f77c11021c1d3af86c580f8c1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/ready.json",
+      "size": 2433,
+      "sha256": "074f939a41ffba3d20b5d8d9fc2f242aab4b373d9ff2109a59719a4c7295a850"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/source/tests/data/p05_dependency_manifest.json",
+      "size": 1224,
+      "sha256": "efa1655de018ea3c500b36d1a615d7815e2ff39c9be1868553b19894ea0fdfaf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/source/tests/data/p05_fixture_spec.json",
+      "size": 1860,
+      "sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/source/tests/fixtures/artifacts/Generic.Utils.KillProcess.yaml",
+      "size": 374,
+      "sha256": "cf3d14b2f091d2bbcb571509909e0f4570f77e1f59df9a8ff19e2abd72a3876b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/ready/source/tests/p05_process_parent.py",
+      "size": 9485,
+      "sha256": "fa5bc493e836a96c18b09d29d5b562d18517f07dd843e25470d0c07be06fbad5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/report.json",
+      "size": 18854,
+      "sha256": "7b535c2b748956ff077e80e7a427d95f98a58acf525d8728de0a1a3b8819c9ac"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/server-observation.json",
+      "size": 317,
+      "sha256": "d856a90cdfafd9af943c5e0cfc4aaaee6e4a22d0c5eabec56e3f1f70235e5780"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/snapshot-evidence.json",
+      "size": 1965,
+      "sha256": "0d37ea65fc8e7096cc0a462b5a94e3843ed88c86d5547fa594edab2c130d6554"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/tools-list.json",
+      "size": 247630,
+      "sha256": "264995ad688728f8376ad82bd16e95732d56626e8c600fe03668d367d205512c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-1/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/dependency/dependency-acceptance.json",
+      "size": 711,
+      "sha256": "b6888399f31fdf876137a171c330217928936d10a53cba4146fd6403299bac47"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/dependency/three-chains.json",
+      "size": 115918,
+      "sha256": "b25d1ac3745ce46f4fa3ebf9e8dca129d8a6f9b027cc5cf09d96a8c57a0cbc1f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate-doc.json",
+      "size": 1456,
+      "sha256": "38836f024f73f1b131d51f5f692e5d9c436045ee117f71c1b7cc9a8fd49bfb48"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/allowed_origin.json",
+      "size": 4551,
+      "sha256": "32e35cd1def456caca6260934768ed84077920f436240c275cdfb72dc89d6d0b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/missing_bearer.json",
+      "size": 3851,
+      "sha256": "60a0e523f0a830343b46f09dca4501aa98df48414b25d1069bb0386398b016a4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/missing_host.json",
+      "size": 3722,
+      "sha256": "d4ac7d768c592161eb5d40110dd1f8e850a41a3134137efa7d10be4f93d7a8d8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/no_origin.json",
+      "size": 4471,
+      "sha256": "37c39c672afa696ba70e8248d36efc8407137f346eb99f36dd18734fea6ff0c9"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/wrong_bearer.json",
+      "size": 3846,
+      "sha256": "d2d6babf4b81611873b597c5f705497a46c834b30074df55459362a29c6122e4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/wrong_host.json",
+      "size": 3865,
+      "sha256": "0cd1380e2e4aaee8b595f978af33b7a4cb79941b9f0cd5e93972b266c4301e8d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/entry-gate/cases/wrong_origin.json",
+      "size": 3924,
+      "sha256": "a6c60da01b519c2c92e4d748bed046a957a4f1683eeb431490a5a91adc276d54"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/fixture-instance.json",
+      "size": 3948,
+      "sha256": "72e0039df57b66dfb94454fd3780797633c2f7ec797ba7ff7e9ba4ac110de6c0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/http-headers.json",
+      "size": 4467,
+      "sha256": "3b8ee9c84b63021d7b4986616658e9f89c58069974d8e18434da482910180dbe"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/network-evidence.json",
+      "size": 701,
+      "sha256": "367023ebc85bbcff3026daba63c392d615a20ce4c8d6cc7d0e3ac854508dcc71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/network-window-facts.json",
+      "size": 1018,
+      "sha256": "ea37ba147d47127dcbb86441c5e98db0e9de1f459464bd0809e112dbefceccc8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/network-window.txt",
+      "size": 652063,
+      "sha256": "07213c42de270592d111a44316eb6232661a8ccc7aedad9c3eb82ca8bad388ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/pc006.json",
+      "size": 360,
+      "sha256": "9e8848cb4f0a70625ee2aeda5423e786193fda1fb515fc813edd6b5c011f4a3a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/service-observation.json",
+      "size": 317,
+      "sha256": "54c845bf7443374f4fe3f8eee0eb42b0a312296cb4abbd16303e916ebe2c61eb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/network/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/package-manifest.json",
+      "size": 6362,
+      "sha256": "cde593aeef6bf0cb10006f99b9506909f379b29c367bbb92183d1f784ccc8b52"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/acl.json",
+      "size": 20297569,
+      "sha256": "33c99834cc52283ab4a9d335cf48a49c8026ec75964035fd56decd3e72a0f87b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/dependencies.json",
+      "size": 115706,
+      "sha256": "e1aa9df2159f2de957e2b0b5d495fddd7e0c5c18bd9132f6e12b63bba3b115ac"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/firewall.json",
+      "size": 3470,
+      "sha256": "23aee0c23cdc2a36aed9c68933ce432f0715975dad8c8a352b9ea2ee6cf57b99"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/fixture_instance.json",
+      "size": 5484,
+      "sha256": "1a93ee5544d900b0aa839773592f091ad60776aa8524f2347d0ab780343e776d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/fixture_static.json",
+      "size": 10642,
+      "sha256": "1423b9f8eb86822368c622821d19dc873c63979e6d787f28fdba8ccc216ab85c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/guest_identity.json",
+      "size": 1777,
+      "sha256": "f41add0eddf34dec0eb9d1dfdfd6f1a4dbf948bc2d1d935281796805b990dc49"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/guest_processes.json",
+      "size": 35426,
+      "sha256": "2273582437077282259c1f786d9730beefaf61f30b114a0ff7f2fc01b540ef8a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/host_clock.json",
+      "size": 914,
+      "sha256": "228a50d507c97a68a36894258eceba27c89e5baed58035dc212043584f0803d7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/host_processes.json",
+      "size": 1466,
+      "sha256": "eb0f18bcf5f5e1ec001d0b6c934284a30de48c34053b0562e5cc0382b58fa905"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/parent_bindings.json",
+      "size": 8265,
+      "sha256": "6f9bbf232a5bc6ac5f9eb22ef26e5355bf9ea8365fea605c9f1064c7c9cf7a21"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/resources.json",
+      "size": 8503,
+      "sha256": "07b2db2cdd1effac81fddc333e721cb3cf03dabca0ae5da57ee3a90dd8d365ca"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/raw/service.json",
+      "size": 4973,
+      "sha256": "9d7d722f99e3e9ecd6e0f0e2a178295766b4047958b19b1212f5a608452e5bc6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/ready.json",
+      "size": 2433,
+      "sha256": "e2c7d9d4206c64f94d74a302cb22b9b899b664d8813e4884ed3311666556239f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/source/tests/data/p05_dependency_manifest.json",
+      "size": 1224,
+      "sha256": "efa1655de018ea3c500b36d1a615d7815e2ff39c9be1868553b19894ea0fdfaf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/source/tests/data/p05_fixture_spec.json",
+      "size": 1860,
+      "sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/source/tests/fixtures/artifacts/Generic.Utils.KillProcess.yaml",
+      "size": 374,
+      "sha256": "cf3d14b2f091d2bbcb571509909e0f4570f77e1f59df9a8ff19e2abd72a3876b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/ready/source/tests/p05_process_parent.py",
+      "size": 9485,
+      "sha256": "fa5bc493e836a96c18b09d29d5b562d18517f07dd843e25470d0c07be06fbad5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/report.json",
+      "size": 19954,
+      "sha256": "3c7bc17386cea21279ee9719f37cd0600cb96842f43e92e53eb3160993692e3a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/server-observation.json",
+      "size": 317,
+      "sha256": "54c845bf7443374f4fe3f8eee0eb42b0a312296cb4abbd16303e916ebe2c61eb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/snapshot-evidence.json",
+      "size": 1965,
+      "sha256": "43ca365d744f86c61ac5e23a4bdf1f7f618b11501fc43923b2242934b966e169"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/tools-list.json",
+      "size": 247630,
+      "sha256": "264995ad688728f8376ad82bd16e95732d56626e8c600fe03668d367d205512c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/cycle-2/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/dependency/dependency-acceptance.json",
+      "size": 711,
+      "sha256": "0400b5087f1d35ea95bec326c0521a7c84bc22d1ff602eebacacbe1d05595240"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/dependency/three-chains.json",
+      "size": 138782,
+      "sha256": "5c59d07e69fafefe520574707da93270e4c70b8974094e6b3b109a66121b1f2b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate-doc.json",
+      "size": 1456,
+      "sha256": "2bee1690213a4e6a44ef966e7fb8a12ff06dacc4635c5d3008c7e48167eff37c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/allowed_origin.json",
+      "size": 4551,
+      "sha256": "ccafb200295b022cae5258a1b307d8c5510a57c40db0644229d21b3d551c2836"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/missing_bearer.json",
+      "size": 3851,
+      "sha256": "2945dfdfada4944c6d7c0941d34fed5db806ce783bdfc445488f8cc603a6d7de"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/missing_host.json",
+      "size": 3722,
+      "sha256": "7824cdebc94d977af2e59842741460b98900892552240bdd5e04243661999815"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/no_origin.json",
+      "size": 4471,
+      "sha256": "e43e1187da951118320a9cc2e0326ead15d7c5aad342cca1644342d80ecfa5d2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/wrong_bearer.json",
+      "size": 3846,
+      "sha256": "de735bde9139db57772a9fde78c080e81a8eae73008c07c2b7202cf8b956d34a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/wrong_host.json",
+      "size": 3865,
+      "sha256": "921874da7df327309b291043aeb5ee3029bd3367e89bdc80efb3942f8af6712f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/entry-gate/cases/wrong_origin.json",
+      "size": 3924,
+      "sha256": "a84c9fe9590dd1e362d728c2822c09fd6ffa0d66f3e42418c73d0e377eea4b21"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/fixture-instance.json",
+      "size": 3948,
+      "sha256": "ec768c78ae5daec34415f7228a5438f574a7d9c1d6ad9c8efc73fd7e1383e9c8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/http-headers.json",
+      "size": 4253,
+      "sha256": "f98c517cb2ef43aeaf9c70e11d0e4b5deef63d13ed2eb7e9cc15a6ec5d88ec4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/network-evidence.json",
+      "size": 701,
+      "sha256": "bd4cf2632dc880b47715a1024bfe737f2e445f690da4177845fb04c999586d82"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/network-window-facts.json",
+      "size": 1022,
+      "sha256": "508306792f188baccb03f9c044932502ec4f960b4eaed57467dc90ae9666a9be"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/network-window.txt",
+      "size": 733423,
+      "sha256": "d7fe9c0ff2a41d285c6a4a93a2bd6a80c2d239e7d1cf0cc4133bf4c9b37ad28e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/pc006.json",
+      "size": 360,
+      "sha256": "f3509c5adc40cb5c349e27d26da792bbb1fe046c03114c6584500b442698f07a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/service-observation.json",
+      "size": 317,
+      "sha256": "da966ac1037886372f038f4cf17c123ebb9d082dfc5391d1d85b1fed726fb3f0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/network/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/package-manifest.json",
+      "size": 6362,
+      "sha256": "07ee463facdfb2427d80deefc8e29b9916176a66c0c63ae7145f8088861cd5e6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/acl.json",
+      "size": 20035985,
+      "sha256": "c4d9dff3dbe760503456d4186ccfd29b659deaada49d42b2f3daf44686921e2d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/dependencies.json",
+      "size": 115706,
+      "sha256": "9e4fa1eff67bc658aba01a72494eee1a3e930a0cc49acac161c35b9c2bbb4e8a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/firewall.json",
+      "size": 3470,
+      "sha256": "6fd091af6d00be985664a7640160d624dc3bb140e59ad0aa2dd3bf14008080c4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/fixture_instance.json",
+      "size": 5484,
+      "sha256": "84c283433dfd50e9b7e60c631a3615af37c3f137b23734bdf1413cc9425f401e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/fixture_static.json",
+      "size": 10642,
+      "sha256": "4ea2bdbc1503e48d271a0c5e4bc8dbe1cd8e253d3d029f9de5cf1fc99f25a402"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/guest_identity.json",
+      "size": 1777,
+      "sha256": "a6ab880d5360c64fbdb5c7094cc7fe35240f53f7e751a35743ea0faa4be08236"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/guest_processes.json",
+      "size": 35516,
+      "sha256": "e6665b00c523570b1eacbaec3552c97068e5776b48085fdac608e5eef3172daf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/host_clock.json",
+      "size": 914,
+      "sha256": "4daab6c43b83a6ed1829e827218e410eafed9ba5879e6190ea93e565dd6a4ae3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/host_processes.json",
+      "size": 1467,
+      "sha256": "d44f3ca7495db6c5cd3b951761a06cadcb4a245f9e559e5d9a65aa0c214b8996"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/parent_bindings.json",
+      "size": 8261,
+      "sha256": "898f471365080ed5df0533c31b1fe0bd76e100143e090af4b8892dc625aa15bc"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/resources.json",
+      "size": 7820,
+      "sha256": "dad9fd04fae660c60a6b895a7888b484e8ab56f80244b96ca72ce0b4dc541754"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/raw/service.json",
+      "size": 4973,
+      "sha256": "05da61f4e010e14c48f6c6a4b2596f0537e3d75b8f192c4e282dc9e7494e0771"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/ready.json",
+      "size": 2433,
+      "sha256": "a22451e5ae3619ef6aa732ff40f1ba3ded523f27c214fd4cb57298c38dcad402"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/source/tests/data/p05_dependency_manifest.json",
+      "size": 1224,
+      "sha256": "efa1655de018ea3c500b36d1a615d7815e2ff39c9be1868553b19894ea0fdfaf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/source/tests/data/p05_fixture_spec.json",
+      "size": 1860,
+      "sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/source/tests/fixtures/artifacts/Generic.Utils.KillProcess.yaml",
+      "size": 374,
+      "sha256": "cf3d14b2f091d2bbcb571509909e0f4570f77e1f59df9a8ff19e2abd72a3876b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/ready/source/tests/p05_process_parent.py",
+      "size": 9485,
+      "sha256": "fa5bc493e836a96c18b09d29d5b562d18517f07dd843e25470d0c07be06fbad5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/report.json",
+      "size": 18843,
+      "sha256": "ec7586f5c12e95a27bf33b5f0e173753605fdc68df628254338cc85894a1e95d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/server-observation.json",
+      "size": 317,
+      "sha256": "da966ac1037886372f038f4cf17c123ebb9d082dfc5391d1d85b1fed726fb3f0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/snapshot-evidence.json",
+      "size": 1955,
+      "sha256": "e96b0c2191e4f20c29e3737d4e78e8b34d7ff4be3f8f02c475ddaa1ffac02002"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/tools-list.json",
+      "size": 247630,
+      "sha256": "264995ad688728f8376ad82bd16e95732d56626e8c600fe03668d367d205512c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/initial/tools-schema.json",
+      "size": 180965,
+      "sha256": "2f1155817b42827c8e1618e464c12e1374be9ecfa4ac28d1e012122673d59396"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption.json",
+      "size": 4904,
+      "sha256": "bab5544742c77cad4d65b2861dc5074f7858426caa3570d0546c9fb4e2823cd6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption_retry.py",
+      "size": 2310,
+      "sha256": "34b53c76b3f361f1bf729ea4b852353ca03bc38bfbf8234408f81b700e23bf36"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption_workflow.py.sha256",
+      "size": 87,
+      "sha256": "5d9e813bad350fbdcc7c8a53e58d0ee9b75ac92c5acc2b7195d640f95e919010"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/baseline-adoption-validator.json",
+      "size": 1943,
+      "sha256": "db41a088c888ab077a979230ce97313233d35daed28a21e136686d92a4e2a15b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-after.json",
+      "size": 1184,
+      "sha256": "2c4292b6d7d03e7b45d28966361f16bef5842395f66038b062a03deadc0e0d6c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-after.json.identity.json",
+      "size": 481,
+      "sha256": "0b5b44145d135960e55546e80d3153edeca8eddc601bcdb9bcfdfe5d0594e962"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-before.json",
+      "size": 1396,
+      "sha256": "eb14c6d85ad151ed2107b9739ca823208723693694748b683dc643c6a3dda0f8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-before.json.identity.json",
+      "size": 482,
+      "sha256": "3d16fed865eb30b396b1a86a3fac8dfe17190520b2e15f98c6b66c031259b3cd"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-predecessor-state.json",
+      "size": 585,
+      "sha256": "9c07f68be90a5c2781999d57dedffd03f2d21ccbbaaa7bc232964f67376dee0b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/events.ndjson",
+      "size": 2929,
+      "sha256": "cfba29aa1825edd9619659ca7bf72e469147b76a8e1d2173ba839f0e9ed552c9"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/frozen-governance-precondition.json",
+      "size": 3681,
+      "sha256": "fa1b76c15ec2ccb2e44dc5b9243791ef629aa8cd4a57cdda88937c08fb682cb0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/git-head.json",
+      "size": 658,
+      "sha256": "f2e069a534f2bcf4d9fff9a9d8c0ce1cf6b4511c36287919a91c61ba830452ff"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/guest_identity.json",
+      "size": 1673,
+      "sha256": "1aa53ca4368b46c63ecde3ed8db7e58adbb5039e81e66ee51820896454f272e1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/guest_identity_http.json",
+      "size": 4046,
+      "sha256": "201916107d80b8d7f2a32f98d776db77fe3d969c76969ddeeb8c1c01168172ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/metadata.json",
+      "size": 1625,
+      "sha256": "77a9bbc3aa9fcc014fb30077bfd5b8cf1a07219fabb01e403ceb8fcc95a16df2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/next-precondition.json",
+      "size": 551,
+      "sha256": "9759942fff4874a53750bab2ad7277939b9d79c3186ab57e08fa43885b738793"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/orchestration-binding.json",
+      "size": 451,
+      "sha256": "a56047fe4003d707978616049ac64ff6a44da8ec0bc2b58befec2e34a578ebb3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/orchestration/adoption_workflow.py",
+      "size": 26292,
+      "sha256": "01c0e3261179302bd597381a17a0304ed708f980f72832056a0fa0472f255d08"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/pre-selector-stability.json",
+      "size": 568,
+      "sha256": "97d253bb94a03135596e21e80b3c50fba09be3f16d2046649e5d995e1bc981b0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/freeze-result.json",
+      "size": 248,
+      "sha256": "0f6bf1108eb2290d4279099018ff77023f933a48afef20a396ef8a198c083367"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/guest-unit-result.json",
+      "size": 40555,
+      "sha256": "21a239049b9228574a47f3980516413a6313855cfb5b8bbe0a453cbe12c69e1d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/transfer-manifest.json",
+      "size": 79853,
+      "sha256": "b3caeccae2a3bd2708489e602aac7e28c42604939312ac1fd6090c7de49b33e8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/result.json",
+      "size": 862,
+      "sha256": "181148401db6d281414833a351382f2b549a73765af75aacc5c67bd994225f8c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/selector-adopt-baseline.json",
+      "size": 2054,
+      "sha256": "4a98ccb51e41af7c0b2fc6b785d4c96b9fca63685702e31c895f1e7d94168ce3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/snapshot_tree.json",
+      "size": 1065,
+      "sha256": "f941b53f7aad89aff9e77b51f35b84264a320977fd441c836dfe1d8697738bbd"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 386770,
+      "sha256": "a05916e9e874699391191e213306df72a16a1fee8a3b08e9676a206e5134d081"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py",
+      "size": 24619,
+      "sha256": "ac71298f2fe51d39e3c555afed486db16d55e3c81af3a1b1defd550b9326ab0c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 107087,
+      "sha256": "3482f552f5b304c0e8af8ad4f1c200e25d9d308b573baa501eb70405f7407612"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 98102,
+      "sha256": "5c80a7fadf9d8ca8771217792b9140bae66deead93ee95e685713d84759eaa75"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 59299,
+      "sha256": "2f3e8613a73db863241b94cf78faa7fe23b59da14dc236984c30a72714d7c60d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 22943,
+      "sha256": "e27ac0360c160c116aec90f3103bc2e13a4af71c76b2200b12058709674a8ae1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md",
+      "size": 9011,
+      "sha256": "04529183b2e3be0d9879a8182ed5a37b1330265e5bd93ab141744aa23a96ab4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md",
+      "size": 6130,
+      "sha256": "f63d36bd87680f28edab4a9a3938dc7f50f95f08b06b77cdfdee7ea9dda907c2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/tests/p05_baseline_adoption.py",
+      "size": 16413,
+      "sha256": "4485e11d8e8227523bd7736e7d4e36ec935161ede784f6f43b4db28f90b9ea9e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/tests/p05_snapshot_raw.py",
+      "size": 7569,
+      "sha256": "8bfea8bb47f512541b0f12ac552f0daa2416d9f215a147da377921cdc5f37bd1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-3436549862ed/canonical-readback.json",
+      "size": 1184,
+      "sha256": "2c4292b6d7d03e7b45d28966361f16bef5842395f66038b062a03deadc0e0d6c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-3436549862ed/post-restore-identity.json",
+      "size": 404,
+      "sha256": "b4d7091e66c932b7ceeccffc8e5187b0bdc1fb006d73dae1f2fbd12a36698d6d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-3436549862ed/pre-start-marker.json",
+      "size": 538,
+      "sha256": "2dd7a3a8338cd5df29b065e5d0dd6ad1024d01a8339700e94d8ef3bca0401f5a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-3436549862ed/revert-operation.json",
+      "size": 650,
+      "sha256": "878b96433447fc6d9624ec6bb006151b13f5e3d87b94178817f2206c0e356ad1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-3436549862ed/snapshot-metadata.json",
+      "size": 488,
+      "sha256": "08d88f9d8f7b6748f7ce540661788d448688283763b67215a302a1fd13754e91"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-430b3d67066b/canonical-readback.json",
+      "size": 1184,
+      "sha256": "2c4292b6d7d03e7b45d28966361f16bef5842395f66038b062a03deadc0e0d6c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-430b3d67066b/post-restore-identity.json",
+      "size": 404,
+      "sha256": "fd2fb3a134b65052fe5c6b9dac3d0e005ac50b613c51105d7298400444bf7331"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-430b3d67066b/pre-start-marker.json",
+      "size": 538,
+      "sha256": "d265297336781c6178e849482539a3d13b4f869a25840fc53848d1071b7a5ccb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-430b3d67066b/revert-operation.json",
+      "size": 656,
+      "sha256": "aa12791d3a707f8bafdac4d955edd37499ddd57864ca9819d5465d9cfb19f983"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-430b3d67066b/snapshot-metadata.json",
+      "size": 488,
+      "sha256": "fa56304d8ccce4c9328e318cd32c10eb26e9cb0f8ec5a49e3322d7369eb809d2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-e7f7a3b766a1/canonical-readback.json",
+      "size": 1184,
+      "sha256": "2c4292b6d7d03e7b45d28966361f16bef5842395f66038b062a03deadc0e0d6c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-e7f7a3b766a1/post-restore-identity.json",
+      "size": 404,
+      "sha256": "f2fb9c3e94179d2bb8f6d1baf1d7c5a670d7fa96ce24f9151584c8df4373ab33"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-e7f7a3b766a1/pre-start-marker.json",
+      "size": 538,
+      "sha256": "26a93826b6d5a9db58f35741fdb042a460e2b54f8ed19839ad2977b40427c05c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-e7f7a3b766a1/revert-operation.json",
+      "size": 656,
+      "sha256": "c7117c7c477ec5a15f8a5c448d38fb5d352d6d3a82d7bdb1cf8ea2fcbae44ee0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/p05-originals/p05-g4c-restore-e7f7a3b766a1/snapshot-metadata.json",
+      "size": 488,
+      "sha256": "4e75cf1d8e03dcbb8301b67661323600cf9350cf9bbf30b30dedecee427c6f6b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 386770,
+      "sha256": "a05916e9e874699391191e213306df72a16a1fee8a3b08e9676a206e5134d081"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py",
+      "size": 24619,
+      "sha256": "ac71298f2fe51d39e3c555afed486db16d55e3c81af3a1b1defd550b9326ab0c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 108294,
+      "sha256": "68c9b1d8472890960d69b9165ae648207bd10632373458232dddb1357b57e1b0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 99311,
+      "sha256": "ff7bd678de23fd2079061f6ccdef2c18539b78a97dd05f7b2d1249b0fcc25cc2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 60523,
+      "sha256": "34649ca8d67f1abe157471e0bfd6577f5e88fd9e8a655cc633b277087cb928de"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 23576,
+      "sha256": "b5a7c60ddc77834768e85e0ac19cad5bc8526adc80c1d1cd5db829388c15b173"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.13-19-无人值守职责与自评实施门授权.md",
+      "size": 3617,
+      "sha256": "e02866908da9eb02ae4cfed673f2b363e1a1ddac77565358acb92b30bb0413eb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.13-20-主会话自评-PLAN-CHANGE-011及P05至P07承接.md",
+      "size": 10888,
+      "sha256": "72ef0dd1f1700ceae2cbc83f23035140b4830114cff38219d164dbef485d6629"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md",
+      "size": 9011,
+      "sha256": "04529183b2e3be0d9879a8182ed5a37b1330265e5bd93ab141744aa23a96ab4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md",
+      "size": 6130,
+      "sha256": "f63d36bd87680f28edab4a9a3938dc7f50f95f08b06b77cdfdee7ea9dda907c2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-12-执行交接-velo-mcp剩余七步与验收门.md",
+      "size": 46766,
+      "sha256": "d0fba7a614f18a7cbf3419fd56e7a888ac87f507df97ceadba076387627a81dc"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-13-实施自评补充-接手执行静态修复与allowlist登记.md",
+      "size": 10963,
+      "sha256": "671cc5ff66a8ce5dacc9f4f58fcb9d3eda55cbb3000e34825763f157939ea3ba"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-14-G0保护门评估-恢复前置证据闭合.md",
+      "size": 5918,
+      "sha256": "8de5d8af7e6b420a9e6940371094934a029092421ed3d5bd356d776559465545"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-15-PLAN-CHANGE-013裁决-依赖前驱行恢复可达基线.md",
+      "size": 4856,
+      "sha256": "1a29984239a7b9e4617e29ee93776cc9ea74e3e84931b57400c9e7ce101226d8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/PLAN/2026.09.02/2026.09.14-16-PLAN-CHANGE-014裁决-移除Velo方案中FakeNetNG撞车网络机制.md",
+      "size": 4012,
+      "sha256": "c7230a51871507a29b10184c8a255660bb6798bbc2099ef435e03b6b78b9736e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/mcp_velociraptor_bridge.py",
+      "size": 3755,
+      "sha256": "db3aca1b54394efd3f0bf6f43549aeae6b5615901a9dc0da8b664c3ed8aa8281"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/data/p05_dependency_manifest.json",
+      "size": 1224,
+      "sha256": "efa1655de018ea3c500b36d1a615d7815e2ff39c9be1868553b19894ea0fdfaf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/data/p05_fixture_spec.json",
+      "size": 1860,
+      "sha256": "bba83db333962ef57140a75a405cf82ec85c51593124f6324d55f89da15cef4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/data/p05_scenario_index.json",
+      "size": 933,
+      "sha256": "c9c3e5146e0f5bb238926e5b2d1c681926ccd21693231e6862193b28e3956c4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_activation_raw.py",
+      "size": 8020,
+      "sha256": "78298d5fe6980d26c3820cc17c9d5f3b2fbd7405ee58f07600957a62fd0382d9"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_baseline_adoption.py",
+      "size": 16413,
+      "sha256": "4485e11d8e8227523bd7736e7d4e36ec935161ede784f6f43b4db28f90b9ea9e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_candidate_creation.py",
+      "size": 13040,
+      "sha256": "a57e898f46fd4c867d2eb437273b21da6893d88ced98bbcded1417c60c653296"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_dependency_acceptance.py",
+      "size": 14707,
+      "sha256": "ddd5c532ff9b9363bdb6a14552c9d9af4b3db3044183fa8629e9b7f13e183321"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_external_acceptance.py",
+      "size": 5775,
+      "sha256": "b977de9fdc0346deca524d5d5751b638c2c318a1133ba2d469b75d0e91177bf3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_four_chain_evidence.py",
+      "size": 26769,
+      "sha256": "6e53a5bc21a942752cf73847c89cb3b08d5d977aeaf217d55bf42d7152cd4d02"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_http_evidence.py",
+      "size": 41413,
+      "sha256": "7910ae8a4094b95ae1dbd05380965b98efc014cca8f389c1cddd72419905d622"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_prepare_fixtures.ps1",
+      "size": 11831,
+      "sha256": "8d58dae12b068499acde362bf3dfe499fe4466819cb90e8a593fd35975fc4363"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_process_parent.py",
+      "size": 9485,
+      "sha256": "fa5bc493e836a96c18b09d29d5b562d18517f07dd843e25470d0c07be06fbad5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_ready_collect.py",
+      "size": 36663,
+      "sha256": "7275c83be3d0fa061b52b8e983f7d61a32cc9afebb5e9e739ff899fac068c288"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_ready_evidence.py",
+      "size": 88115,
+      "sha256": "9ae396ea9a2c9882bcf5c78e3971cc1b326092df1c603bd7df86ee1c3c6836c1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_real_acceptance.py",
+      "size": 21820,
+      "sha256": "727f64edff5100b4b48daa9887e1a8dc68c48e6420adf6b2f981d90d19ce71b1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_sdk_capture.py",
+      "size": 4611,
+      "sha256": "59a99841bdf7ecade4e051119e2b5230dd2222012a021f83c1d5eacda800fd4a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_service_host.py",
+      "size": 10167,
+      "sha256": "d54122454a6c3f4381034fe1fa30c3bbd23ff8a3fc0643003d3665f3626dd0f4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_service_install.ps1",
+      "size": 18064,
+      "sha256": "c5cc45739b157929e39390de3290f3b932c4df988c8921dfb0084c81fefd3372"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_service_observation.py",
+      "size": 28579,
+      "sha256": "972629975441b18d236381b07e955798be86a848989f43f7b03900c2aa1e93b0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p05_snapshot_raw.py",
+      "size": 7569,
+      "sha256": "8bfea8bb47f512541b0f12ac552f0daa2416d9f215a147da377921cdc5f37bd1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/p06_evidence.py",
+      "size": 67031,
+      "sha256": "4c28b3682f94a15fd8e4005ebd300724ed912cdd6638a03e931d80115d6f981b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/scenario_runner.py",
+      "size": 55101,
+      "sha256": "28fb33c70d140bbb499045f3e6fc4a1bb9e67fa0a0ad3ca38db779af09705a40"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/scenarios/representative/p05-flow-triage-repair-candidate.json",
+      "size": 6074,
+      "sha256": "843551b8b6b4fb6dc48fb4f1fc2808d4105a052a63fd7dddc0a53f7a95a24358"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/scenarios/representative/p05-flow-triage-repair-initial.json",
+      "size": 6066,
+      "sha256": "1fe32b71979d54fb04417e27cc5ca94c792004b9fcdb6dff6d7d5457852961cd"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/scenarios/schema-v1.json",
+      "size": 4471,
+      "sha256": "a4841c62141be1806d304667cc442ff31a4969b1063af8fe2abaea895f250821"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_bridge_service_diagnostics.py",
+      "size": 3207,
+      "sha256": "0b141cdd590639f25c4f7db93fbd36efa0e10fe0254cf71189fb0d5ed327a81b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_activation_raw.py",
+      "size": 5210,
+      "sha256": "c7b82f68dee088d622fce28237b995627147839bddb3aac710945a47ccf1409e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_baseline_adoption.py",
+      "size": 11075,
+      "sha256": "bbf8a38b50a3085fc0a51878135a115ee807db3f59d4d7e93b9ffdd2c0158c16"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_candidate_creation.py",
+      "size": 14095,
+      "sha256": "72eacdda0144aae86310aa6d6bb083609d5a5844d84045d788d4a245df600eb6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_four_chain_evidence.py",
+      "size": 11570,
+      "sha256": "f749b5b836a3e5c93088b3149a624f22d236af73b08cc2c2becad60a19374f86"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_http_evidence.py",
+      "size": 9632,
+      "sha256": "03990517695bc44b057ba1027f8c5a6de4dd8ce6ce4b17b55b21dbf029a24b77"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_ready_collect.py",
+      "size": 5528,
+      "sha256": "a48e379e2a1c7b7a393a7853552055700b058b17f967b64fe402db1e8c267cc0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_ready_evidence.py",
+      "size": 38054,
+      "sha256": "e99051ba8df994a66c37fb4e5bb8147db2d6c236ebe6af6de0d8ff581ee355da"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_recovery_contract.py",
+      "size": 9794,
+      "sha256": "a119eb798e80e5c0939d91772fa560a83e3060c036160bad0fec410079d99ae0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_recovery_namespace.py",
+      "size": 1578,
+      "sha256": "3ffc14b38aa2bdc3f8c3744ccfefe8dd1680a38326687ae82015b5e745ac8124"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_sdk_capture.py",
+      "size": 6312,
+      "sha256": "02d10f1ebcc95ad6a7d13a373ff5a8c2432bcb626951f0279e0547186cc1ed97"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_service_host_abi.py",
+      "size": 10175,
+      "sha256": "c9592a3842f4f4e404d7a29f1c578fec05ea0afb0dd9f433eda0dd60cb0fadec"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_service_observation.py",
+      "size": 8921,
+      "sha256": "3081f7c21ee48494f31f6eeee18271eb1d7018e18bb13856a6360039e5369db4"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p05_snapshot_raw.py",
+      "size": 4605,
+      "sha256": "0b8aa506accebfe3c94972b3ad3dc157561e3586b7941f386f9bd67c37fcf700"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_p06_evidence_schema5.py",
+      "size": 15517,
+      "sha256": "ec47d68a538af7e6933b0c218c8ba94c7558694036a65a8c358e6ac795c6cb73"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/tests/test_service_transport_lifecycle.py",
+      "size": 2219,
+      "sha256": "7d4d9199f7e6ec588dca4e3b0d93bccc2d7c89dcef42afed1fb1abdf770c0f53"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_api.py",
+      "size": 34097,
+      "sha256": "d03388c1e651c5dde1aea61dca099226f7abcacc0e8118fbe9c1e7ebe9eaef96"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_dynamic_artifacts.py",
+      "size": 25716,
+      "sha256": "b1b062a5e97ed0d422bf4ab65ff32998ec318b02859d1ce54433a2d35f39587a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_env.py",
+      "size": 1205,
+      "sha256": "e71a0087148821278cb74d39f0560d232cb45c2cce52ac59fc3cc7091a34da00"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_fixed_tools.py",
+      "size": 41736,
+      "sha256": "6b94a8e17fbaa44e946dc79fe96a04c75fab77aa40399a45629acf22fb476205"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_mcp_core.py",
+      "size": 25156,
+      "sha256": "e0922c3c304bcf69f8936305f5790d076cae789bf0cbc64ebcf16d12e91685bf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/activation-188/5d2f20ad-601a-46a0-8b52-e2300d97a571/source/velociraptor_transport.py",
+      "size": 8895,
+      "sha256": "5d222541a5024b00103807517293e525dac0fe6b86655d0869ab9c10338913ca"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption.json",
+      "size": 4904,
+      "sha256": "bab5544742c77cad4d65b2861dc5074f7858426caa3570d0546c9fb4e2823cd6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption_retry.py",
+      "size": 2310,
+      "sha256": "34b53c76b3f361f1bf729ea4b852353ca03bc38bfbf8234408f81b700e23bf36"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/adoption_workflow.py.sha256",
+      "size": 87,
+      "sha256": "5d9e813bad350fbdcc7c8a53e58d0ee9b75ac92c5acc2b7195d640f95e919010"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/baseline-adoption-validator.json",
+      "size": 1943,
+      "sha256": "db41a088c888ab077a979230ce97313233d35daed28a21e136686d92a4e2a15b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-after.json",
+      "size": 1184,
+      "sha256": "2c4292b6d7d03e7b45d28966361f16bef5842395f66038b062a03deadc0e0d6c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-after.json.identity.json",
+      "size": 481,
+      "sha256": "0b5b44145d135960e55546e80d3153edeca8eddc601bcdb9bcfdfe5d0594e962"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-before.json",
+      "size": 1396,
+      "sha256": "eb14c6d85ad151ed2107b9739ca823208723693694748b683dc643c6a3dda0f8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-before.json.identity.json",
+      "size": 482,
+      "sha256": "3d16fed865eb30b396b1a86a3fac8dfe17190520b2e15f98c6b66c031259b3cd"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/canonical-predecessor-state.json",
+      "size": 585,
+      "sha256": "9c07f68be90a5c2781999d57dedffd03f2d21ccbbaaa7bc232964f67376dee0b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/events.ndjson",
+      "size": 2929,
+      "sha256": "cfba29aa1825edd9619659ca7bf72e469147b76a8e1d2173ba839f0e9ed552c9"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/frozen-governance-precondition.json",
+      "size": 3681,
+      "sha256": "fa1b76c15ec2ccb2e44dc5b9243791ef629aa8cd4a57cdda88937c08fb682cb0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/git-head.json",
+      "size": 658,
+      "sha256": "f2e069a534f2bcf4d9fff9a9d8c0ce1cf6b4511c36287919a91c61ba830452ff"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/guest_identity.json",
+      "size": 1673,
+      "sha256": "1aa53ca4368b46c63ecde3ed8db7e58adbb5039e81e66ee51820896454f272e1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/guest_identity_http.json",
+      "size": 4046,
+      "sha256": "201916107d80b8d7f2a32f98d776db77fe3d969c76969ddeeb8c1c01168172ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/metadata.json",
+      "size": 1625,
+      "sha256": "77a9bbc3aa9fcc014fb30077bfd5b8cf1a07219fabb01e403ceb8fcc95a16df2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/next-precondition.json",
+      "size": 551,
+      "sha256": "9759942fff4874a53750bab2ad7277939b9d79c3186ab57e08fa43885b738793"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/orchestration-binding.json",
+      "size": 451,
+      "sha256": "a56047fe4003d707978616049ac64ff6a44da8ec0bc2b58befec2e34a578ebb3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/orchestration/adoption_workflow.py",
+      "size": 26292,
+      "sha256": "01c0e3261179302bd597381a17a0304ed708f980f72832056a0fa0472f255d08"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/pre-selector-stability.json",
+      "size": 568,
+      "sha256": "97d253bb94a03135596e21e80b3c50fba09be3f16d2046649e5d995e1bc981b0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/freeze-result.json",
+      "size": 248,
+      "sha256": "0f6bf1108eb2290d4279099018ff77023f933a48afef20a396ef8a198c083367"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/guest-unit-result.json",
+      "size": 40555,
+      "sha256": "21a239049b9228574a47f3980516413a6313855cfb5b8bbe0a453cbe12c69e1d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/preconditions/transfer-manifest.json",
+      "size": 79853,
+      "sha256": "b3caeccae2a3bd2708489e602aac7e28c42604939312ac1fd6090c7de49b33e8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/result.json",
+      "size": 862,
+      "sha256": "181148401db6d281414833a351382f2b549a73765af75aacc5c67bd994225f8c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/selector-adopt-baseline.json",
+      "size": 2054,
+      "sha256": "4a98ccb51e41af7c0b2fc6b785d4c96b9fca63685702e31c895f1e7d94168ce3"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/snapshot_tree.json",
+      "size": 1065,
+      "sha256": "f941b53f7aad89aff9e77b51f35b84264a320977fd441c836dfe1d8697738bbd"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 386770,
+      "sha256": "a05916e9e874699391191e213306df72a16a1fee8a3b08e9676a206e5134d081"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py",
+      "size": 24619,
+      "sha256": "ac71298f2fe51d39e3c555afed486db16d55e3c81af3a1b1defd550b9326ab0c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 107087,
+      "sha256": "3482f552f5b304c0e8af8ad4f1c200e25d9d308b573baa501eb70405f7407612"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 98102,
+      "sha256": "5c80a7fadf9d8ca8771217792b9140bae66deead93ee95e685713d84759eaa75"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 59299,
+      "sha256": "2f3e8613a73db863241b94cf78faa7fe23b59da14dc236984c30a72714d7c60d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 22943,
+      "sha256": "e27ac0360c160c116aec90f3103bc2e13a4af71c76b2200b12058709674a8ae1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md",
+      "size": 9011,
+      "sha256": "04529183b2e3be0d9879a8182ed5a37b1330265e5bd93ab141744aa23a96ab4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md",
+      "size": 6130,
+      "sha256": "f63d36bd87680f28edab4a9a3938dc7f50f95f08b06b77cdfdee7ea9dda907c2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/tests/p05_baseline_adoption.py",
+      "size": 16413,
+      "sha256": "4485e11d8e8227523bd7736e7d4e36ec935161ede784f6f43b4db28f90b9ea9e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/baseline-adoption/919c5de5-ac0f-4eca-b2f8-029927c560c1/source/tests/p05_snapshot_raw.py",
+      "size": 7569,
+      "sha256": "8bfea8bb47f512541b0f12ac552f0daa2416d9f215a147da377921cdc5f37bd1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/canonical.json",
+      "size": 1900,
+      "sha256": "2d5f378d20c163401b1c4ce7087db102a4719b394fc7a9408baa7d63d7ca4385"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/historical/historical-manifest.json",
+      "size": 94399,
+      "sha256": "9f75f2fd74ee18cf7ab48c4b3eb7146a10710b7976ca1702bc8abd2acdd6d9cb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/migration.json",
+      "size": 15433,
+      "sha256": "01dddecb5be72626820bdbf32c7d200a06a3d4a6b50159e319707d72a3ee7518"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/package-manifest.json",
+      "size": 127889,
+      "sha256": "5fac038ab79e2bc5b7643db423e6ee5df6a3db2423e9ba73b9af04cc999d73bf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/admission.json",
+      "size": 15168,
+      "sha256": "079ebe78576e63dc6a70398392d292c4f0d0116c9d3ab80366c2e78a85d11809"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/package-manifest.json",
+      "size": 13678,
+      "sha256": "e9fa1e03deadd7f4af7fd8710302fcbf04f2724253058c4c5bb4bdd47680a2e2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preparation-copy-manifest.json",
+      "size": 13889,
+      "sha256": "b7a7255c282ebfe990d13d44d7df0944edd582eacca62efd0f6968af50296127"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preservation/control-response.json",
+      "size": 384,
+      "sha256": "c143eb42e1b5a7ce2dd96841dd4e697b0f32b9940dcb88a74b8ae7af50528957"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preservation/manifest.json",
+      "size": 937,
+      "sha256": "66e5e0d689250ead5e7ca4a0f2ccb883101819017b4880209abf9facbd806761"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preservation/receiver-stopped.json",
+      "size": 2327,
+      "sha256": "8ffcbe23fcdaeccd0c9b6eb2b006d770a3f223b332b6b83efe0fa9472afc3a6e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preservation/transfer-receipt.json",
+      "size": 1780,
+      "sha256": "e43dfe1ae60084cb6f0302aa3cfc5eb7cbf75b608e5dc76fc4fb77f5cfccda4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/preserved/evidence.zip",
+      "size": 2148983,
+      "sha256": "08a311104afed41ec5e7e712a19bde3936d77473551d302420847219e0eead37"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/raw/metadata.json",
+      "size": 2175,
+      "sha256": "5f882b9e04910d77ea7fa84170afc19b99db4ac8f3bf67c28009bd1386f5fe88"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/raw/tree.json",
+      "size": 1120,
+      "sha256": "8194331edf223e123219c41787484b41b1831fe3e76bd344a43e8d6a35138cbf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/raw/vm.json",
+      "size": 6020,
+      "sha256": "2a97876d851ca2cf4b730c1beaad3fc74de0d93a5d193346638e3c8b44722193"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/retired.json",
+      "size": 678,
+      "sha256": "5dc9a3534b4fd0bf828b37175e8412b12b631ef69c2081a459e67d625f02f19c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/.tmp/velo-codex-20260920-pc017-norm-combined/codex-R02-verdict.md",
+      "size": 1628,
+      "sha256": "9934821ccf41aeb8650cbbe69795726796f8c870993b4ab8c0eaf532048ff5e6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/.tmp/velo-codex-20260920-pc017-norm-combined/evidence-r02/base-manifest.json",
+      "size": 6418,
+      "sha256": "3a0a5881525c1ae6dabcba088563b0711caa84c544ad4a719e32e3edc0f7cee7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/.tmp/velo-codex-20260920-pc017-norm-combined/proposal-r02.patch",
+      "size": 120736,
+      "sha256": "128aa65e162225f2df92f29ed984976372e89719a1085f09224560fcd0d81f68"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/.tmp/velo-codex-20260920-pc020-activation-time/candidate-manifest.json",
+      "size": 11977,
+      "sha256": "ddc6df7a5b7aa4edb95032eb4df3d02ebd174963845066c376919a683db46b7b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/.tmp/velo-codex-20260920-pc020-activation-time/codex-R01-verdict.md",
+      "size": 1261,
+      "sha256": "63d1593c0a77f6950dead270bd3830d96e8d2467db295c24433269d78fd653ad"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 411366,
+      "sha256": "b311046290192c2444fb7281ac804031e7e2e955d8b5eed6789b37215fc4efa8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 133510,
+      "sha256": "44b3742cfe08bc7e081ccab55744acf1ceabae558b5ddee7877f6e3e9ffbcd00"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 47122,
+      "sha256": "ce15a3c9e14da7c5caaafad8ea4718b3d650ee24b3d4b13ff1561f362301a9ea"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 47059,
+      "sha256": "d6eb076e74194a43cf47a8a04e82bb44604caac7bd343bbe3537736a337a419d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 36132,
+      "sha256": "b53d274902c5240805134b5dec14105ecd91a9613044980510dd11a9c841f065"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 44762,
+      "sha256": "a26bc8894525f373a18e983d632e92600f4e4a00f2c131b488f5b4e3d3a47cf1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 185661,
+      "sha256": "9889447778d295374a2d8a3eff17f05d5fa9f80c3fcae4377e416d97d55cefcf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 76716,
+      "sha256": "f242a6991692863bbe102efc73f0df8643f0b7d939ffab2082c620488485802e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 38383,
+      "sha256": "da1895965921520a9a1bd104ac8d0ed3bbf03e6c750d2ca308dfd07592f7aa7a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-06-PC017作者稿采纳与规范同步范围.md",
+      "size": 2722,
+      "sha256": "eee0becc161f7924b2d7263ae10f38d18cb065054236c7f567f84e0e90752feb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-07-PC017主方自评发现-发布后故障边界.md",
+      "size": 3142,
+      "sha256": "db318f540fde02c6df0b16432a1f2f658dbe490d8512ecc57229e0fd63c531c5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-08-PC017发布提交点与故障语义裁决.md",
+      "size": 5187,
+      "sha256": "ca4e7689e095536b5bb1ece2579db26ee1779766a321772a5e32407f211e7cde"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-10-PLAN-CHANGE-018登记与裁决-分页游标上下文.md",
+      "size": 3020,
+      "sha256": "f349353fdaa0ef799400c0343841932380bd8095dbf3c36b007f54c92134b92b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-11-主方自评发现-固定启动响应状态缺口.md",
+      "size": 2217,
+      "sha256": "1c138291f5a9dff6b09bf3ad57bfbeff8be0a9e33b8488dbf837cb0c28626c71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-12-PLAN-CHANGE-019裁决-固定启动真实状态.md",
+      "size": 3165,
+      "sha256": "edcf727f9db2e98e785972231bc051476d01617e71876d72eaeb3222b587eb71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-13-PC018终页字段勘误与自评续作.md",
+      "size": 2987,
+      "sha256": "946a463b1b75d9fd769fe487f2068aeb1c6351c290546ec0a314f0216792ffb0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-15-PLAN-CHANGE-020登记与作者方向-恢复代次重建.md",
+      "size": 3798,
+      "sha256": "cce4be1e55a73f82296c98041c7810fd41bba4010fc2cb9e5e0e8a2fbba9b222"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺序裁决.md",
+      "size": 4129,
+      "sha256": "dce41b89f393bdcda880447dac9d075a8a2f5658317dd8a07f7ea81d321d8e37"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-17-PC020集合与证据复用边界勘误.md",
+      "size": 1799,
+      "sha256": "53e576e4044891648d34b2639b25b30c5a71c90787526af71e97be1749a5f85a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-18-PC020作者自评发现与裁决-激活签发时间.md",
+      "size": 2996,
+      "sha256": "9068694cbbf6ceda264739edb2762eb5a24fcfd6782353094f19df39b6ac2ed1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-19-PC020作者采纳决定与正式同步范围.md",
+      "size": 2537,
+      "sha256": "fea9ea3c99cccf6e860c27bf888b72c003cad3e10d5198261044066ffc1d5cb2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/2026.09.20-20-PC020主方完整规范自评与限定实现门.md",
+      "size": 33726,
+      "sha256": "03324b3196f70923ce98dc25da16896f1fec7a10dd6be4fb535a89d303dc56ed"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/current-normative-inputs-pc019-r02.json",
+      "size": 5506,
+      "sha256": "a5d8cb01ab7dfe70c0b6aad21eec128798cdc21c74589872ce2e89c28c694a71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/current-normative-inputs-pc019.json",
+      "size": 4950,
+      "sha256": "986321ef8473b047db11fd8b205d5a9c69f8f0b4efee2a575875ff4c5f25044a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/current-normative-inputs-pc020-r01.json",
+      "size": 9640,
+      "sha256": "cf9ca9d6ab0469e229ce9305e31e43e01202f7369c70253d05bbf3ca229d3c4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/pc017-author-revision-2-manifest.json",
+      "size": 3895,
+      "sha256": "06f409b2f0367e1ac3f03e6ae3e600b393769dba66bb589ca728fafaec77c2e8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/PLAN/2026.09.20/pc017-author-sync-manifest.json",
+      "size": 5054,
+      "sha256": "9be201f76b2195cadc7a0dc33b57babba23e09c100518ada032a85c74c0de235"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc020_activation.py",
+      "size": 28959,
+      "sha256": "659aa3ac762e8878660935f056277baef140420334651c7007c9714f2c961aa5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc020_creation.py",
+      "size": 10008,
+      "sha256": "e74205a781134c32ddc2b95ac92d20a26f06f43e8779af66f565594a3c2bc432"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc020_evidence.py",
+      "size": 51310,
+      "sha256": "e99a04aea1f741e6310bc4e94efd2e5ec80d212c45d6269357591c3d049d774f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc020_restore.py",
+      "size": 12045,
+      "sha256": "e880ea660c62f12424fc83ec4b68eab07f4841b989f91a6a5cd0f045645e3844"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc020_transition.py",
+      "size": 18854,
+      "sha256": "110f6d68fc4a7f80f6dad19817f37b1e727670924f8c96db7f87a5bf738f511a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc021_activation_writer.py",
+      "size": 15046,
+      "sha256": "2110cb08ce044ca9b30cb1b740ec142e98832872fe021511bcb68dc995d1a3cb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc021_issuer.py",
+      "size": 13105,
+      "sha256": "35c83d41c8aeccdf7fe2c066ee7ac46fdcd58222cbf0d5a4b5fb5a56fc8f7990"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc021_package.py",
+      "size": 22976,
+      "sha256": "ebfdc809cbc042d3c9f3973b7e30f7d0420125fc970f62ec548e2034d5688548"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p05_pc021_stage_rules.py",
+      "size": 9416,
+      "sha256": "8885a5e75d11e67274fda83396f4a5d839ba998b60f08ba7b05b7b905c5f1653"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/p06_pc021_consumer.py",
+      "size": 11384,
+      "sha256": "8caf4d3eb1b4dd2c20f3ee8fa9e4b831287b86b27df3d869670497250e2f3f5f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/source/tests/pc022_windows_refresh.py",
+      "size": 17534,
+      "sha256": "63c3497096a3461bd80795ae65ccfacd7349da6077b5e6b565eb71ac264f26d2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/preparation/vm-identity.json",
+      "size": 481,
+      "sha256": "44d1659bf77530c88f089850e2d3e06cf77a86e57b0e8435e0827445e37456e7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/.tmp/velo-codex-20260920-pc017-norm-combined/codex-R02-verdict.md",
+      "size": 1628,
+      "sha256": "9934821ccf41aeb8650cbbe69795726796f8c870993b4ab8c0eaf532048ff5e6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/.tmp/velo-codex-20260920-pc017-norm-combined/evidence-r02/base-manifest.json",
+      "size": 6418,
+      "sha256": "3a0a5881525c1ae6dabcba088563b0711caa84c544ad4a719e32e3edc0f7cee7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/.tmp/velo-codex-20260920-pc017-norm-combined/proposal-r02.patch",
+      "size": 120736,
+      "sha256": "128aa65e162225f2df92f29ed984976372e89719a1085f09224560fcd0d81f68"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/.tmp/velo-codex-20260920-pc020-activation-time/candidate-manifest.json",
+      "size": 11977,
+      "sha256": "ddc6df7a5b7aa4edb95032eb4df3d02ebd174963845066c376919a683db46b7b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/.tmp/velo-codex-20260920-pc020-activation-time/codex-R01-verdict.md",
+      "size": 1261,
+      "sha256": "63d1593c0a77f6950dead270bd3830d96e8d2467db295c24433269d78fd653ad"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 411366,
+      "sha256": "b311046290192c2444fb7281ac804031e7e2e955d8b5eed6789b37215fc4efa8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 133510,
+      "sha256": "44b3742cfe08bc7e081ccab55744acf1ceabae558b5ddee7877f6e3e9ffbcd00"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 47122,
+      "sha256": "ce15a3c9e14da7c5caaafad8ea4718b3d650ee24b3d4b13ff1561f362301a9ea"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 47059,
+      "sha256": "d6eb076e74194a43cf47a8a04e82bb44604caac7bd343bbe3537736a337a419d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 36132,
+      "sha256": "b53d274902c5240805134b5dec14105ecd91a9613044980510dd11a9c841f065"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 44762,
+      "sha256": "a26bc8894525f373a18e983d632e92600f4e4a00f2c131b488f5b4e3d3a47cf1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 185661,
+      "sha256": "9889447778d295374a2d8a3eff17f05d5fa9f80c3fcae4377e416d97d55cefcf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 76716,
+      "sha256": "f242a6991692863bbe102efc73f0df8643f0b7d939ffab2082c620488485802e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 38383,
+      "sha256": "da1895965921520a9a1bd104ac8d0ed3bbf03e6c750d2ca308dfd07592f7aa7a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-06-PC017作者稿采纳与规范同步范围.md",
+      "size": 2722,
+      "sha256": "eee0becc161f7924b2d7263ae10f38d18cb065054236c7f567f84e0e90752feb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-07-PC017主方自评发现-发布后故障边界.md",
+      "size": 3142,
+      "sha256": "db318f540fde02c6df0b16432a1f2f658dbe490d8512ecc57229e0fd63c531c5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-08-PC017发布提交点与故障语义裁决.md",
+      "size": 5187,
+      "sha256": "ca4e7689e095536b5bb1ece2579db26ee1779766a321772a5e32407f211e7cde"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-10-PLAN-CHANGE-018登记与裁决-分页游标上下文.md",
+      "size": 3020,
+      "sha256": "f349353fdaa0ef799400c0343841932380bd8095dbf3c36b007f54c92134b92b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-11-主方自评发现-固定启动响应状态缺口.md",
+      "size": 2217,
+      "sha256": "1c138291f5a9dff6b09bf3ad57bfbeff8be0a9e33b8488dbf837cb0c28626c71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-12-PLAN-CHANGE-019裁决-固定启动真实状态.md",
+      "size": 3165,
+      "sha256": "edcf727f9db2e98e785972231bc051476d01617e71876d72eaeb3222b587eb71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-13-PC018终页字段勘误与自评续作.md",
+      "size": 2987,
+      "sha256": "946a463b1b75d9fd769fe487f2068aeb1c6351c290546ec0a314f0216792ffb0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-15-PLAN-CHANGE-020登记与作者方向-恢复代次重建.md",
+      "size": 3798,
+      "sha256": "cce4be1e55a73f82296c98041c7810fd41bba4010fc2cb9e5e0e8a2fbba9b222"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺序裁决.md",
+      "size": 4129,
+      "sha256": "dce41b89f393bdcda880447dac9d075a8a2f5658317dd8a07f7ea81d321d8e37"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-17-PC020集合与证据复用边界勘误.md",
+      "size": 1799,
+      "sha256": "53e576e4044891648d34b2639b25b30c5a71c90787526af71e97be1749a5f85a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-18-PC020作者自评发现与裁决-激活签发时间.md",
+      "size": 2996,
+      "sha256": "9068694cbbf6ceda264739edb2762eb5a24fcfd6782353094f19df39b6ac2ed1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-19-PC020作者采纳决定与正式同步范围.md",
+      "size": 2537,
+      "sha256": "fea9ea3c99cccf6e860c27bf888b72c003cad3e10d5198261044066ffc1d5cb2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/2026.09.20-20-PC020主方完整规范自评与限定实现门.md",
+      "size": 33726,
+      "sha256": "03324b3196f70923ce98dc25da16896f1fec7a10dd6be4fb535a89d303dc56ed"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/current-normative-inputs-pc019-r02.json",
+      "size": 5506,
+      "sha256": "a5d8cb01ab7dfe70c0b6aad21eec128798cdc21c74589872ce2e89c28c694a71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/current-normative-inputs-pc019.json",
+      "size": 4950,
+      "sha256": "986321ef8473b047db11fd8b205d5a9c69f8f0b4efee2a575875ff4c5f25044a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/current-normative-inputs-pc020-r01.json",
+      "size": 9640,
+      "sha256": "cf9ca9d6ab0469e229ce9305e31e43e01202f7369c70253d05bbf3ca229d3c4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/pc017-author-revision-2-manifest.json",
+      "size": 3895,
+      "sha256": "06f409b2f0367e1ac3f03e6ae3e600b393769dba66bb589ca728fafaec77c2e8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/PLAN/2026.09.20/pc017-author-sync-manifest.json",
+      "size": 5054,
+      "sha256": "9be201f76b2195cadc7a0dc33b57babba23e09c100518ada032a85c74c0de235"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc020_activation.py",
+      "size": 28959,
+      "sha256": "659aa3ac762e8878660935f056277baef140420334651c7007c9714f2c961aa5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc020_creation.py",
+      "size": 10008,
+      "sha256": "e74205a781134c32ddc2b95ac92d20a26f06f43e8779af66f565594a3c2bc432"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc020_evidence.py",
+      "size": 51310,
+      "sha256": "e99a04aea1f741e6310bc4e94efd2e5ec80d212c45d6269357591c3d049d774f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc020_restore.py",
+      "size": 12045,
+      "sha256": "e880ea660c62f12424fc83ec4b68eab07f4841b989f91a6a5cd0f045645e3844"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc020_transition.py",
+      "size": 18854,
+      "sha256": "110f6d68fc4a7f80f6dad19817f37b1e727670924f8c96db7f87a5bf738f511a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc021_activation_writer.py",
+      "size": 15046,
+      "sha256": "2110cb08ce044ca9b30cb1b740ec142e98832872fe021511bcb68dc995d1a3cb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc021_issuer.py",
+      "size": 13105,
+      "sha256": "35c83d41c8aeccdf7fe2c066ee7ac46fdcd58222cbf0d5a4b5fb5a56fc8f7990"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc021_package.py",
+      "size": 22976,
+      "sha256": "ebfdc809cbc042d3c9f3973b7e30f7d0420125fc970f62ec548e2034d5688548"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p05_pc021_stage_rules.py",
+      "size": 9416,
+      "sha256": "8885a5e75d11e67274fda83396f4a5d839ba998b60f08ba7b05b7b905c5f1653"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/p06_pc021_consumer.py",
+      "size": 11384,
+      "sha256": "8caf4d3eb1b4dd2c20f3ee8fa9e4b831287b86b27df3d869670497250e2f3f5f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-migration/52350b8b-1296-48d6-8135-050cbc4f9bc4/source/tests/pc022_windows_refresh.py",
+      "size": 17534,
+      "sha256": "63c3497096a3461bd80795ae65ccfacd7349da6077b5e6b565eb71ac264f26d2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/admission.json",
+      "size": 15168,
+      "sha256": "079ebe78576e63dc6a70398392d292c4f0d0116c9d3ab80366c2e78a85d11809"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/package-manifest.json",
+      "size": 13678,
+      "sha256": "e9fa1e03deadd7f4af7fd8710302fcbf04f2724253058c4c5bb4bdd47680a2e2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/preservation/control-response.json",
+      "size": 384,
+      "sha256": "c143eb42e1b5a7ce2dd96841dd4e697b0f32b9940dcb88a74b8ae7af50528957"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/preservation/manifest.json",
+      "size": 937,
+      "sha256": "66e5e0d689250ead5e7ca4a0f2ccb883101819017b4880209abf9facbd806761"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/preservation/receiver-stopped.json",
+      "size": 2327,
+      "sha256": "8ffcbe23fcdaeccd0c9b6eb2b006d770a3f223b332b6b83efe0fa9472afc3a6e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/preservation/transfer-receipt.json",
+      "size": 1780,
+      "sha256": "e43dfe1ae60084cb6f0302aa3cfc5eb7cbf75b608e5dc76fc4fb77f5cfccda4b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/preserved/evidence.zip",
+      "size": 2148983,
+      "sha256": "08a311104afed41ec5e7e712a19bde3936d77473551d302420847219e0eead37"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/raw/metadata.json",
+      "size": 2175,
+      "sha256": "5f882b9e04910d77ea7fa84170afc19b99db4ac8f3bf67c28009bd1386f5fe88"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/raw/tree.json",
+      "size": 1120,
+      "sha256": "8194331edf223e123219c41787484b41b1831fe3e76bd344a43e8d6a35138cbf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/raw/vm.json",
+      "size": 6020,
+      "sha256": "2a97876d851ca2cf4b730c1beaad3fc74de0d93a5d193346638e3c8b44722193"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/retired.json",
+      "size": 678,
+      "sha256": "5dc9a3534b4fd0bf828b37175e8412b12b631ef69c2081a459e67d625f02f19c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/.tmp/velo-codex-20260920-pc017-norm-combined/codex-R02-verdict.md",
+      "size": 1628,
+      "sha256": "9934821ccf41aeb8650cbbe69795726796f8c870993b4ab8c0eaf532048ff5e6"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/.tmp/velo-codex-20260920-pc017-norm-combined/evidence-r02/base-manifest.json",
+      "size": 6418,
+      "sha256": "3a0a5881525c1ae6dabcba088563b0711caa84c544ad4a719e32e3edc0f7cee7"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/.tmp/velo-codex-20260920-pc017-norm-combined/proposal-r02.patch",
+      "size": 120736,
+      "sha256": "128aa65e162225f2df92f29ed984976372e89719a1085f09224560fcd0d81f68"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/.tmp/velo-codex-20260920-pc020-activation-time/candidate-manifest.json",
+      "size": 11977,
+      "sha256": "ddc6df7a5b7aa4edb95032eb4df3d02ebd174963845066c376919a683db46b7b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/.tmp/velo-codex-20260920-pc020-activation-time/codex-R01-verdict.md",
+      "size": 1261,
+      "sha256": "63d1593c0a77f6950dead270bd3830d96e8d2467db295c24433269d78fd653ad"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+      "size": 411366,
+      "sha256": "b311046290192c2444fb7281ac804031e7e2e955d8b5eed6789b37215fc4efa8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 133510,
+      "sha256": "44b3742cfe08bc7e081ccab55744acf1ceabae558b5ddee7877f6e3e9ffbcd00"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 47122,
+      "sha256": "ce15a3c9e14da7c5caaafad8ea4718b3d650ee24b3d4b13ff1561f362301a9ea"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 47059,
+      "sha256": "d6eb076e74194a43cf47a8a04e82bb44604caac7bd343bbe3537736a337a419d"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 36132,
+      "sha256": "b53d274902c5240805134b5dec14105ecd91a9613044980510dd11a9c841f065"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 44762,
+      "sha256": "a26bc8894525f373a18e983d632e92600f4e4a00f2c131b488f5b4e3d3a47cf1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 185661,
+      "sha256": "9889447778d295374a2d8a3eff17f05d5fa9f80c3fcae4377e416d97d55cefcf"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 76716,
+      "sha256": "f242a6991692863bbe102efc73f0df8643f0b7d939ffab2082c620488485802e"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 38383,
+      "sha256": "da1895965921520a9a1bd104ac8d0ed3bbf03e6c750d2ca308dfd07592f7aa7a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-06-PC017作者稿采纳与规范同步范围.md",
+      "size": 2722,
+      "sha256": "eee0becc161f7924b2d7263ae10f38d18cb065054236c7f567f84e0e90752feb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-07-PC017主方自评发现-发布后故障边界.md",
+      "size": 3142,
+      "sha256": "db318f540fde02c6df0b16432a1f2f658dbe490d8512ecc57229e0fd63c531c5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-08-PC017发布提交点与故障语义裁决.md",
+      "size": 5187,
+      "sha256": "ca4e7689e095536b5bb1ece2579db26ee1779766a321772a5e32407f211e7cde"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-10-PLAN-CHANGE-018登记与裁决-分页游标上下文.md",
+      "size": 3020,
+      "sha256": "f349353fdaa0ef799400c0343841932380bd8095dbf3c36b007f54c92134b92b"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-11-主方自评发现-固定启动响应状态缺口.md",
+      "size": 2217,
+      "sha256": "1c138291f5a9dff6b09bf3ad57bfbeff8be0a9e33b8488dbf837cb0c28626c71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-12-PLAN-CHANGE-019裁决-固定启动真实状态.md",
+      "size": 3165,
+      "sha256": "edcf727f9db2e98e785972231bc051476d01617e71876d72eaeb3222b587eb71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-13-PC018终页字段勘误与自评续作.md",
+      "size": 2987,
+      "sha256": "946a463b1b75d9fd769fe487f2068aeb1c6351c290546ec0a314f0216792ffb0"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-15-PLAN-CHANGE-020登记与作者方向-恢复代次重建.md",
+      "size": 3798,
+      "sha256": "cce4be1e55a73f82296c98041c7810fd41bba4010fc2cb9e5e0e8a2fbba9b222"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺序裁决.md",
+      "size": 4129,
+      "sha256": "dce41b89f393bdcda880447dac9d075a8a2f5658317dd8a07f7ea81d321d8e37"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-17-PC020集合与证据复用边界勘误.md",
+      "size": 1799,
+      "sha256": "53e576e4044891648d34b2639b25b30c5a71c90787526af71e97be1749a5f85a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-18-PC020作者自评发现与裁决-激活签发时间.md",
+      "size": 2996,
+      "sha256": "9068694cbbf6ceda264739edb2762eb5a24fcfd6782353094f19df39b6ac2ed1"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-19-PC020作者采纳决定与正式同步范围.md",
+      "size": 2537,
+      "sha256": "fea9ea3c99cccf6e860c27bf888b72c003cad3e10d5198261044066ffc1d5cb2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/2026.09.20-20-PC020主方完整规范自评与限定实现门.md",
+      "size": 33726,
+      "sha256": "03324b3196f70923ce98dc25da16896f1fec7a10dd6be4fb535a89d303dc56ed"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/current-normative-inputs-pc019-r02.json",
+      "size": 5506,
+      "sha256": "a5d8cb01ab7dfe70c0b6aad21eec128798cdc21c74589872ce2e89c28c694a71"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/current-normative-inputs-pc019.json",
+      "size": 4950,
+      "sha256": "986321ef8473b047db11fd8b205d5a9c69f8f0b4efee2a575875ff4c5f25044a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/current-normative-inputs-pc020-r01.json",
+      "size": 9640,
+      "sha256": "cf9ca9d6ab0469e229ce9305e31e43e01202f7369c70253d05bbf3ca229d3c4c"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/pc017-author-revision-2-manifest.json",
+      "size": 3895,
+      "sha256": "06f409b2f0367e1ac3f03e6ae3e600b393769dba66bb589ca728fafaec77c2e8"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/PLAN/2026.09.20/pc017-author-sync-manifest.json",
+      "size": 5054,
+      "sha256": "9be201f76b2195cadc7a0dc33b57babba23e09c100518ada032a85c74c0de235"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc020_activation.py",
+      "size": 28959,
+      "sha256": "659aa3ac762e8878660935f056277baef140420334651c7007c9714f2c961aa5"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc020_creation.py",
+      "size": 10008,
+      "sha256": "e74205a781134c32ddc2b95ac92d20a26f06f43e8779af66f565594a3c2bc432"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc020_evidence.py",
+      "size": 51310,
+      "sha256": "e99a04aea1f741e6310bc4e94efd2e5ec80d212c45d6269357591c3d049d774f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc020_restore.py",
+      "size": 12045,
+      "sha256": "e880ea660c62f12424fc83ec4b68eab07f4841b989f91a6a5cd0f045645e3844"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc020_transition.py",
+      "size": 18854,
+      "sha256": "110f6d68fc4a7f80f6dad19817f37b1e727670924f8c96db7f87a5bf738f511a"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc021_activation_writer.py",
+      "size": 15046,
+      "sha256": "2110cb08ce044ca9b30cb1b740ec142e98832872fe021511bcb68dc995d1a3cb"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc021_issuer.py",
+      "size": 13105,
+      "sha256": "35c83d41c8aeccdf7fe2c066ee7ac46fdcd58222cbf0d5a4b5fb5a56fc8f7990"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc021_package.py",
+      "size": 22976,
+      "sha256": "ebfdc809cbc042d3c9f3973b7e30f7d0420125fc970f62ec548e2034d5688548"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p05_pc021_stage_rules.py",
+      "size": 9416,
+      "sha256": "8885a5e75d11e67274fda83396f4a5d839ba998b60f08ba7b05b7b905c5f1653"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/p06_pc021_consumer.py",
+      "size": 11384,
+      "sha256": "8caf4d3eb1b4dd2c20f3ee8fa9e4b831287b86b27df3d869670497250e2f3f5f"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/source/tests/pc022_windows_refresh.py",
+      "size": 17534,
+      "sha256": "63c3497096a3461bd80795ae65ccfacd7349da6077b5e6b565eb71ac264f26d2"
+    },
+    {
+      "relative_path": "Logs/P05/wf-01a05d1d-p05/pc020-preparation/405a6f6e-b4e5-499c-842c-973687c2a277/vm-identity.json",
+      "size": 481,
+      "sha256": "44d1659bf77530c88f089850e2d3e06cf77a86e57b0e8435e0827445e37456e7"
+    }
+  ],
+  "immutable_c7_sha256": "96afd802b2c1630f0a06f441e4ca6fa81cf8c448a6030f4c9d169595ab5ca500",
+  "history_only_not_current_success": true,
+  "same_bytes_existing": "reverify only, never overwrite different bytes or unsafe types/ancestors",
+  "new_ready_requires": "actual dual publication, full historical policy validation, current freeze and controller approval; no source discovery"
+}

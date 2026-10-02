@@ -1,0 +1,105 @@
+{
+  "status": "DRAFT_PENDING_CONTROLLER_SELF_REVIEW",
+  "c7_sha256": "96afd802b2c1630f0a06f441e4ca6fa81cf8c448a6030f4c9d169595ab5ca500",
+  "stages": [
+    {
+      "stage": "P05_REPAIR_INITIAL",
+      "profile_id": "pc026-snapshot191-v1",
+      "canonical": {
+        "schema_version": 6,
+        "epoch": 7,
+        "phase": "PREPARATION_BASELINE",
+        "active_snapshot": "Snapshot 187-固定IP+WindowsMCP开机自启"
+      },
+      "restored_snapshot": "Snapshot 187-固定IP+WindowsMCP开机自启",
+      "record_kinds": [
+        "snapshot_metadata",
+        "revert_operation",
+        "pre_start_marker",
+        "post_restore_hostname",
+        "canonical_readback",
+        "pc020_migration",
+        "pc020_preparation"
+      ],
+      "consumes_creation": false,
+      "requires_activation_graph": false,
+      "canonical_writer": "guest Windows controller only",
+      "qualification": "same external approved group, full bootstrap/current graph; physical current never suffices"
+    },
+    {
+      "stage": "P05_REPAIR_CANDIDATE",
+      "profile_id": "pc026-snapshot191-v1",
+      "canonical": {
+        "schema_version": 6,
+        "epoch": 7,
+        "phase": "PREPARATION_BASELINE",
+        "active_snapshot": "Snapshot 187-固定IP+WindowsMCP开机自启"
+      },
+      "restored_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
+      "record_kinds": [
+        "snapshot_metadata",
+        "revert_operation",
+        "pre_start_marker",
+        "post_restore_hostname",
+        "canonical_readback",
+        "pc020_migration",
+        "pc020_preparation"
+      ],
+      "consumes_creation": true,
+      "requires_activation_graph": false,
+      "canonical_writer": "guest Windows controller only",
+      "qualification": "same external approved group, full bootstrap/current graph; physical current never suffices"
+    },
+    {
+      "stage": "P06_ACTIVE",
+      "profile_id": "pc026-snapshot191-v1",
+      "canonical": {
+        "schema_version": 6,
+        "epoch": 8,
+        "phase": "NETWORK_ACTIVE",
+        "active_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线"
+      },
+      "restored_snapshot": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
+      "record_kinds": [
+        "snapshot_metadata",
+        "revert_operation",
+        "pre_start_marker",
+        "post_restore_hostname",
+        "canonical_readback",
+        "pc020_migration",
+        "pc020_preparation",
+        "activation_evidence"
+      ],
+      "consumes_creation": true,
+      "requires_activation_graph": true,
+      "canonical_writer": "guest Windows controller only",
+      "qualification": "same external approved group, full bootstrap/current graph; physical current never suffices"
+    }
+  ],
+  "new_generation": {
+    "candidate": "Snapshot 191-Velociraptor-MCP可恢复验收基线",
+    "A": "activation-191/<canonical-lowercase-uuid>",
+    "R_keys": 13,
+    "R_schema": 1,
+    "R_kind": "snapshot191-activation-evidence-v1",
+    "S_keys": 13,
+    "S_schema": 2,
+    "S_kind": "snapshot191-activation-issuance-receipt-v2",
+    "activation_source": "snapshot191-activation",
+    "intent_keys": 10,
+    "intent_schema": 2,
+    "intent_kind": "pc020-canonical-transition-intent-v2",
+    "receipt_keys": 15,
+    "receipt_schema": 3,
+    "receipt_kind": "pc021-epoch8-activation-transition-receipt-v3",
+    "fixed_intent": "epoch8-transition-intent.json",
+    "fixed_receipt": "epoch8-transition-receipt.json"
+  },
+  "C8_retired_append": [
+    "Snapshot 187-固定IP+WindowsMCP开机自启",
+    "Snapshot 189-Velociraptor-MCP可恢复验收基线",
+    "Snapshot 190-velo-mcp-18fce616-新版保留-验收未全通过"
+  ],
+  "retired_status": "MANUAL_ONLY_REQUIRES_NEW_USER_AUTHORIZATION",
+  "creation": "after current initial success, before0/after1 and four→five exact retained tree, real UID/marker/parent187; no predicted UID/marker"
+}

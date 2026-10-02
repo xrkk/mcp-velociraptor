@@ -1,0 +1,21 @@
+# PC026 主控自评修正与解释（正式优先）
+
+本文件优先于组内机械候选、两作者草稿与旧正文。组CURRENT-PC026-R01由外侧采纳记录绑定最终manifest；嵌入草稿中的未采纳/候选语句是创作历史，不撤销外侧采纳。规范采纳只打开逐任务实施门，不是产品通过、来源READY、恢复或快照操作许可。
+
+## F01 已完成操作与当前阶段分开
+
+T011/R02将finish action=prepare/commit且operation.status=DONE限定为该动作刚完成阶段，错误拒绝了原合同的历史收据重读。实际GuestTerminal.begin_action对同input_digest返回已有operation；transfer_finish同时返回当前local_phase，因此release之后读prepare仍应是原prepare收据+当前RELEASED，不回退阶段、不重新写或创建worker。
+
+修正：DONE prepare可伴随同方向PREPARED及后续阶段（含后续FAILED；source还含SOURCE_CHANGED）；DONE commit可伴随DEST_PUBLISHED/DEST_RELEASING/DEST_RELEASED/DEST_FAILED；DONE release仍要求本方向RELEASED。finish顶层允许真实SOURCE_FAILED/DEST_FAILED，失败operation结果仍只能error码。scope/action/operation输入/原收据/不可变digest必须联合验证；不允许借放宽阶段伪造已完成动作。全局COMPLETE仍须真实目的、双cleanup和持久result，历史DONE不改变当前失败事实。
+
+必须补正式Windows回归：prepare→commit→release后重读prepare/commit、pull release后重读prepare；同收据无新worker/文件变化；变更输入冲突拒绝；缺实际前序receipt、scope错、DONE携error、IN_PROGRESS带结果拒绝。静态schema只验证可表达部分。
+
+## F02 需求边界解释
+
+REQ-008/RACC-008/CON-013/CUM-055的DFIR130纯结构化合同不改；七transfer采用PC024原wire+PC026精确输出，SDK同事实镜像许可仅该切片，不恢复旧客户端兼容层。NON-003/CUM-024禁止的运行时工具profile不改：pc026-snapshot191-v1仅测试/恢复来源身份，不能隐藏或条件注册工具。
+
+CON-002仍要求guest业务及正式单元/集成证据在Windows；host传输coordinator和外部HTTP客户端按PC024职责在host验证，主控schema检查仅文档一致性，既有host单元通过不冒充正式Windows资格。原阶段门/依赖/三phase九Flow/七八kind/645/P07五pair/最后未参与者独立核验均保留。
+
+NON-014原缺工具fallback在本组明确收紧：旧六工具server是incompatible_server，禁止自动换通道；仅其它原准许begin前不可用条件保留。同ID绑定、原deadline、程序完整性、published_ever和所有权清理不变。批准信任边界是受控主控治理目录，不宣称hash抗同权限恶意篡改。
+
+历史source与当前source分层不豁免旧包完整谓词，不把旧189成功或190保留算新191资格；新实现及每阶段需重新冻结/实际执行。开发顺序：先修PC026传输契约及其真实Windows局部验证，再完成生产批准loader/191图与实际consumer，随后部署来源/资料保全/明确恢复窗口，才能进入P05真实周期、P06、P07与独立核验。

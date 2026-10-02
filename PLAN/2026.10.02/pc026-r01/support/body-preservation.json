@@ -1,0 +1,101 @@
+[
+  {
+    "id": "requirement",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "source": "PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md",
+    "prefix_size": 27305,
+    "prefix_sha256": "57d33169c6b7a0e961dc1d4df99243c34a0b56316876cb2ae49d4551bdba0a5f",
+    "body_size": 420287,
+    "body_sha256": "e946243295aeb15479ce1543e79dd0f1d5f734f458b09c879c00c9c3ff3cb91a",
+    "body_exact": true
+  },
+  {
+    "id": "master",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+    "source": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+    "prefix_size": 27298,
+    "prefix_sha256": "710c1d5b5b865235676c516430c988a2b838f0163d29bf7aa05816493e35c74b",
+    "body_size": 137946,
+    "body_sha256": "8e5b9f6e53d7c31cbddc69180415597ad245c0220df3a69ee7ffa3a22cc67fd6",
+    "body_exact": true
+  },
+  {
+    "id": "P01",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+    "source": "PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+    "prefix_size": 27305,
+    "prefix_sha256": "ccc3a3dd8eccb314745a5e2de33c550dd92c5b4c9c9f83f3f22920c73ae679f3",
+    "body_size": 46989,
+    "body_sha256": "ed6d9b60148462766df57cdf35ed3ed86ca38c30de6474e67ea001f5b5f3f6cb",
+    "body_exact": true
+  },
+  {
+    "id": "P02",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+    "source": "PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+    "prefix_size": 27339,
+    "prefix_sha256": "e47996346aaf295ae409445b6bd155a83089f0d18ae78492109eca13f41173ca",
+    "body_size": 48669,
+    "body_sha256": "bc9dcb0af136d3e762dc114509720f15a1fc9a6102129e877c74fe49842cd90d",
+    "body_exact": true
+  },
+  {
+    "id": "P03",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+    "source": "PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+    "prefix_size": 27306,
+    "prefix_sha256": "161f675f0370c3d428831dfd65ba02429c27b6ed6f23fe85de5a854d3e8f52b5",
+    "body_size": 37607,
+    "body_sha256": "942fcfe69600155dafc5cb706160df97043902ba13a18568fcbd973c8dd6cc13",
+    "body_exact": true
+  },
+  {
+    "id": "P04",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "source": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+    "prefix_size": 27343,
+    "prefix_sha256": "ac80a9379d8e7ae7685bdf6529a63f34145668ca4e6e3192058ca3b3cb687f58",
+    "body_size": 47723,
+    "body_sha256": "7a0fa5cbe9fdd6c5efd497729d146a846e6a621f5893bf6c318cd7652e42f5b1",
+    "body_exact": true
+  },
+  {
+    "id": "P05",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+    "source": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+    "prefix_size": 27431,
+    "prefix_sha256": "e1c5c3802a87dce3785f42c238bc646a31aebbee6036a4b8afb756c8de14151c",
+    "body_size": 187878,
+    "body_sha256": "1ec8921dbd03688c07dac3a7b993861f5433c98fd45b2dde3fdb277e5b0b5b54",
+    "body_exact": true
+  },
+  {
+    "id": "P06",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+    "source": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+    "prefix_size": 27349,
+    "prefix_sha256": "3d151446b1ff0468df4ba40cf5ee2555fd972dcd89af19bc1a8f0737ae1d8c40",
+    "body_size": 81029,
+    "body_sha256": "6f5db453529d3d8b424e9f4d31bbd0b0c7fcd18590ec2aa37c9ef80992bce347",
+    "body_exact": true
+  },
+  {
+    "id": "P07",
+    "formal_path": "PLAN/2026.10.02/pc026-r01/norms/2026.09.12-18-实施子方案-P07清理与终检.md",
+    "candidate_relative": "candidate/PLAN/2026.10.02/pc026-r01/norms/2026.09.12-18-实施子方案-P07清理与终检.md",
+    "source": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+    "prefix_size": 27369,
+    "prefix_sha256": "93163d1b477c99c8dd5bae7e6fe403414c76baef459419b1b4ba7c5229d456e3",
+    "body_size": 40223,
+    "body_sha256": "71e4bf65e9c4223116fa2012fcba5601389e1038e510f2827d0e8fe71bf1cd61",
+    "body_exact": true
+  }
+]
