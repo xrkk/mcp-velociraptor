@@ -292,25 +292,8 @@ class _DirectChunkChannel:
                               json={"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     async def call(self, name: str, arguments: dict) -> dict:
-        if not getattr(self, "_binary_tried", False) or self._binary_ok:
-            self._binary_tried = True
-            try:
-                if self._http is None:
-                    import httpx2 as _h
-                    self._http = _h.AsyncClient(headers=self._headers, timeout=self._timeout,
-                                                follow_redirects=False, trust_env=False)
-                if name == "transfer_chunks" and "chunks" in arguments:
-                    return await self._binary_push(name, arguments)
-                if name == "transfer_chunks":
-                    return await self._binary_pull(arguments)
-            except AdapterError as exc:
-                if exc.code in ("connection_failed", "protocol_error", "malformed_response"):
-                    self._binary_ok = False
-                    # fall through to the MCP JSON path below
-                else:
-                    raise
-            except Exception as exc:
-                raise _classify(exc, name) from None
+        # PC026 binary/session implementation is pending. Never probe a write
+        # then replay its unknown result through JSON.
         try:
             await self._ensure()
         except AdapterError:
@@ -360,7 +343,10 @@ class _DirectChunkChannel:
         if not Draft202012Validator(SCHEMAS[name]["outputSchema"]).is_valid(envelope):
             raise AdapterError("malformed_response")
         if result.get("content"):
-            raise AdapterError("malformed_response")
+            content = result["content"]
+            if (len(content) != 1 or content[0].get("type") != "text" or
+                    json.loads(content[0]["text"], object_pairs_hook=_json_pairs) != envelope):
+                raise AdapterError("malformed_response")
         return _guest_result(envelope)
 
 
@@ -394,7 +380,10 @@ class TransportAdapter:
             attempted = True
             try:
                 return await self._direct.call(name, arguments)
-            except AdapterError:
+            except AdapterError as exc:
+                if name not in READ_ONLY and exc.code != "batch_not_allowed":
+                    exc.may_have_committed = True
+                    exc.retryable = False
                 raise
             except Exception as exc:
                 raise _classify(exc, name) from None
@@ -427,14 +416,10 @@ class TransportAdapter:
             raise
         except Exception as exc:
             error = _classify(exc, name)
-            if attempted and name not in READ_ONLY:
+            if attempted and name not in READ_ONLY and error.code != "batch_not_allowed":
                 error.may_have_committed = True
-                # A chunk is idempotent on this protocol: re-sending a pull
-                # chunk is a pure read, and a push chunk for an already
-                # acknowledged offset is verified against the stored bytes and
-                # answered as a replay, so transient transport failures may be
-                # retried safely instead of failing the whole transfer.
-                error.retryable = name in ("transfer_chunk", "transfer_chunks")
+                # Unknown writes require coordinator proof reconciliation.
+                error.retryable = False
             raise error from None
 
     async def call(self, operation: str, arguments: dict) -> dict:
@@ -443,11 +428,10 @@ class TransportAdapter:
         validator = Draft202012Validator(SCHEMAS[operation]["inputSchema"])
         errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
         if errors:
-            first = errors[0]
-            raise AdapterError("invalid_arguments:" + first.message[:120])
+            raise AdapterError("invalid_arguments")
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
-        attempts = 3 if operation in READ_ONLY or operation in ("transfer_chunk", "transfer_chunks") else 1
+        attempts = 3 if operation in READ_ONLY else 1
         for i in range(attempts):
             try:
                 result = await self._invoke(operation, arguments)
@@ -458,11 +442,9 @@ class TransportAdapter:
                     if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
                         self.raw_chunk_bytes = min(1 << 20, limit)
                     batch = result.get("max_batch_chunks")
-                    # Chunk traffic rides the direct Streamable HTTP channel,
-                    # whose plain-httpx SSE reader has shown no size limit; the
-                    # coordinator still degrades to single chunks on failure.
-                    # Keep each encoded batch response inside a ~50 MiB budget.
-                    if isinstance(batch, int) and 1 <= batch <= 64:
+                    # This is only a grant-based development bound. T013 still
+                    # has to enforce the complete serialized HTTP body budget.
+                    if type(batch) is int and 1 <= batch <= 64:
                         response_budget = 100 * 1024 * 1024
                         encoded_chunk = 4 * (self.raw_chunk_bytes + 2) // 3
                         self.batch_chunks = max(1, min(batch, response_budget // encoded_chunk))
@@ -493,7 +475,7 @@ class TransportAdapter:
             raise _classify(exc, "transfer_capabilities") from None
         found = {tool.name: tool for tool in listed.tools}
         if any(name not in found for name in NAMES):
-            raise AdapterError("tools_missing")
+            raise AdapterError("incompatible_server")
         for name in NAMES:
             tool = found[name]
             if tool.input_schema != SCHEMAS[name]["inputSchema"] or tool.output_schema != SCHEMAS[name]["outputSchema"]:
@@ -553,8 +535,7 @@ class WindowsAdapter(TransportAdapter):
         validator = Draft202012Validator(SCHEMAS[operation]["inputSchema"])
         errors = sorted(validator.iter_errors(arguments), key=lambda e: list(e.path))
         if errors:
-            first = errors[0]
-            raise AdapterError("invalid_arguments:" + first.message[:120])
+            raise AdapterError("invalid_arguments")
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
         raw = json.dumps({"operation": operation, "arguments": arguments}, ensure_ascii=False,
@@ -697,10 +678,8 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
                     else:
                         adapter = TransportAdapter(session, channel, endpoint.url, deadline_monotonic,
                                                    request_timeout_seconds, instances)
-                        if endpoint.token is not None:
-                            adapter._direct = _DirectChunkChannel(
-                                endpoint.url, {"Authorization": "Bearer " + endpoint.token.read()},
-                                deadline_monotonic, request_timeout_seconds)
+                        # Use the official SDK JSON session until T013 provides
+                        # a negotiated binary channel bound to that session.
                         opened = True
                         yield adapter
                     body_completed = True

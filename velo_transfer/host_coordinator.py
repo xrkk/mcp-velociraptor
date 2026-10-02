@@ -15,7 +15,8 @@ import re
 import time
 from pathlib import Path, PureWindowsPath
 
-from .adapters import AdapterError, select_adapter
+from .adapters import AdapterError, select_adapter, SCHEMAS
+from jsonschema import Draft202012Validator
 from .connection import load_connection_profile
 from .errors import TransferContentError as Error
 from .host_content import HostContent, _package_identity
@@ -26,7 +27,7 @@ from .host_publication import HostPublication
 from .manifest import canonical_json, digest_json, file_identity
 from .protocol import (GuestTerminal, PROTOCOL_VERSION, receipt_digest,
                        source_validation_receipt, validate_binding,
-                       validate_prepare, validate_publication)
+                       validate_prepare, validate_publication, validate_prefix_verification)
 from .request import HostRequest, make_guest_request
 from .result import result_summary, validate_result
 
@@ -202,12 +203,14 @@ class TransferCoordinator:
                     raise
             else:
                 resumable = status["local_phase"] in ("DEST_RECEIVING", "DEST_RECEIVED", "SOURCE_PREPARING")
-                recoverable_errors = (None, "worker_failed", "worker_activation_unknown",
+                recoverable_errors = (None, "worker_failed", "worker_result_unknown", "worker_activation_unknown",
                                       "worker_activation_failed", "worker_activation_timeout")
                 if status.get("error") and (not resumable or status["error"] not in recoverable_errors):
                     raise Error(status["error"])
                 if not resumable:
                     return status
+                if self.request.document["direction"] == "push":
+                    return await self._reverify_push(status)
                 worker = status.get("worker")
                 if worker is not None and worker.get("stopped") is not True:
                     return status
@@ -227,6 +230,70 @@ class TransferCoordinator:
             # The cap guards against runaway retries within one recovery, not
             # against the task's whole history; a successful begin re-arms it.
             self._save(begin_attempts=0)
+        return status
+
+    async def _reverify_push(self, status):
+        """Exactly one fixed-request begin after observation; no mutation replay."""
+        # A stopped worker with no committed proof is precisely the case that
+        # needs a new bounded verification. Wait for an active owner first,
+        # without treating its old failure as a completed verification.
+        while status.get("worker") and status["worker"].get("stopped") is not True:
+            await self._pause()
+            status = await self._status()
+        if status.get("error") not in (None, "worker_failed", "worker_result_unknown",
+                "worker_activation_unknown", "worker_activation_failed", "worker_activation_timeout"):
+            raise Error("chunk_outcome_unresolved")
+        previous = status.get("worker")
+        old_nonces = {previous.get("nonce") if isinstance(previous, dict) else None}
+        prior_proof = status.get("prefix_verification")
+        if isinstance(prior_proof, dict):
+            old_nonces.add(prior_proof.get("worker_nonce"))
+        try:
+            response = await self._call("transfer_begin", {"request": self._data()["guest_request"]})
+            status = self._ingest(response)
+        except AdapterError as exc:
+            if not exc.may_have_committed:
+                raise
+            status = await self._status()
+        try:
+            status = await self._ready(status)
+        except Error:
+            raise Error("chunk_outcome_unresolved") from None
+        proof, worker = status.get("prefix_verification"), status.get("worker")
+        if (not isinstance(proof, dict) or not isinstance(worker, dict) or
+                worker.get("stopped") is not True or worker.get("nonce") in old_nonces or
+                worker.get("job") != "verify_partial" or status.get("error") is not None):
+            raise Error("chunk_outcome_unresolved")
+        try:
+            validate_prefix_verification(proof, digest=self._identity_args()["request_digest"],
+                offset=status["verified_offset"], worker=worker)
+        except Error:
+            raise Error("chunk_outcome_unresolved") from None
+        data = self._data()
+        # Durable host intent contains the actual count/hash of all acknowledged
+        # and uncertain sent chunks. It independently pins every allowed prefix.
+        records = list(data.get("push_ledger", []))
+        pending = data.get("pending_chunk")
+        if pending and pending.get("records"):
+            records.extend(pending["records"])
+        offset = 0
+        raw_ledger = bytearray()
+        accepted = []
+        matched = proof["verified_offset"] == 0 and proof["chunk_count"] == 0 and proof["ledger_sha256"] == hashlib.sha256(b"").hexdigest()
+        for record in records:
+            if record["offset"] != offset:
+                raise Error("chunk_outcome_unresolved")
+            offset += record["count"]
+            raw_ledger.extend(canonical_json(record) + b"\n")
+            accepted.append(record)
+            if (offset == proof["verified_offset"] and len(accepted) == proof["chunk_count"] and
+                    hashlib.sha256(raw_ledger).hexdigest() == proof["ledger_sha256"]):
+                matched = True
+                break
+        if not matched:
+            raise Error("chunk_outcome_unresolved")
+        self._save(push_ledger=accepted if proof["verified_offset"] else [],
+                   push_offset=proof["verified_offset"], pending_chunk=None)
         return status
 
     async def _ready(self, status):
@@ -297,6 +364,9 @@ class TransferCoordinator:
                 status = await self._status()
 
     def _accept_finish(self, response, args):
+        if not Draft202012Validator(SCHEMAS["transfer_finish"]["outputSchema"]).is_valid({
+                "schema": "velo.transfer.mcp.response.v1", "status": "success", "result": response}):
+            raise Error("guest_operation_conflict")
         data = self._data()
         action = args["action"]
         inputs = {k: v for k, v in args.items() if k not in ("transfer_id", "request_digest", "action")}
@@ -393,34 +463,35 @@ class TransferCoordinator:
                                       "data_base64": base64.b64encode(raw).decode("ascii"),
                                       "chunk_sha256": hashlib.sha256(raw).hexdigest()})
                         batch_end += count
-                    self._save(pending_chunk={"offset": offset, "count": items[0]["count"],
-                                              "sha256": items[0]["chunk_sha256"], "batch": len(items)})
+                    records = []
+                    cursor = offset
+                    for item in items:
+                        records.append({"offset": cursor, "count": item["count"], "sha256": item["chunk_sha256"]})
+                        cursor += item["count"]
+                    self._save(pending_chunk={"offset": offset, "records": records})
                     try:
                         response = await self._call("transfer_chunks",
                                                     {**self._identity_args(), "offset": offset,
                                                      "chunks": items})
                         advanced = response.get("verified_offset")
                     except AdapterError as exc:
-                        if exc.code in ("protocol_error", "transport_timeout", "outcome_unknown",
-                                        "connection_failed"):
-                            # Large batched responses hit the client transport
-                            # intermittently; degrade to single chunks instead of
-                            # failing the transfer. Chunks are idempotent replays.
-                            # Drop the loop-local batch as well, or this branch
-                            # would keep retrying the same failing batch forever.
+                        if exc.code == "batch_not_allowed" and not exc.may_have_committed:
                             self.adapter.batch_chunks = 1
                             batch = 1
+                            self._save(pending_chunk=None)
                             continue
                         if not exc.may_have_committed:
                             raise
-                        reconciled = await self._status()
+                        reconciled = await self._reverify_push(await self._status())
                         advanced = reconciled["verified_offset"]
-                        if advanced == offset:
-                            raise Error("chunk_outcome_unresolved")
-                    if type(advanced) is not int or not offset < advanced <= batch_end:
+                        offset = advanced
+                        continue
+                    if (type(advanced) is not int or advanced != batch_end or
+                            response.get("accepted") != len(items)):
                         raise Error("guest_offset_conflict")
                     offset = advanced
-                    self._save(push_offset=offset, pending_chunk=None)
+                    self._save(push_offset=offset, pending_chunk=None,
+                               push_ledger=self._data().get("push_ledger", []) + records)
                     continue
                 count = min(maximum, package["size"] - offset)
                 raw = os.pread(fd, count, offset)
@@ -429,23 +500,24 @@ class TransferCoordinator:
                 args = {**self._identity_args(), "offset": offset, "count": count,
                         "data_base64": base64.b64encode(raw).decode("ascii"),
                         "chunk_sha256": hashlib.sha256(raw).hexdigest()}
-                self._save(pending_chunk={"offset": offset, "count": count, "sha256": args["chunk_sha256"]})
+                record = {"offset": offset, "count": count, "sha256": args["chunk_sha256"]}
+                self._save(pending_chunk={"offset": offset, "records": [record]})
                 try:
                     response = await self._call("transfer_chunk", args)
                     advanced = response.get("verified_offset")
                 except AdapterError as exc:
                     if not exc.may_have_committed:
                         raise
-                    reconciled = await self._status()
-                    advanced = reconciled["verified_offset"]
-                    if advanced == offset:
-                        # A confirmed non-advance remains recoverable; next run
-                        # uses the same bytes. Do not spin on uncertain writes.
-                        raise Error("chunk_outcome_unresolved")
+                    reconciled = await self._reverify_push(await self._status())
+                    offset = reconciled["verified_offset"]
+                    continue
                 if type(advanced) is not int or advanced != offset + count:
                     raise Error("guest_offset_conflict")
                 offset = advanced
-                self._save(push_offset=offset, pending_chunk=None)
+                self._save(push_offset=offset, pending_chunk=None,
+                           push_ledger=self._data().get("push_ledger", []) + [record])
+            # Even a complete byte count is not fresh full-prefix evidence.
+            await self._reverify_push(await self._status())
         finally:
             os.close(fd)
 

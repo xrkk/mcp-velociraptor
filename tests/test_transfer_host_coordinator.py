@@ -55,6 +55,8 @@ class LocalPeer:
         self.offset = 0
         self.worker = None
         self.proof = None
+        self.prefix_proof = None
+        self.chunk_records = []
         self.aborted = False
         self.on_finish = None
         self.on_status = None
@@ -87,7 +89,8 @@ class LocalPeer:
                 "cleanup": {"temporary_files_removed": True, "workers_stopped": True}
                            if terminal and terminal.local_phase.endswith("RELEASED") else None,
                 "destination_verification": copy.deepcopy(self.proof),
-                "error": None, "worker": copy.deepcopy(self.worker)}
+                "error": None, "worker": copy.deepcopy(self.worker),
+                "prefix_verification": copy.deepcopy(self.prefix_proof)}
         if self.on_status is not None:
             return self.on_status(response)
         return response
@@ -103,6 +106,7 @@ class LocalPeer:
         self.trace.append((operation, copy.deepcopy(arguments)))
         self._fault(key, "before")
         if operation == "transfer_begin":
+            resume = self.request is not None
             self.request = copy.deepcopy(arguments["request"])
             self.package = self.request.get("package", self.package)
             self.binding = {"protocol_version": "velo.transfer.v1",
@@ -114,6 +118,15 @@ class LocalPeer:
                 "manifest_sha256": self.package["manifest_sha256"]}
             if self.direction == "pull":
                 self.terminal = GuestTerminal(self.binding, self.request["expected_destination"])
+            if resume and self.direction == "push":
+                nonce = 'verify-' + str(self.counts[key])
+                self.worker = {'transfer_id':self.request['transfer_id'],'job':'verify_partial',
+                    'nonce':nonce,'pid':123,'birth':'fixture-birth','deadline_monotonic':999999999.,'stopped':True}
+                ledger = b''.join(json.dumps(r, sort_keys=True, separators=(',', ':')).encode() + b'\n' for r in self.chunk_records)
+                self.prefix_proof = {'schema':'velo.transfer.prefix-verification.v1',
+                    'request_digest':self.request['request_digest'],'worker_nonce':nonce,
+                    'verified_offset':self.offset,'chunk_count':len(self.chunk_records),
+                    'ledger_sha256':hashlib.sha256(ledger).hexdigest(),'completed':True}
             response = self.status()
         elif operation == "transfer_status":
             if self.request is None:
@@ -124,6 +137,8 @@ class LocalPeer:
             assert arguments["offset"] == self.offset
             assert arguments["count"] == len(raw)
             assert hashlib.sha256(raw).hexdigest() == arguments["chunk_sha256"]
+            self.prefix_proof = None
+            self.chunk_records.append({'offset':self.offset,'count':len(raw),'sha256':hashlib.sha256(raw).hexdigest()})
             self.received.extend(raw)
             self.offset += len(raw)
             if self.offset == self.package["size"]:
@@ -157,6 +172,8 @@ class LocalPeer:
                 assert pos == self.offset
                 assert item["count"] == len(raw)
                 assert hashlib.sha256(raw).hexdigest() == item["chunk_sha256"]
+                self.prefix_proof = None
+                self.chunk_records.append({'offset':self.offset,'count':len(raw),'sha256':hashlib.sha256(raw).hexdigest()})
                 self.received.extend(raw)
                 self.offset += len(raw)
                 pos += len(raw)
@@ -164,7 +181,7 @@ class LocalPeer:
                 assert hashlib.sha256(self.received).hexdigest() == self.package["sha256"]
                 self.terminal = GuestTerminal(self.binding, self.request["expected_destination"])
             response = {"schema": "velo.transfer.guest.response.v1",
-                        "verified_offset": self.offset, "replayed": False}
+                        "verified_offset": self.offset, "accepted":len(arguments["chunks"])}
         elif operation == "transfer_finish":
             inputs = {k: v for k, v in arguments.items()
                       if k not in ("transfer_id", "request_digest", "action")}
@@ -193,7 +210,9 @@ class LocalPeer:
                             "manifest_sha256": self.binding["manifest_sha256"],
                             "release_worker_nonce": "fixture-nonce", "verification_phase": "post_cleanup"}
             response = {"schema": "velo.transfer.guest.response.v1",
-                        "action": action, "operation": copy.deepcopy(self.terminal.operations[action])}
+                        "action": action, "operation": copy.deepcopy(self.terminal.operations[action]),
+                        "state_scope":"guest_source" if self.direction=="pull" else "guest_destination",
+                        "local_phase":self.terminal.local_phase}
             if self.on_finish is not None:
                 self.on_finish(action)
         elif operation == "transfer_abort":
@@ -332,12 +351,87 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["outcome"], "complete")
         names = [name for name, _ in self.peer.trace]
         self.assertEqual(names[:2], ["transfer_begin", "transfer_status"])
-        self.assertEqual(names.count("transfer_begin"), 1)
+        self.assertEqual(names.count("transfer_begin"), 2)  # final full-prefix verification
         begin = self.peer.trace[0][1]["request"]
         status = self.peer.trace[1][1]
         self.assertEqual(status, {"transfer_id": begin["transfer_id"],
                                   "request_digest": begin["request_digest"]})
         self.assertEqual(self.journal_data()["begin_attempts"], 1)
+
+    async def test_pc026_unknown_batch_and_begin_lost_reply_never_duplicate_ranges(self):
+        self.setup_request()
+        self.peer.batch_chunks = 4
+        self.peer.fail("transfer_chunks", when="after")
+        self.peer.fail("transfer_begin", nth=2, when="after")
+        summary = await self.run_transfer()
+        self.assertEqual(summary["outcome"], "complete")
+        writes = [(name,args) for name,args in self.peer.trace if name in ("transfer_chunk","transfer_chunks")]
+        offsets = [args["offset"] for _,args in writes]
+        self.assertEqual(len(offsets), len(set(offsets)))
+        names = [name for name,_ in self.peer.trace]
+        first = names.index("transfer_chunks")
+        self.assertEqual(names[first+1:first+3], ["transfer_status","transfer_begin"])
+        self.assertTrue(all(name == "transfer_chunks" for name,_ in writes))
+
+    async def test_pc026_wrong_ledger_proof_blocks_next_writer(self):
+        self.setup_request()
+        self.peer.fail("transfer_chunk", when="after")
+        def damage(response):
+            if response.get("prefix_verification"):
+                response["prefix_verification"]["ledger_sha256"] = "f"*64
+            return response
+        self.peer.on_status = damage
+        summary = await self.run_transfer()
+        self.assertEqual(self.result(summary)["warnings"], ["chunk_outcome_unresolved"])
+        self.assertEqual(sum(op == "transfer_chunk" for op,_ in self.peer.trace), 1)
+
+    async def test_pc026_dead_worker_without_proof_gets_new_bounded_verification(self):
+        self.setup_request()
+        self.peer.fail("transfer_chunk", when="after")
+        def old_failure(response):
+            if self.peer.offset and self.peer.prefix_proof is None:
+                response["error"] = "worker_result_unknown"
+            return response
+        self.peer.on_status = old_failure
+        summary = await self.run_transfer()
+        self.assertEqual(summary["outcome"], "complete")
+        chunks = [args for op,args in self.peer.trace if op == "transfer_chunk"]
+        self.assertEqual(len({item["offset"] for item in chunks}), len(chunks))
+        self.assertTrue(self.peer.prefix_proof["completed"])
+
+    async def test_pc026_old_nonce_lost_begin_cannot_self_certify(self):
+        self.setup_request()
+        self.peer.fail("transfer_chunk", when="after")
+        self.peer.fail("transfer_begin", nth=2, when="before")
+        # A lost begin before any new worker does not provide a new proof.
+        summary = await self.run_transfer()
+        self.assertEqual(self.result(summary)["warnings"], ["chunk_outcome_unresolved"])
+        self.assertEqual(sum(op == "transfer_chunk" for op,_ in self.peer.trace), 1)
+        self.assertEqual(sum(op == "transfer_begin" for op,_ in self.peer.trace), 2)
+
+    async def test_pc026_finish_scope_done_error_and_in_progress_result_rejected(self):
+        for variant in ('wrong_scope', 'done_error', 'in_progress_result'):
+            with self.subTest(variant=variant):
+                self.document['transfer_id'] = 'invalid-finish-' + variant
+                self.peer = None
+                self.setup_request()
+                original = self.peer.call
+                async def damaged(op, args):
+                    response = await original(op, args)
+                    if op == 'transfer_finish' and args['action'] == 'prepare':
+                        if variant == 'wrong_scope':
+                            response['state_scope'] = 'guest_source'
+                        elif variant == 'done_error':
+                            response['operation']['result']['error'] = 'worker_failed'
+                        else:
+                            response['operation']['status'] = 'IN_PROGRESS'
+                    return response
+                self.peer.call = damaged
+                summary = await self.run_transfer()
+                self.assertEqual(self.result(summary)['warnings'], ['guest_operation_conflict'])
+                self.assertFalse(any(op == 'transfer_finish' and args['action'] == 'commit'
+                                     for op,args in self.peer.trace))
+                self.assertIsNone(self.journal_data().get('prepare_receipt'))
 
     async def test_c2_unknown_push_chunk_queries_offset_without_duplicate(self):
         self.setup_request()

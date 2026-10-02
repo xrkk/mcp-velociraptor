@@ -70,6 +70,11 @@ def invoke(request_file: str, service: GuestTransferService):
     if name == "transfer_chunk":
         if set(args) not in (required, required - {"data_base64", "chunk_sha256"}):
             raise Error("invalid_request")
+    elif name == "transfer_chunks":
+        from .adapters import SCHEMAS
+        from jsonschema import Draft202012Validator
+        if not Draft202012Validator(SCHEMAS[name]["inputSchema"]).is_valid(args):
+            raise Error("invalid_arguments")
     elif name == "transfer_finish":
         if not {"transfer_id", "request_digest", "action"}.issubset(args) or not set(args).issubset(required):
             raise Error("invalid_request")

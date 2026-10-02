@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
+from importlib.resources import files
 import os
 import re
 import threading
@@ -25,6 +28,8 @@ TRANSFER_TOOL_NAMES = (
     "transfer_chunk", "transfer_chunks", "transfer_finish", "transfer_abort",
 )
 _SCHEMA = "velo.transfer.mcp.response.v1"
+_CONTRACT = json.loads(files("velo_transfer").joinpath("transfer_tools_schema.json").read_text())
+_CODES = frozenset(_CONTRACT["transfer_status"]["outputSchema"]["oneOf"][1]["properties"]["error"]["properties"]["code"]["enum"])
 HexDigest = Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
@@ -218,7 +223,7 @@ class TransferToolService:
 
     @staticmethod
     def _failure(code):
-        if not isinstance(code, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,79}", code) is None:
+        if not isinstance(code, str) or code not in _CODES:
             code = "internal_error"
         return TransferEnvelope(schema=_SCHEMA, status="error", error={"code": code})
 
@@ -343,21 +348,7 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
                  "then": {"required": ["prepare_receipt", "publication_receipt"],
                           "not": {"required": ["source_validation_receipt"]}}},
             ]
-        tool.fn_metadata.output_schema = {
-            "type": "object",
-            "oneOf": [
-                {"type": "object", "additionalProperties": False,
-                 "properties": {"schema": {"const": _SCHEMA}, "status": {"const": "success"},
-                                "result": {"type": "object"}},
-                 "required": ["schema", "status", "result"]},
-                {"type": "object", "additionalProperties": False,
-                 "properties": {"schema": {"const": _SCHEMA}, "status": {"const": "error"},
-                                "error": {"type": "object", "additionalProperties": False,
-                                          "properties": {"code": {"type": "string",
-                                                                  "pattern": "^[a-z][a-z0-9_]{0,79}$"}},
-                                          "required": ["code"]}},
-                 "required": ["schema", "status", "error"]},
-            ]}
+        tool.fn_metadata.output_schema = copy.deepcopy(_CONTRACT[name]["outputSchema"])
         Draft202012Validator.check_schema(parameters)
         Draft202012Validator.check_schema(tool.fn_metadata.output_schema)
         previous = tool.fn_metadata

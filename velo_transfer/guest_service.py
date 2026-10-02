@@ -155,7 +155,7 @@ class GuestTransferService:
                 "read_root_ids": [digest_json(str(p)) for p in self.policy.read_roots],
                 "write_root_ids": [digest_json(str(p)) for p in self.policy.write_roots],
                 "default_chunk_bytes": min(1 << 20, limits["max_chunk_bytes"]),
-                "limits": limits,
+                "limits": limits, "binary_wire": None,
                 **({"max_batch_chunks": limits["max_batch_chunks"]}
                    if "max_batch_chunks" in limits else {})}
 
@@ -937,6 +937,8 @@ class GuestTransferService:
         with store.writer():
             fresh = self._load(transfer_id, request_digest, store)
             state = fresh["state"]
+            if state["cancelled"]:
+                raise Error("transfer_cancelled")
             self._check_idle(store)
             if state["phase"] not in ("DEST_RECEIVING", "DEST_RECEIVED"):
                 raise Error("chunk_precondition_failed")

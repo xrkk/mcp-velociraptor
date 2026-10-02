@@ -17,7 +17,11 @@ from velo_transfer.windows_platform import observe_windows
 
 
 class PrefixTests(unittest.TestCase):
-    request = fixture.GuestTests.request
+    def request(self, *args, **kwargs):
+        req = fixture.GuestTests.request(self, *args, **kwargs)
+        req['expected_vm_identity']['boot_identity'] = self.observation.boot_identity
+        req['request_digest'] = request_digest(req)
+        return req
     wait_phase = fixture.GuestTests.wait_phase
     budget = fixture.GuestTests.budget
 
@@ -199,6 +203,79 @@ class PrefixTests(unittest.TestCase):
                 state['prefix_verification'].update(change)
                 with self.assertRaises(Error):
                     store.save('trial', env['binding'], env['revision'], state)
+
+    def test_f01_real_push_receipts_re_read_after_release_without_writes(self, _later_failure=False):
+        from velo_transfer import capture_sources, create_bundle
+        from velo_transfer.protocol import source_validation_receipt
+        source = self.host / 'benign.txt'
+        source.write_bytes(b'pc026-benign')
+        specs = [{'absolute_path':str(source),'relative_path':'benign.txt'}]
+        manifest = capture_sources(self.host, specs, self.budget())
+        bundle = self.host / 'package.zip'
+        package = create_bundle(self.host, specs, manifest, bundle, self.host, self.budget())
+        req = self.request('push', specs, self.write / 'final',
+            {k:package[k] for k in ('size','sha256','manifest_sha256')})
+        self.service.transfer_begin(req)
+        self.send_chunk(req, raw=bundle.read_bytes())
+        self.service.transfer_finish('trial',req['request_digest'],'prepare')
+        receipt = self.wait_phase(req,'DEST_PREPARED')['terminal']['prepare_receipt']
+        source_receipt = source_validation_receipt(receipt['binding'],receipt,hashlib.sha256(b'source').hexdigest())
+        inputs = {'prepare_receipt':receipt,'source_validation_receipt':source_receipt}
+        self.service.transfer_finish('trial',req['request_digest'],'commit',**inputs)
+        publication = self.wait_phase(req,'DEST_PUBLISHED')['terminal']['publication_receipt']
+        if _later_failure:
+            (self.write / 'final' / 'benign.txt').write_bytes(b'changed after publication')
+        self.service.transfer_finish('trial',req['request_digest'],'release',
+            prepare_receipt=receipt,publication_receipt=publication)
+        if _later_failure:
+            until = time.monotonic() + 60
+            while time.monotonic() < until:
+                status = self.service.transfer_status('trial', req['request_digest'])
+                if status['worker']['stopped']:
+                    break
+                time.sleep(.02)
+            self.assertTrue(status['worker']['stopped'])
+            self.assertIsNotNone(status['error'])
+            self.assertEqual(status['terminal']['operations']['release']['status'], 'FAILED')
+        else:
+            status = self.wait_phase(req,'DEST_RELEASED')
+        def snapshot():
+            return {str(p): (p.read_bytes(),p.stat().st_ino,p.stat().st_mtime_ns)
+                    for p in self.root.rglob('*') if p.is_file()}
+        before = snapshot()
+        with mock.patch.object(self.service,'_launch',side_effect=AssertionError('new worker forbidden')):
+            for action,args in [('prepare',{}),('commit',inputs)]:
+                response = self.service.transfer_finish('trial',req['request_digest'],action,**args)
+                self.assertEqual(response['local_phase'],status['local_phase'])
+                self.assertEqual(response['operation'],status['terminal']['operations'][action])
+            changed = copy.deepcopy(inputs)
+            changed['source_validation_receipt']['identity_digest'] = 'f'*64
+            with self.assertRaises(Error):
+                self.service.transfer_finish('trial',req['request_digest'],'commit',**changed)
+        self.assertEqual(snapshot(), before)
+
+    def test_f01_real_prepare_commit_history_survives_later_release_failure(self):
+        self.test_f01_real_push_receipts_re_read_after_release_without_writes(_later_failure=True)
+
+    def test_f01_real_pull_prepare_re_read_after_release_without_writes(self):
+        from velo_transfer.protocol import publication_receipt
+        source = self.read / 'benign.txt'
+        source.write_bytes(b'pull-benign')
+        req = self.request('pull',[{'absolute_path':str(source),'relative_path':'file'}],self.host/'out')
+        self.service.transfer_begin(req)
+        self.wait_phase(req,'SOURCE_READY')
+        self.service.transfer_finish('trial',req['request_digest'],'prepare')
+        receipt = self.wait_phase(req,'SOURCE_PREPARED')['terminal']['prepare_receipt']
+        publication = publication_receipt(receipt['binding'],receipt,req['expected_destination'],{'device':1,'inode':2})
+        self.service.transfer_finish('trial',req['request_digest'],'release',prepare_receipt=receipt,publication_receipt=publication)
+        state = self.wait_phase(req,'SOURCE_RELEASED')
+        path = self.work/'tasks/trial/state.json'
+        before = (path.read_bytes(),path.stat().st_mtime_ns)
+        with mock.patch.object(self.service,'_launch',side_effect=AssertionError('new worker forbidden')):
+            response = self.service.transfer_finish('trial',req['request_digest'],'prepare')
+        self.assertEqual(response['operation'],state['terminal']['operations']['prepare'])
+        self.assertEqual(response['local_phase'],'SOURCE_RELEASED')
+        self.assertEqual((path.read_bytes(),path.stat().st_mtime_ns), before)
 
 
 if __name__ == '__main__':

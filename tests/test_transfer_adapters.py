@@ -493,27 +493,38 @@ class _FixtureService:
     def transfer_capabilities(self):
         if not self.enabled:
             return {"schema": "velo.transfer.guest.response.v1", "enabled": False,
-                    "reason": "fixture_disabled"}
+                    "reason": "not_configured"}
         return {"schema": "velo.transfer.guest.response.v1", "enabled": True,
                 "protocol_version": "velo.transfer.v1", "vm_uuid": "fixture-vm", "boot_identity": "fixture-boot",
                 "build": "fixture", "policy_id": "fixture-policy", "default_chunk_bytes": 1048576,
-                "limits": {"max_chunk_bytes": 1048576}}
+                "limits": {"max_chunk_bytes": 1048576,"max_files":100,"max_metadata_bytes":100000,
+                           "max_logical_bytes":100000,"max_package_bytes":100000,
+                           "min_free_bytes":0,"max_state_bytes":65536,"max_duration_seconds":60},
+                "binary_wire":None,"can_read":True,"can_write":True,"read_root_ids":[],"write_root_ids":[]}
 
     def transfer_status(self, **kwargs):
-        return {"schema": "velo.transfer.guest.response.v1", "transfer_id": kwargs["transfer_id"],
-                "offset": 1 << 33}
+        return {"schema":"velo.transfer.guest.response.v1","state_scope":"guest_source",
+                "local_phase":"SOURCE_PREPARING","transfer_id":kwargs["transfer_id"],
+                "request_digest":kwargs.get("request_digest","0"*64),"package":None,
+                "verified_offset":0,"terminal":None,"cleanup":None,
+                "destination_verification":None,"error":None,"worker":None,"prefix_verification":None}
 
     def transfer_begin(self, **kwargs):
-        return {"schema": "velo.transfer.guest.response.v1", "transfer_id": kwargs["request"]["transfer_id"]}
+        return self.transfer_status(**{k:kwargs["request"][k] for k in ("transfer_id","request_digest")})
 
     def transfer_chunk(self, **kwargs):
-        return {"schema": "velo.transfer.guest.response.v1", "offset": kwargs["offset"]}
+        return {"schema":"velo.transfer.guest.response.v1","offset":kwargs["offset"],
+                "count":kwargs["count"],"data_base64":base64.b64encode(b"x"*kwargs["count"]).decode(),
+                "chunk_sha256":hashlib.sha256(b"x"*kwargs["count"]).hexdigest()}
 
     def transfer_finish(self, **kwargs):
-        return {"schema": "velo.transfer.guest.response.v1", "action": kwargs["action"]}
+        return {"schema":"velo.transfer.guest.response.v1","state_scope":"guest_source",
+                "local_phase":"SOURCE_READY","action":kwargs["action"],"operation":{
+                    "operation_id":"fixture","input_digest":"0"*64,"status":"IN_PROGRESS",
+                    "inputs":{},"result":None}}
 
     def transfer_abort(self, **kwargs):
-        return {"schema": "velo.transfer.guest.response.v1", "transfer_id": kwargs["transfer_id"]}
+        return self.transfer_status(**kwargs)
 
     def shutdown(self):
         pass
@@ -609,7 +620,7 @@ class SdkLoopback(PrivateProfile):
                 self.assertEqual(adapter.channel, "velo")
                 self.assertIsNone(adapter.fallback_reason)
                 status = await adapter.call("transfer_status", {"transfer_id": "x", "request_digest": "0" * 64})
-                self.assertEqual(status["offset"], 1 << 33)
+                self.assertEqual(status["verified_offset"], 0)
                 self.assertEqual(adapter.observations["vm_uuid"], "fixture-vm")
                 self.assertIn("instance", adapter.observations)
                 self.assertEqual(adapter.observations["instance"], "fixture-instance")
@@ -679,9 +690,19 @@ class SdkLoopback(PrivateProfile):
                 self.assertEqual(adapter.channel, "windows")
                 self.assertEqual(adapter.fallback_reason, reason)
                 self.assertEqual((await adapter.call("transfer_status", {"transfer_id": "x",
-                    "request_digest": "0" * 64}))["offset"], 1 << 33)
+                    "request_digest": "0" * 64}))["verified_offset"], 0)
 
-        for port, reason in ((self.missing_port, "tools_missing"), (refused, "connection_unavailable")):
+        self.payload["velo"]["endpoint"] = f"http://127.0.0.1:{self.missing_port}/mcp"
+        self.save()
+        async def missing_rejected():
+            with self.assertRaises(AdapterError) as caught:
+                async with select_adapter(load_connection_profile(self.path),
+                    expected_vm_identity={"vm_uuid":"fixture-vm","boot_identity":"fixture-boot"},
+                    deadline_monotonic=time.monotonic()+10, request_timeout_seconds=3):
+                    pass
+            self.assertEqual(caught.exception.code, "incompatible_server")
+        asyncio.run(missing_rejected())
+        for port, reason in ((refused, "connection_unavailable"),):
             self.payload["velo"]["endpoint"] = f"http://127.0.0.1:{port}/mcp"
             self.save()
             asyncio.run(run(reason))
@@ -867,6 +888,45 @@ class SelectionRules(unittest.TestCase):
             self.assertEqual(err.exception.code, "outcome_unknown")
         asyncio.run(run())
         self.assertEqual(session.calls, 1)
+
+    def test_pc026_unknown_single_or_batch_write_is_sent_once(self):
+        class Session:
+            calls = 0
+            async def call_tool(self, *args, **kwargs):
+                self.calls += 1
+                raise asyncio.TimeoutError()
+        async def run():
+            for op,args in [("transfer_chunk",{"count":1,"data_base64":"eA==","chunk_sha256":hashlib.sha256(b"x").hexdigest()}),
+                            ("transfer_chunks",{"chunks":[{"count":1,"data_base64":"eA==","chunk_sha256":hashlib.sha256(b"x").hexdigest()}]})]:
+                session = Session()
+                adapter = TransportAdapter(session,"velo","http://127.0.0.1:9/mcp",time.monotonic()+10,1,[])
+                with self.assertRaises(AdapterError) as caught:
+                    await adapter.call(op,{"transfer_id":"x","request_digest":"0"*64,"offset":0,**args})
+                self.assertTrue(caught.exception.may_have_committed)
+                self.assertFalse(caught.exception.retryable)
+                self.assertEqual(session.calls,1)
+        asyncio.run(run())
+
+    def test_pc026_explicit_batch_rejection_is_before_action(self):
+        from mcp.types import CallToolResult
+        class Session:
+            calls = 0
+            async def call_tool(self, *args, **kwargs):
+                self.calls += 1
+                return CallToolResult(content=[], structuredContent={
+                    "schema":"velo.transfer.mcp.response.v1", "status":"error",
+                    "error":{"code":"batch_not_allowed"}})
+        session = Session()
+        adapter = TransportAdapter(session,"velo","http://127.0.0.1:9/mcp",time.monotonic()+10,1,[])
+        async def run():
+            with self.assertRaises(AdapterError) as caught:
+                await adapter.call("transfer_chunks",{"transfer_id":"x","request_digest":"0"*64,
+                    "offset":0,"chunks":[{"count":1,"data_base64":"eA==",
+                    "chunk_sha256":hashlib.sha256(b"x").hexdigest()}]})
+            self.assertEqual(caught.exception.code,"batch_not_allowed")
+            self.assertFalse(caught.exception.may_have_committed)
+        asyncio.run(run())
+        self.assertEqual(session.calls,1)
 
     def test_read_only_has_three_bounded_attempts(self):
         class Session:
