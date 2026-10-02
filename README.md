@@ -528,3 +528,28 @@ Call timing alone does not establish raw-message completeness, client/Flow
 binding, pagination completion, environment comparability or P07 cost
 success. These additions require a new actual source freeze and approved
 run; local SDK tests do not constitute Windows acceptance.
+
+
+`tests/p06_http_body_capture.py` provides independent, currently unintegrated
+test infrastructure for PC026 HTTP body originals. `CaptureTransport` wraps
+the installed httpx2 transport used by the official MCP SDK, preserving each
+request/response chunk before JSON/SSE parsing and before response
+Content-Encoding decoding. It records transport-level body bytes, not TCP/TLS
+packets or raw HTTP headers; capture adds real persistence overhead.
+
+The caller supplies its own new admitted run directory and canonical run UUID.
+The module exclusively creates `raw-mcp`, incremental body files, and a
+fsynced `capture.json` index. EOF, early close, cancellation, error and
+unstarted directions remain distinct. Stream failures retain prefixes and
+propagate normally; local capture faults propagate and prevent a complete
+record. Only response Content-Type/Content-Encoding and status are indexed;
+authentication headers and environment values are not collected.
+
+`RECORDED` means the observer closed normally, including incomplete or failed
+HTTP exchanges. The read-only verifier checks original files and exact
+structure, without granting business success. Failed index staging remains
+unpublished. This module is not connected to the formal P06 runner, current
+consumer or freeze catalog. Request-ID/result joining, production admission
+and evidence closure remain future integration work; both P07 cost entry
+points continue to refuse the unimplemented collector. Local loopback SDK
+and stream-model tests do not establish Windows acceptance.
