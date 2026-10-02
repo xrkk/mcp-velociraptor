@@ -91,6 +91,58 @@ class HTTPTests(unittest.IsolatedAsyncioTestCase):
         return {str(p):(p.read_bytes(),p.stat().st_ino,p.stat().st_mtime_ns) for p in self.f.work.rglob('*') if p.is_file()}
 
     @connected_test
+    async def test_adapter_real_loopback_401_without_instance_and_security_order(self):
+        from velo_transfer.adapters import TransportAdapter, _DirectChunkChannel, AdapterError
+        req = self.f.push()
+        before = self.snapshot()
+        adapter = TransportAdapter(None, 'velo', self.url, time.monotonic()+60, 10, [self.instance])
+        channel = _DirectChunkChannel(self.http, self.url, self.sid, self.instance,
+                                      adapter.deadline_monotonic, 10)
+        adapter._direct = channel
+        args = {'transfer_id': req['transfer_id'], 'request_digest': req['request_digest'],
+                'offset': 0, 'chunks': [{'count': 1, 'data_base64': 'eA==',
+                    'chunk_sha256': hashlib.sha256(b'x').hexdigest()}]}
+        responses = []
+        async def observe(response):
+            responses.append((response.status_code, response.headers.get('x-mcp-server-instance')))
+        self.http.event_hooks['response'].append(observe)
+        for token in ('Bearer wrong', None):
+            with self.subTest(token_present=token is not None):
+                if token is None:
+                    del self.http.headers['Authorization']
+                else:
+                    self.http.headers['Authorization'] = token
+                self.http.headers['Host'] = 'bad'
+                self.http.headers['Origin'] = 'https://denied.example'
+                previous = len(responses)
+                with self.assertRaises(AdapterError) as raised:
+                    await adapter.call('transfer_chunks', args)
+                error = raised.exception
+                self.assertEqual(error.code, 'unauthorized')
+                self.assertTrue(error.may_have_committed)
+                self.assertFalse(error.retryable)
+                self.assertEqual(responses[previous:], [(401, None)])
+                self.assertIs(adapter._direct, channel)
+                self.assertEqual(self.snapshot(), before)
+        self.http.headers['Authorization'] = 'Bearer local-only-fixture-token'
+        for code, change in (('bad_host', {}), ('origin_denied', {'Host': None}),
+                             ('session_not_found', {'Origin': None})):
+            for key, value in change.items():
+                if value is None:
+                    del self.http.headers[key]
+            if code == 'session_not_found':
+                channel.session_id = 'unknown'
+            previous = len(responses)
+            with self.assertRaises(AdapterError) as raised:
+                await adapter.call('transfer_chunks', args)
+            self.assertEqual(raised.exception.code, code)
+            self.assertTrue(raised.exception.may_have_committed)
+            self.assertFalse(raised.exception.retryable)
+            self.assertEqual(len(responses)-previous, 1)
+            self.assertEqual(self.snapshot(), before)
+        channel.session_id = self.sid
+
+    @connected_test
     async def test_real_sdk_push_and_pull_business(self):
         req=self.f.push()
         r=await self.post(self.headers(req),self.pushframe())

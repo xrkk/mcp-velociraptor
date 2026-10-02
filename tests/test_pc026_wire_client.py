@@ -36,15 +36,25 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             except AdapterError as exc:return exc,calls
 
     def response(self,body,status=200,instance='instance',kind='application/octet-stream'):
-        return httpx2.Response(status,headers={'x-mcp-server-instance':instance,'content-type':kind},content=body)
+        headers={'content-type':kind}
+        if instance is not None:headers['x-mcp-server-instance']=instance
+        return httpx2.Response(status,headers=headers,content=body)
 
     async def test_non200_exact_codes_and_no_replay(self):
         for status,code in [(400,'session_required'),(400,'invalid_frame'),*wire.HTTP_ERRORS.items()]:
-            response=self.response(('{"error":{"code":"'+code+'"}}').encode(),status,kind='application/json')
-            error,calls=await self.invoke(response)
-            self.assertEqual(error.code,code);self.assertEqual(len(calls),1)
-            self.assertEqual(calls[0][1],'sdk-established-session')
-            self.assertTrue(error.may_have_committed);self.assertFalse(error.retryable)
+            for instance in (None,'instance','changed'):
+                response=self.response(('{"error":{"code":"'+code+'"}}').encode(),status,
+                                       instance=instance,kind='application/json')
+                error,calls=await self.invoke(response)
+                self.assertEqual(error.code,code);self.assertEqual(len(calls),1)
+                self.assertEqual(calls[0][1],'sdk-established-session')
+                self.assertTrue(error.may_have_committed);self.assertFalse(error.retryable)
+
+    async def test_unmapped_status_null_code_is_protocol_error(self):
+        error,calls=await self.invoke(self.response(b'{"error":{"code":null}}',502,
+                                                  instance=None,kind='application/json'))
+        self.assertEqual(error.code,'protocol_error');self.assertTrue(error.may_have_committed)
+        self.assertFalse(error.retryable);self.assertEqual(len(calls),1)
 
     async def test_malformed200_changed_instance_and_interrupted_response_unknown_no_fallback(self):
         for response,code in [(self.response(b'VBT1\x00'), 'malformed_response'),

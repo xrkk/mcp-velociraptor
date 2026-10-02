@@ -176,6 +176,20 @@ def _parse_vbt(body):
         raise AdapterError("malformed_response") from None
 
 
+def _http_safety_code(status, content_type, body):
+    """Classify exact non-200 safety JSON before considering instance headers."""
+    try:
+        error = wire.strict_json(body)
+        code = error["error"]["code"]
+        allowed = ("session_required", "invalid_frame") if status == 400 else (wire.HTTP_ERRORS.get(status),)
+        if (content_type != "application/json" or type(code) is not str or
+                error != {"error": {"code": code}} or code not in allowed):
+            raise wire.WireError("invalid_frame")
+        return code
+    except (wire.WireError, KeyError, TypeError):
+        return "protocol_error"
+
+
 class _DirectChunkChannel:
     """Binary encoding on the same HTTP client and official SDK live session.
 
@@ -215,7 +229,7 @@ class _DirectChunkChannel:
             timeout = _remaining(self.deadline,self.timeout)
             async with asyncio.timeout(timeout):
                 async with self.http.stream("POST",self.url,headers=headers,content=outgoing()) as response:
-                    if response.headers.get("x-mcp-server-instance") != self.instance:
+                    if response.status_code == 200 and response.headers.get("x-mcp-server-instance") != self.instance:
                         raise AdapterError("instance_changed",may_have_committed=push)
                     data = bytearray()
                     async for part in response.aiter_bytes():
@@ -223,17 +237,8 @@ class _DirectChunkChannel:
                             raise AdapterError("response_too_large",may_have_committed=push)
                         data.extend(part)
                     if response.status_code != 200:
-                        if response.headers.get("content-type") != "application/json":
-                            raise AdapterError("protocol_error",may_have_committed=push)
-                        try:
-                            error = wire.strict_json(bytes(data))
-                            code = error["error"]["code"]
-                            allowed = ("session_required","invalid_frame") if response.status_code == 400 else (wire.HTTP_ERRORS.get(response.status_code),)
-                            if error != {"error":{"code":code}} or code not in allowed:
-                                raise wire.WireError("invalid_frame")
-                        except (wire.WireError, KeyError, TypeError):
-                            raise AdapterError("protocol_error",may_have_committed=push) from None
-                        raise AdapterError(code)
+                        raise AdapterError(_http_safety_code(response.status_code,
+                            response.headers.get("content-type"), bytes(data)), may_have_committed=push)
                     if response.headers.get("content-type") != "application/octet-stream":
                         raise AdapterError("malformed_response",may_have_committed=push)
                     header,payload = wire.parse(bytes(data))
@@ -615,16 +620,10 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
         if failure is not None and response.status_code >= 400:
             try:
                 body = await response.aread()
-                value = wire.strict_json(body)
-                code = value["error"]["code"]
-                allowed = ("session_required", "invalid_frame") if response.status_code == 400 else (wire.HTTP_ERRORS.get(response.status_code),)
-                if response.headers.get("content-type") != "application/json" or value != {"error":{"code":code}} or code not in allowed:
-                    code = "protocol_error"
-                failure["code"] = code
+                failure["code"] = _http_safety_code(response.status_code,
+                    response.headers.get("content-type"), body)
             except HTTPBodyLimitError as exc:
                 failure["code"] = str(exc)
-            except (wire.WireError, KeyError, TypeError):
-                failure["code"] = "protocol_error"
         if response.status_code in (400, 401, 403, 421):
             denied_status.append(response.status_code)
         value = response.headers.get("x-mcp-server-instance")
