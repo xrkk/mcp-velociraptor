@@ -28,11 +28,15 @@ def assert_error(result, code, details):
         raise AssertionError('fixed error contract differs from the reviewed expectation')
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 async def acceptance(endpoint, token_env):
     from tests import p06_pc026_binding
     admission = p06_pc026_binding.load()
     root = runner.P06_REPORT_ROOT
-    declaration = json.loads((root/'current-restore.json').read_bytes())
+    declaration = json.loads(admission.read(root/'current-restore.json'))
     run_id = declaration['run_id']
     restore = runner.load_current_restore(root,run_id,_admission=admission)
     if restore['snapshot_stage']!='P06_ACTIVE':
@@ -68,6 +72,8 @@ async def acceptance(endpoint, token_env):
         report['calls'].append(row)
         try:
             async with asyncio.timeout(60):
+                from tests.p05_pc026_governance import before_effect
+                before_effect()
                 result = await session.call_tool(tool,arguments)
             row.update(is_error=bool(result.is_error),structured=result.structured_content,
                        mcp_result=result.model_dump(mode='json',by_alias=True,exclude_none=True))
@@ -140,7 +146,7 @@ async def acceptance(endpoint, token_env):
                     'server_observation_sha256':report['server_observation_sha256']}
         (run_dir/'snapshot-evidence.json').write_bytes(runner.canonical_bytes(snapshot))
         report['snapshot_evidence_sha256'] = runner.sha256_file(run_dir/'snapshot-evidence.json')
-        admission.recheck()
+        admission.finish_report(report)
         (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
         (run_dir/'package-manifest.json').write_bytes(runner.canonical_bytes(member_inventory(run_dir,root)))
         verify_manifest(run_dir,root)

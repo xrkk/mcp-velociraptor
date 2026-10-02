@@ -53,7 +53,7 @@ class ApprovalFixture:
         self.root = root
         self.refs = {}
         self.approval = {}
-        for path in (gov.CONTRACT, gov.NORMATIVE):
+        for path in (gov.CONTRACT, gov.NATIVE_CONTRACT, gov.NORMATIVE):
             self.copy(gov.REPOSITORY / path, path)
         normative = json.loads((root / gov.NORMATIVE).read_bytes())
         self.normative = {row["path"]: row for row in gov.nested_refs(normative)}

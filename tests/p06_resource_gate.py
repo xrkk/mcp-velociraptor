@@ -375,6 +375,8 @@ class GuestResourceSampler:
         self.sequence = 0
 
     async def sample(self, step_id: str) -> dict:
+        from tests.p05_pc026_governance import before_effect
+        before_effect()
         if not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', step_id):
             raise ValueError('invalid resource observation step id')
         self.sequence += 1
@@ -386,6 +388,8 @@ class GuestResourceSampler:
         transcript = []
 
         def rpc(payload):
+            from tests.p05_pc026_governance import before_effect
+            before_effect()
             request = urllib.request.Request(self.url, json.dumps(payload).encode(), headers)
             with opener.open(request, timeout=75) as response:
                 session = response.headers.get('mcp-session-id')

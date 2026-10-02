@@ -2595,6 +2595,10 @@ def verify_historical_restore(restore: dict, root: Path) -> dict[str, Path]:
     return by_kind
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def verify_restore(restore: dict, root: Path) -> dict[str, Path]:
     """Current host consumer: fixed approval and complete schema6/191 graph."""
     from tests import p06_pc026_binding

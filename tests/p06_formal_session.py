@@ -28,6 +28,8 @@ async def formal_session(endpoint, token_env, observation_path, run_dir, report,
     token = os.environ.get(token_env, '').strip()
     if not token:
         raise ValueError('formal HTTP bearer token is not configured')
+    from tests.p05_pc026_governance import before_effect
+    before_effect()
     capture = HttpHeaderCapture(httpx2.AsyncHTTPTransport())
     try:
         async with httpx2.AsyncClient(headers={'Authorization': f'Bearer {token}'},
@@ -35,6 +37,7 @@ async def formal_session(endpoint, token_env, observation_path, run_dir, report,
             async with streamable_http_client(endpoint, http_client=client) as (read, write):
                 async with ClientSession(read, write) as session:
                     report['mcp_session']['initialized_at'] = utc_now()
+                    before_effect()
                     await session.initialize()
                     row = next((row for row in capture.responses
                                 if row['method'] == 'POST' and row['mcp_session_id']), None)
@@ -49,6 +52,7 @@ async def formal_session(endpoint, token_env, observation_path, run_dir, report,
                     (run_dir / 'server-observation.json').write_bytes(raw)
                     report['server_observation_sha256'] = hashlib.sha256(raw).hexdigest()
                     report['server_identity'] = {key: value for key, value in observed.items() if key != 'observed_at'}
+                    before_effect()
                     listing = await session.list_tools()
                     (run_dir/'tools-list.json').write_bytes(canonical_bytes(
                         listing.model_dump(mode='json',by_alias=True,exclude_none=True)))

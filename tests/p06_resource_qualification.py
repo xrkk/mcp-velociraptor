@@ -87,6 +87,8 @@ async def call(session, report, step_id, tool, arguments):
            'started_at': started_at, 'is_error': True, 'structured': None, 'mcp_result': None}
     report['calls'].append(row)
     try:
+        from tests.p05_pc026_governance import before_effect
+        before_effect()
         result = await session.call_tool(tool, arguments)
         row.update(is_error=bool(result.is_error), structured=result.structured_content,
                    mcp_result=result.model_dump(mode='json', by_alias=True, exclude_none=True))
@@ -151,6 +153,10 @@ async def run_flow(session, report, sampler, label, tool, arguments, timeout):
     return results, files, flow_id
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_out=None,
                   server_observation=None, fixture_instance=None):
     from tests import scenario_runner as runner
@@ -159,8 +165,6 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
     from tests.p06_package import member_inventory, member_sources, verify_manifest, verify_payload_zip
     if baseline_binding is not None:
         raise ValueError('schema3 qualification is historical and cannot authorize current P06')
-    if os.name != 'posix':
-        raise ValueError('current qualification requires host approval; Windows handoff is not adopted')
     from tests import p06_pc026_binding
     admission = p06_pc026_binding.load()
     schema3 = baseline_binding is not None
@@ -179,7 +183,7 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
         restore = None
     else:
         evidence_root = OUT
-        declaration = json.loads((evidence_root/'current-restore.json').read_text(encoding='utf-8'))
+        declaration = json.loads(admission.read(evidence_root/'current-restore.json'))
         run_id = declaration['run_id']
         restore = runner.load_current_restore(evidence_root, run_id, _admission=admission)
         if restore['snapshot_stage'] != 'P06_ACTIVE':
@@ -285,7 +289,7 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
             raw = runner.canonical_bytes(snapshot)
             (run_dir/'snapshot-evidence.json').write_bytes(raw)
             report['snapshot_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
-        admission.recheck()
+        admission.finish_report(report)
         (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
     if report['status']=='success':
         # Measured payload precedes the budget, avoiding hash/size self-reference.

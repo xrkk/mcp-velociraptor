@@ -1,4 +1,4 @@
-"""Host-only current P06 admission, retaining one fixed approval through use.
+"""Fixed dual-platform current P06 admission, retaining one fixed approval through use.
 
 No transport token or Windows approval handoff is minted here. The private
 group seam is solely for isolated tests; production always uses governance.load.
@@ -25,16 +25,25 @@ class Admission:
     consumed: dict = field(default_factory=dict)
 
     def read(self, path: Path) -> bytes:
-        data, identity, _ = governance._read(path)
+        data, identity, _ = self.group.read_path(path)
         previous = self.consumed.setdefault(path, (data, identity))
         governance.require(previous == (data, identity), 'consumer input drift')
+        shared = self.group.consumer_inputs.setdefault(path, (data, identity))
+        governance.require(shared == (data, identity), 'consumer input drift')
         return data
 
     def recheck(self):
         self.group.recheck()
         for path, expected in self.consumed.items():
-            data, identity, _ = governance._read(path)
+            data, identity, _ = self.group.read_path(path)
             governance.require(expected == (data, identity), 'consumer input drift: ' + str(path))
+
+    def finish_report(self, report):
+        try:
+            self.recheck()
+        except Exception as exc:
+            report.update(status='failed', coverage=[], failure={
+                'type':type(exc).__name__, 'message':str(exc), 'previous_failure':report.get('failure')})
 
     def report(self, report, run_dir, root):
         from tests.p06_aggregate_reports import verify_report_shape, verify_tools_schema_binding
@@ -174,7 +183,7 @@ class Admission:
 
 
 def _from_group(group):
-    canonical, _, _ = governance._read(group.repository / governance.CANONICAL)
+    canonical, _, _ = group.read_path(group.repository / governance.CANONICAL)
     bindings = governance.bindings_for(group, canonical)
     selector.qualify(canonical, bindings=bindings, stage='P06_ACTIVE')
     return Admission(group, canonical, bindings)

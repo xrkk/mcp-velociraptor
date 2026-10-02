@@ -7,11 +7,14 @@ Historical archive coordinates are authenticated by the pinned bootstrap list.
 from __future__ import annotations
 
 import ast
+import contextvars
+from functools import wraps
+import inspect
 from dataclasses import dataclass, field
 import errno
 import json
 import os
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PureWindowsPath, PurePosixPath
 import re
 import stat
 import struct
@@ -29,6 +32,8 @@ FREEZE = BASE + "implementation-freeze.json"
 DEPLOYMENT = BASE + "deployment-configuration.json"
 CONTRACT = BASE + "2026.10.02-04-PC026-运行信任锚读取契约.md"
 CONTRACT_SHA = "5336acb8ed4a1536f2aac71792b976d849b1cc8cab0234063e735a1b5e28ad71"
+NATIVE_CONTRACT = BASE + "2026.10.02-05-PC026-Windows固定原生读取补充.md"
+NATIVE_CONTRACT_SHA = "c5c9f1291bbe0bee4e40b642482b28ac62aa28fed98305fb42448ee5c962d300"
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
 MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
@@ -53,8 +58,9 @@ ENTRIES = ENTRIES | frozenset({"tests/scenario_runner.py", "tests/p06_evidence.p
     "tests/p07_cost_measurement_r232.py", "tests/p06_pc026_binding.py",
     "tests/test_p06_pc026_binding.py", "tests/p06_resource_qualification.py",
     "tests/p06_formal_session.py", "tests/p06_contracts.py", "tests/test_p06_contracts.py",
-    "tests/test_p06_resource_gate.py", "tests/test_p06_aggregate.py"})
-RESOURCES = frozenset({"requirements.txt", "requirements.lock",
+    "tests/test_p06_resource_gate.py", "tests/test_p06_aggregate.py",
+    "tests/p05_pc026_windows_reader.py", "tests/test_p05_pc026_windows_reader.py"})
+RESOURCES = frozenset({NATIVE_CONTRACT, "requirements.txt", "requirements.lock",
     "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
     "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
@@ -70,7 +76,7 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
         'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
         'p06-data-exfiltration', 'p06-remediation-validation'))})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
-    if path.startswith(("tests/data/", "tests/scenarios/")))
+    if path == NATIVE_CONTRACT or path.startswith(("tests/data/", "tests/scenarios/")))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
 # third-party imports when this reader itself runs in an incomplete tree.
@@ -157,6 +163,65 @@ LOCAL_MODULES = frozenset({
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
 
 
+_CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
+
+
+def consumption(function):
+    """Close native retained handles at the outer actual consumer boundary."""
+    def begin():
+        groups = _CONSUMPTION.get()
+        if groups is not None:
+            return groups, None
+        groups = []
+        return groups, _CONSUMPTION.set(groups)
+    def finish(groups, token, primary):
+        if token is not None:
+            errors = []
+            try:
+                for group in reversed(groups):
+                    try:
+                        group.close()
+                    except Exception as exc:
+                        errors.append(str(exc))
+            finally:
+                _CONSUMPTION.reset(token)
+            if errors:
+                if primary is not None:
+                    primary.add_note('native close failures: ' + repr(errors))
+                else:
+                    raise GovernanceError('native close failures: ' + repr(errors))
+    if inspect.iscoroutinefunction(function):
+        @wraps(function)
+        async def asynchronous(*args, **kwargs):
+            groups, token = begin()
+            primary = None
+            try:
+                return await function(*args, **kwargs)
+            except BaseException as exc:
+                primary = exc
+                raise
+            finally:
+                finish(groups, token, primary)
+        return asynchronous
+    @wraps(function)
+    def synchronous(*args, **kwargs):
+        groups, token = begin()
+        primary = None
+        try:
+            return function(*args, **kwargs)
+        except BaseException as exc:
+            primary = exc
+            raise
+        finally:
+            finish(groups, token, primary)
+    return synchronous
+
+
+def before_effect():
+    for group in _CONSUMPTION.get() or ():
+        group.recheck()
+
+
 class GovernanceError(evidence.Pc020EvidenceError):
     pass
 
@@ -234,7 +299,24 @@ def _acl(fd, info):
         "owner_uid": str(info.st_uid), "owner_gid": str(info.st_gid), "extended_acl": rows})
 
 
-def _read(path):
+def _read(path, *, reader=None):
+    if os.name == "nt":
+        from tests.p05_pc026_windows_reader import WindowsSession
+        owned = reader is None
+        reader = reader or WindowsSession()
+        try:
+            return reader.read(path, private=path.name in {
+                "controller-runtime-record.json", "controller-approval.json",
+                "deployment-configuration.json", ".env", "api.config.yaml"})
+        except Exception as exc:
+            raise GovernanceError("native governance read failed: " + str(exc)) from exc
+        finally:
+            if owned:
+                reader.close()
+    return _read_posix(path)
+
+
+def _read_posix(path):
     """Retain no-follow ancestor handles through bytes, owner and full ACL read."""
     require(os.name == "posix", "production governance reader requires a POSIX host")
     handles = []
@@ -280,12 +362,26 @@ class GovernedGroup:
     bootstrap_refs: dict
     synthetic_fixture: bool
     validators: dict = field(default_factory=dict)
+    reader: object | None = None
+    consumer_inputs: dict = field(default_factory=dict)
+
+    @property
+    def endpoint(self):
+        return "guest" if self.reader is not None else "host"
+
+    def read_path(self, path):
+        return _read(path, reader=self.reader)
+
+    def close(self):
+        if self.reader is not None:
+            self.reader.close()
+
 
     def read(self, reference):
         reference = ref(reference)
         require(self.allowed.get(reference["path"]) == reference,
                 "Ref absent or different in independent allowlist")
-        data, identity, _ = _read(self.repository / reference["path"])
+        data, identity, _ = self.read_path(self.repository / reference["path"])
         require(len(data) == reference["size"] and evidence._sha(data) == reference["sha256"],
                 "governance Ref bytes drift: " + reference["path"])
         require(reference["path"] not in self.locked
@@ -298,8 +394,11 @@ class GovernedGroup:
 
     def recheck(self):
         for path, (data, identity) in self.locked.items():
-            current, current_identity, _ = _read(self.repository / path)
+            current, current_identity, _ = self.read_path(self.repository / path)
             require((current, current_identity) == (data, identity), "governance consumption drift: " + path)
+        for path, expected in self.consumer_inputs.items():
+            data, identity, _ = self.read_path(path)
+            require(expected == (data, identity), "consumer input drift: " + str(path))
 
 
 def implementation_closure(group):
@@ -388,8 +487,8 @@ def _publication(group, deployment):
         reference = {"path": path, "size": row["size"], "sha256": row["sha256"]}
         require(reference == expected[path], "publication member content binding differs")
         group.read(reference)
-        _, _, actual = _read(group.repository / path)
-        require(row["host_identity"] == actual, "host publication identity differs from actual file")
+        _, _, actual = group.read_path(group.repository / path)
+        require(row[group.endpoint + "_identity"] == actual, "local publication identity differs from actual file")
         require(row["guest_identity"]["principal_sid"] == deployment["guest_principal_sid"],
                 "guest publication principal differs")
         for endpoint in ("host", "guest"):
@@ -411,7 +510,65 @@ def _publication(group, deployment):
         require(evidence._sha(acl) == row["identity"]["acl_sha256"], "ACL original hash differs")
         if key[1] == "guest":
             _windows_descriptor(acl, row["identity"]["owner_sid"])
+        else:
+            _host_descriptor(acl, row["identity"])
     require(seen == set(identities), "identity archive misses endpoint coverage")
+
+
+def _host_descriptor(data, identity):
+    value = evidence._json_bytes(data, "host full ACL original")
+    require(set(value) == {"mode", "owner_uid", "owner_gid", "extended_acl"}
+        and all(value[key] == identity[key] for key in ("mode", "owner_uid", "owner_gid")),
+        "host ACL original fields differ")
+    rows = value["extended_acl"]
+    require(isinstance(rows, list) and len(rows) == 2, "host extended ACL originals missing")
+    for row, name in zip(rows, ("system.posix_acl_access", "system.posix_acl_default")):
+        require(isinstance(row, dict) and set(row) == {"name", "value_hex"} and row["name"] == name,
+                "host full ACL original shape differs")
+        raw = row["value_hex"]
+        require(raw is None or isinstance(raw, str) and re.fullmatch(r"(?:[0-9a-f]{2})+", raw),
+                "host ACL original encoding differs")
+        if raw is not None:
+            decoded = bytes.fromhex(raw)
+            require(len(decoded) >= 4 and (len(decoded) - 4) % 8 == 0
+                and struct.unpack_from("<I", decoded)[0] == 2, "host kernel ACL original malformed")
+
+
+def _deployment_binding(group, deployment):
+    host = deployment["host_project_root"]
+    require(isinstance(host, str) and PurePosixPath(host).is_absolute()
+        and ".." not in host.split("/") and str(PurePosixPath(host)) == host,
+        "host deployment coordinate is not canonical")
+    if group.endpoint == "host":
+        require(host == str(group.repository), "deployment root/VM/principal binding differs: host root")
+    else:
+        from tests.p05_pc026_windows_reader import check_path
+        guest = PureWindowsPath(deployment["guest_deployment_base"]) / deployment["guest_project_coordinate"]
+        check_path(guest)
+        require(str(guest) == str(group.repository), "deployment guest root differs")
+        require(group.reader.sid == deployment["guest_principal_sid"], "actual TokenUser principal differs")
+        from velo_transfer.windows_platform import observe_windows
+        require(observe_windows().vm_uuid == deployment["vm_uuid"], "actual guest VM identity differs")
+
+
+def _validate_deployment(group, deployment):
+    exact(deployment, "schema_version kind profile_id workflow_id host_project_root guest_deployment_base guest_project_coordinate guest_canonical_coordinate vm_uuid guest_principal_sid",
+          "pc026-deployment-configuration-v1")
+    require(isinstance(deployment["guest_project_coordinate"], str)
+            and deployment["guest_project_coordinate"] == relative(deployment["guest_project_coordinate"])
+            and deployment["guest_canonical_coordinate"] == CANONICAL
+            and deployment["vm_uuid"] == VM_UUID
+            and isinstance(deployment["guest_principal_sid"], str)
+            and SID.fullmatch(deployment["guest_principal_sid"]), "deployment root/VM/principal binding differs")
+    sid_parts = deployment["guest_principal_sid"].split("-")[2:]
+    require(int(sid_parts[0]) < 2 ** 48 and all(int(part) < 2 ** 32 for part in sid_parts[1:]),
+            "deployment principal SID numeric range differs")
+    base = deployment["guest_deployment_base"]
+    require(isinstance(base, str) and re.fullmatch(r"[A-Za-z]:\\[^:]+", base)
+            and PureWindowsPath(base).is_absolute()
+            and all(part not in {"", ".", ".."} for part in base[3:].split("\\"))
+            and "/" not in base and "\0" not in base, "unsafe Windows deployment base")
+    _deployment_binding(group, deployment)
 
 
 def _windows_descriptor(data, owner_sid):
@@ -445,34 +602,60 @@ def _windows_descriptor(data, owner_sid):
 
 
 def _load_at(repository: Path, *, synthetic_fixture=False):
+    # Platform is automatic, never a caller-supplied selector or environment.
+    reader = None
+    if os.name == "nt":
+        from tests.p05_pc026_windows_reader import WindowsSession
+        reader = WindowsSession()
+    try:
+        group = _load_group(repository, synthetic_fixture=synthetic_fixture, reader=reader)
+        if _CONSUMPTION.get() is not None:
+            _CONSUMPTION.get().append(group)
+        return group
+    except BaseException:
+        if reader is not None:
+            reader.close()
+        raise
+
+
+def _load_group(repository: Path, *, synthetic_fixture, reader):
     """Internal file-tree seam; all fixed model/hash/path gates still apply."""
     require(repository.is_absolute() and str(repository) == str(repository.absolute())
             and ".." not in repository.parts, "repository root must be canonical absolute")
-    contract, _, _ = _read(repository / CONTRACT)
+    contract, _, _ = _read(repository / CONTRACT, reader=reader)
     require(len(contract) == 6559 and evidence._sha(contract) == CONTRACT_SHA, "adopted contract version anchor differs")
-    runtime_bytes, runtime_identity, runtime_host = _read(repository / RUNTIME)
-    require(runtime_host["owner_uid"] in {"0", str(os.geteuid())}
-            and not (int(runtime_host["mode"], 8) & 0o022), "runtime owner/ACL trust boundary differs")
-    for index, (identity, security) in enumerate(zip(runtime_identity[0][:-1], runtime_identity[1][:-1])):
-        mode = identity[2]
-        # OS-owned ancestors above the code root can use mapped/container UIDs.
-        # The controlled repository and its governance descendants must retain
-        # the reader/root owner boundary; do not infer UID 0 for filesystem /.
-        controlled = index >= len(repository.parts) - 1
-        require((not controlled or security[0] in {0, os.geteuid()})
-                and (not mode & 0o002 or not controlled and mode & stat.S_ISVTX)
-                and (not controlled or not mode & 0o020 or security[1] == os.getegid()),
-                "runtime ancestor owner/ACL trust boundary differs")
+    native_contract, _, _ = _read(repository / NATIVE_CONTRACT, reader=reader)
+    require(len(native_contract) == 6343 and evidence._sha(native_contract) == NATIVE_CONTRACT_SHA,
+            "adopted native contract version anchor differs")
+    runtime_bytes, runtime_identity, runtime_host = _read(repository / RUNTIME, reader=reader)
+    if reader is None:
+        require(runtime_host["owner_uid"] in {"0", str(os.geteuid())}
+                and not (int(runtime_host["mode"], 8) & 0o022), "runtime owner/ACL trust boundary differs")
+        for index, (identity, security) in enumerate(zip(runtime_identity[0][:-1], runtime_identity[1][:-1])):
+            mode = identity[2]
+            # OS-owned ancestors above the code root can use mapped/container UIDs.
+            # The controlled repository and its governance descendants must retain
+            # the reader/root owner boundary; do not infer UID 0 for filesystem /.
+            controlled = index >= len(repository.parts) - 1
+            require((not controlled or security[0] in {0, os.geteuid()})
+                    and (not mode & 0o002 or not controlled and mode & stat.S_ISVTX)
+                    and (not controlled or not mode & 0o020 or security[1] == os.getegid()),
+                    "runtime ancestor owner/ACL trust boundary differs")
     runtime = evidence._json_bytes(runtime_bytes, "fixed runtime record")
     exact(runtime, "schema_version kind profile_id workflow_id contract_ref approval_ref allowed_refs status",
           "pc026-controller-runtime-record-v1", "ADOPTED")
     allowed = refs(runtime["allowed_refs"])
     require(runtime["contract_ref"] == {"path": CONTRACT, "size": 6559, "sha256": CONTRACT_SHA}
             and runtime["approval_ref"]["path"] == APPROVAL, "fixed runtime trust anchors differ")
-    group = GovernedGroup(repository, {}, allowed, {RUNTIME: (runtime_bytes, runtime_identity)}, {}, {}, {}, synthetic_fixture)
+    group = GovernedGroup(repository, {}, allowed, {RUNTIME: (runtime_bytes, runtime_identity)}, {}, {}, {}, synthetic_fixture, reader=reader)
     for path in allowed:
         relative(path)
         require(not path.startswith(".tmp/") and "candidate" not in path.split("/")[:-1], "unadopted governance source")
+    require(allowed.get(NATIVE_CONTRACT) == {"path": NATIVE_CONTRACT, "size":6343,
+            "sha256":NATIVE_CONTRACT_SHA}, "native contract allowlist anchor missing")
+    require(DEPLOYMENT in allowed, "fixed deployment Ref absent")
+    deployment = group.document(allowed[DEPLOYMENT])
+    _validate_deployment(group, deployment)
     # The fixed normative anchor authenticates the historical path exception.
     require(allowed.get(NORMATIVE, {}).get("sha256") == NORMATIVE_SHA, "normative manifest version anchor missing")
     normative = group.document(allowed[NORMATIVE], canonical=False)
@@ -524,23 +707,10 @@ def _load_at(repository: Path, *, synthetic_fixture=False):
     mapping = approval["root_mapping"]
     require(mapping["deployment_configuration"]["path"] == DEPLOYMENT
             and mapping["guest_canonical_coordinate"] == CANONICAL, "fixed deployment/canonical mapping differs")
-    deployment = group.document(mapping["deployment_configuration"])
-    exact(deployment, "schema_version kind profile_id workflow_id host_project_root guest_deployment_base guest_project_coordinate guest_canonical_coordinate vm_uuid guest_principal_sid",
-          "pc026-deployment-configuration-v1")
-    require(deployment["host_project_root"] == str(repository)
-            and deployment["guest_project_coordinate"] == relative(mapping["guest_project_coordinate"])
-            and deployment["guest_canonical_coordinate"] == CANONICAL
-            and deployment["vm_uuid"] == VM_UUID
-            and isinstance(deployment["guest_principal_sid"], str)
-            and SID.fullmatch(deployment["guest_principal_sid"]), "deployment root/VM/principal binding differs")
-    sid_parts = deployment["guest_principal_sid"].split("-")[2:]
-    require(int(sid_parts[0]) < 2 ** 48 and all(int(part) < 2 ** 32 for part in sid_parts[1:]),
-            "deployment principal SID numeric range differs")
-    base = deployment["guest_deployment_base"]
-    require(isinstance(base, str) and re.fullmatch(r"[A-Za-z]:\\[^:]+", base)
-            and PureWindowsPath(base).is_absolute()
-            and all(part not in {"", ".", ".."} for part in base[3:].split("\\"))
-            and "/" not in base and "\0" not in base, "unsafe Windows deployment base")
+    require(group.document(mapping["deployment_configuration"]) == deployment
+        and mapping["deployment_configuration"] == allowed[DEPLOYMENT]
+        and deployment["guest_project_coordinate"] == mapping["guest_project_coordinate"],
+        "deployment mapping differs from fixed early binding")
     _publication(group, deployment)
     group.recheck()
     return group
@@ -589,6 +759,7 @@ def bindings_for(group, canonical_bytes):
                        if path != BOOTSTRAP}
     current_sources[NORMATIVE] = group.allowed[NORMATIVE]
     current_sources[CONTRACT] = group.allowed[CONTRACT]
+    current_sources[NATIVE_CONTRACT] = group.allowed[NATIVE_CONTRACT]
     current_sources.update({path: group.freeze_refs[path] for path in resource_sources})
     def identities(values):
         return {path: evidence.FrozenIdentity(row["size"], row["sha256"], evidence._blob(group.read(row)))
@@ -597,7 +768,7 @@ def bindings_for(group, canonical_bytes):
         identities({path: row for path, row in group.freeze_refs.items() if path not in resource_sources}),
         synthetic_fixture=group.synthetic_fixture)
     canonical_path = group.repository / CANONICAL
-    data, identity, _ = _read(canonical_path)
+    data, identity, _ = group.read_path(canonical_path)
     require(data == canonical_bytes, "selector did not read the fixed canonical bytes")
     group.locked[CANONICAL] = (data, identity)
     state = evidence._json_bytes(data, "fixed canonical")

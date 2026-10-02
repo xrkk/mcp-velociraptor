@@ -535,6 +535,8 @@ async def execute_tool_step(
     for attempt in range(1, max_attempts + 1):
         call_started, call_clock = utc_now(), time.monotonic()
         try:
+            from tests.p05_pc026_governance import before_effect
+            before_effect()
             raw = await session.call_tool(step["tool"], arguments)
         except BaseException as exc:
             calls.append({'arguments': arguments, 'attempt': attempt, 'sequence': len(calls)+1,
@@ -932,6 +934,10 @@ def _local_process_identity(pid: int | None) -> dict[str, Any]:
     }
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 async def run_scenario(
     scenario_id: str,
     *,
@@ -949,8 +955,6 @@ async def run_scenario(
     if scenario_id.startswith('p06-') and transport == 'streamable-http':
         if baseline_binding is not None:
             raise ScenarioInputError('schema3 baseline binding is historical and cannot authorize current P06')
-        if os.name != 'posix':
-            raise ScenarioInputError('current P06 requires the host approval decision; Windows handoff is not adopted')
         from tests import p06_pc026_binding
         admission = p06_pc026_binding.load()
     baseline_mode = baseline_binding is not None
@@ -1092,9 +1096,12 @@ async def run_scenario(
                 transport=capture,
             )
             session_context = streamable_http_client(endpoint, http_client=http_client)
+        from tests.p05_pc026_governance import before_effect
+        before_effect()
         async with session_context as (read, write):
             async with ClientSession(read, write) as session:
                 report["mcp_session"]["initialized_at"] = utc_now()
+                before_effect()
                 await session.initialize()
                 if transport == "stdio":
                     spawned = direct_child_pids(os.getpid()) - children_before
@@ -1142,6 +1149,7 @@ async def run_scenario(
                     import socket
                     if socket.gethostname().casefold()==observation['computer_name'].casefold():
                         raise ScenarioFailure('formal P06 client must execute outside the target VM')
+                before_effect()
                 listing = await session.list_tools()
                 (run_dir/'tools-list.json').write_bytes(canonical_bytes(
                     listing.model_dump(mode='json',by_alias=True,exclude_none=True)))
@@ -1301,7 +1309,7 @@ async def run_scenario(
             (run_dir / "snapshot-evidence.json").write_bytes(evidence_bytes)
             report["snapshot_evidence_sha256"] = hashlib.sha256(evidence_bytes).hexdigest()
         if admission is not None:
-            admission.recheck()
+            admission.finish_report(report)
         report_path.write_bytes(canonical_bytes(report))
         if scenario_id.startswith('p06-') and transport == 'streamable-http':
             from tests.p06_package import member_inventory, verify_manifest

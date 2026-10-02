@@ -631,6 +631,10 @@ def _aggregate_current(admission, *, evidence_root=None, ledger_path=None,
     return result
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def aggregate(*, evidence_root=EVIDENCE_ROOT, ledger_path=LEDGER,
               selection_path=SELECTION, manifest_path=MANIFEST):
     from tests import p06_pc026_binding
@@ -638,6 +642,7 @@ def aggregate(*, evidence_root=EVIDENCE_ROOT, ledger_path=LEDGER,
         ledger_path=ledger_path, selection_path=selection_path, manifest_path=manifest_path)
 
 
+@consumption
 def main() -> int:
     from tests import p06_pc026_binding
     admission = p06_pc026_binding.load()

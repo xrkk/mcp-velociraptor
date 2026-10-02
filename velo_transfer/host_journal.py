@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import fcntl
 import hashlib
 import json
 import math
@@ -293,6 +292,7 @@ class HostJournal:
     def writer(self):
         if os.name != "posix":
             raise Error("unsupported_host")
+        import fcntl
         if self._lock_fd is not None:
             raise Error("writer_lock_held")
         _check_parent_chain(self.root.parent)

@@ -384,6 +384,10 @@ def main_historical() -> int:
     return 0
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def main() -> int:
     """Current admission precedes every count/output; old pairs stay historical."""
     from tests import p06_pc026_binding, p06_aggregate_reports

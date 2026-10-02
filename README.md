@@ -11,7 +11,7 @@ explicit isolated fixture seam verifies complete 191 content while preserving
 historical 448+4 originals and the old 189 verifier defaults. This reader never
 publishes evidence, writes canonical state, mints capabilities or executes VMware.
 Native Windows observations, service-principal/default ACL qualification and
-actual READY issuance remain separate. Current host P06 restore, receiver and
+actual READY issuance remain separate. Current P06 restore, receiver and
 aggregate entrypoints retain the same fixed approval and qualify the complete
 191/C8 graph plus eight restore kinds. Success receipt admission precedes lock
 and ledger writes; duplicates are rejected before a lock. Failed attempts keep
@@ -24,9 +24,22 @@ and `aggregate_historical`; historical 188/189/schema3 inputs cannot qualify the
 current entrypoints. There is no automatic approval creation or test-root CLI.
 
 P07 current entrypoints enforce the approval/P06 handoff and refuse historical
-cost output. A current upstream five-pair collection binding and the Windows
-approval handoff still need a controller contract; current P07 cost production
-and native Windows execution are not complete. Explicit historical measurement
+cost output. A current upstream five-pair collection binding still needs a controller
+contract; current P07 cost production is not complete. The adopted Windows
+reader contract keeps the same exact approval model and independent allowlist,
+with separately pinned 04/05 interfaces. Platform selection uses the real OS
+and the code-owned repository. Windows binds actual TokenUser, full raw
+owner/group/DACL/SACL, FileIdInfo, metadata and bytes on retained handles,
+rejects reparse/alias paths and checks conservative ancestor/private-file ACLs.
+It requires an already assigned SeSecurityPrivilege to read the complete SD;
+the scoped enable restores its prior token state. Missing privilege or partial
+ACL observation refuses admission. It adds no trusted SID or root override.
+Each side compares only its own live publication identity while checking both
+archived originals. Consumers recheck before business stages and close retained
+handles at the outer consumption boundary; drift preserves failed facts with
+zero coverage. Actual service-principal/default ACL qualification and complete
+native consumer execution remain unverified; the external HTTP client boundary
+still applies. Explicit historical measurement
 functions preserve old calculations, without declaring current acceptance.
 Isolated host fixtures verify consumer content and rejection boundaries; they
 are not real recoveries, 645 business executions or measured cost achievements.

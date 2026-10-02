@@ -9,6 +9,10 @@ from tests.p06_evidence import plain_file
 from tests.p06_package import canonical_bytes, file_identity, verify_manifest
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def receive(run_dir: Path, root: Path) -> dict:
     from tests.p06_aggregate_reports import ledger_identity, load_ledger
     report_path = plain_file(run_dir, 'report.json')

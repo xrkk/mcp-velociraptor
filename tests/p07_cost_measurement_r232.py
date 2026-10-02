@@ -376,6 +376,10 @@ def main_historical() -> int:
     return 0
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def main() -> int:
     """The old .232 no-restore layout cannot publish a current cost result."""
     from tests import p06_pc026_binding, p06_aggregate_reports
