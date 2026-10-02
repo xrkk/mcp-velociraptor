@@ -339,11 +339,14 @@ def audit(event,args):
   if path.is_relative_to(original) and not (path.is_relative_to(root) or path.is_relative_to(original/'.venv')):
    raise AssertionError('escaped frozen tree: '+str(path))
 sys.addaudithook(audit)
-from tests import p07_handoff, p07_cost_measurement, p07_cost_measurement_r232, test_p07_handoff
+from tests import p07_handoff, p07_cost_measurement, p07_cost_measurement_r232, test_p07_handoff, p06_call_clock
 from tests import p05_pc026_governance as gov
 from tests import p06_pc026_binding as binding
 admission=binding.load()
 assert gov.HANDOFF_CONTRACT in admission.group.freeze_refs
+assert gov.CALL_CLOCK_CONTRACT in admission.group.freeze_refs
+assert 'tests/p06_call_clock.py' in admission.group.freeze_refs
+assert 'tests/test_p06_call_clock.py' in admission.group.freeze_refs
 assert 'tests/test_p07_handoff.py' in admission.group.freeze_refs
 p07_handoff._completion(admission,p07_handoff._ref(admission,root/p07_handoff.ROOT_REL/'final-selection.json'))
 modules={}

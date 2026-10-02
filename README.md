@@ -506,3 +506,25 @@ missing sparse index. It does not prove a consistent source snapshot. Downloadin
 that uncertain entry fails with `BACKEND_ERROR/size_mismatch` before content I/O
 or output creation; other valid files in the same Flow remain usable. Paired sparse
 metadata, identity/selector conflicts, and invalid numeric sizes remain strict.
+
+
+Current PC026 P06 evidence includes one `call-clock.json` per admitted new
+five-scenario run. It binds the final original `report.json` bytes, run ID,
+runner identity and a fresh clock ID to the process's real
+`time.monotonic_ns` implementation. Every tool-call observation, including
+retry and cleanup, carries `monotonic` with `clock_id`, `invoked`,
+`started_ns` and `ended_ns`. Pre-call refusal records `invoked=false` with
+two null endpoints; a returned error or SDK exception retains its interval.
+Clock failure stops new calls and preserves a failed report with no coverage.
+
+The current receiver, aggregator and fixed P07 handoff require matching
+clock/report identities and ordered, non-overlapping intervals. The package
+includes the clock original. Historical evidence, resource qualification
+and individual acceptance keep their existing contracts; old reports must
+not be repaired with invented timestamps. `invoked` observes the SDK method,
+not a proven wire request. UTC timestamps are display data, and summing
+individual `duration_ms` values cannot measure a subchain containing waits.
+Call timing alone does not establish raw-message completeness, client/Flow
+binding, pagination completion, environment comparability or P07 cost
+success. These additions require a new actual source freeze and approved
+run; local SDK tests do not constitute Windows acceptance.

@@ -37,6 +37,8 @@ NATIVE_CONTRACT = BASE + "2026.10.02-05-PC026-Windows固定原生读取补充.md
 NATIVE_CONTRACT_SHA = "c5c9f1291bbe0bee4e40b642482b28ac62aa28fed98305fb42448ee5c962d300"
 HANDOFF_CONTRACT = BASE + "2026.10.02-06-PC026-P07固定交接读取契约.md"
 HANDOFF_CONTRACT_SHA = "dc3b548d8e2741c5773df669962fdab51af41ca7db204655a3a2302bcf12676c"
+CALL_CLOCK_CONTRACT = BASE + "2026.10.02-07-PC026-P06调用单调钟原件补充.md"
+CALL_CLOCK_CONTRACT_SHA = "b55e5faee6b5b01f7a0d556a131dc77f73fe911c3df0d5042f57bc9a3ccb1f76"
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
 MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
@@ -63,8 +65,9 @@ ENTRIES = ENTRIES | frozenset({"tests/scenario_runner.py", "tests/p06_evidence.p
     "tests/p06_formal_session.py", "tests/p06_contracts.py", "tests/test_p06_contracts.py",
     "tests/test_p06_resource_gate.py", "tests/test_p06_aggregate.py",
     "tests/p05_pc026_windows_reader.py", "tests/test_p05_pc026_windows_reader.py",
-    "tests/p07_handoff.py", "tests/test_p07_handoff.py"})
-RESOURCES = frozenset({NATIVE_CONTRACT, HANDOFF_CONTRACT, "requirements.txt", "requirements.lock",
+    "tests/p07_handoff.py", "tests/test_p07_handoff.py",
+    "tests/p06_call_clock.py", "tests/test_p06_call_clock.py"})
+RESOURCES = frozenset({NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT, "requirements.txt", "requirements.lock",
     "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
     "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
@@ -80,7 +83,7 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
         'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
         'p06-data-exfiltration', 'p06-remediation-validation'))})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
-    if path in {NATIVE_CONTRACT, HANDOFF_CONTRACT} or path.startswith(("tests/data/", "tests/scenarios/")))
+    if path in {NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(("tests/data/", "tests/scenarios/")))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
 # third-party imports when this reader itself runs in an incomplete tree.
@@ -122,6 +125,8 @@ LOCAL_MODULES = frozenset({
     'tests/p06_aggregate_reports.py',
     'tests/p06_evidence.py',
     'tests/p06_package.py',
+    'tests/p06_call_clock.py',
+    'tests/test_p06_call_clock.py',
     'tests/p06_pc021_consumer.py',
     'tests/p06_receive.py',
     'tests/p06_resource_gate.py',
@@ -664,6 +669,8 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
             "sha256":NATIVE_CONTRACT_SHA}, "native contract allowlist anchor missing")
     require(allowed.get(HANDOFF_CONTRACT) == {"path":HANDOFF_CONTRACT, "size":9234,
             "sha256":HANDOFF_CONTRACT_SHA}, "handoff contract allowlist anchor missing")
+    require(allowed.get(CALL_CLOCK_CONTRACT) == {'path': CALL_CLOCK_CONTRACT, 'size': 6933,
+            'sha256': CALL_CLOCK_CONTRACT_SHA}, 'call-clock contract allowlist anchor missing')
     require(DEPLOYMENT in allowed, "fixed deployment Ref absent")
     deployment = group.document(allowed[DEPLOYMENT])
     _validate_deployment(group, deployment)

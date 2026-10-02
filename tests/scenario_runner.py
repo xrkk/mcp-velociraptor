@@ -524,8 +524,18 @@ async def execute_tool_step(
     completed: dict[str, Any],
     fixture: dict[str, Any],
     calls: list[dict[str, Any]],
+    *, _call_clock=None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    arguments = resolve_value(step["arguments"], completed, fixture)
+    try:
+        arguments = resolve_value(step["arguments"], completed, fixture)
+    except BaseException as exc:
+        if _call_clock is not None:
+            calls.append({'arguments': step['arguments'], 'attempt': 1, 'sequence': len(calls)+1,
+                          'is_error': True, 'step_id': step['id'], 'structured': None,
+                          'tool': step['tool'], 'started_at': utc_now(), 'ended_at': utc_now(),
+                          'duration_ms': 0, 'monotonic': _call_clock.not_invoked(),
+                          'error': {'type': type(exc).__name__, 'message': str(exc)}})
+        raise
     repeat = step.get("repeat_until")
     max_attempts = repeat["max_attempts"] if repeat else 1
     interval = repeat["interval_seconds"] if repeat else 0
@@ -533,36 +543,63 @@ async def execute_tool_step(
     last: dict[str, Any] = {}
     evaluated: list[dict[str, Any]] = []
     for attempt in range(1, max_attempts + 1):
-        call_started, call_clock = utc_now(), time.monotonic()
-        try:
-            from tests.p05_pc026_governance import before_effect
-            before_effect()
-            raw = await session.call_tool(step["tool"], arguments)
-        except BaseException as exc:
-            calls.append({'arguments': arguments, 'attempt': attempt, 'sequence': len(calls)+1,
-                          'is_error': True, 'step_id': step['id'], 'structured': None,
-                          'tool': step['tool'], 'started_at': call_started, 'ended_at': utc_now(),
-                          'duration_ms': max(0,int((time.monotonic()-call_clock)*1000)),
-                          'error': {'type': type(exc).__name__, 'message': str(exc)}})
-            raise
-        last = result_value(raw)
-        evaluated = [evaluate_assertion(item, last, fixture) for item in assertion_spec]
-        calls.append(
-            {
-                "arguments": arguments,
-                "attempt": attempt,
-                "sequence": len(calls) + 1,
-                "is_error": last["isError"],
-                "step_id": step["id"],
-                "structured": last["structuredContent"],
-                "mcp_result": raw.model_dump(mode='json',by_alias=True,exclude_none=True)
-                              if hasattr(raw,'model_dump') else None,
-                "tool": step["tool"],
-                "started_at": call_started,
-                "ended_at": utc_now(),
-                "duration_ms": max(0, int((time.monotonic()-call_clock)*1000)),
-            }
-        )
+        if _call_clock is not None:
+            row = {'arguments': arguments, 'attempt': attempt, 'sequence': len(calls)+1,
+                   'is_error': True, 'step_id': step['id'], 'structured': None,
+                   'tool': step['tool'], 'started_at': utc_now()}
+            raw, error, timing_error = await _call_clock.observe(session, step['tool'], arguments, row)
+            row['ended_at'] = utc_now()
+            calls.append(row)
+            if raw is not None:
+                try:
+                    last = result_value(raw)
+                    row.update(is_error=last['isError'], structured=last['structuredContent'])
+                    row['mcp_result'] = raw.model_dump(mode='json', by_alias=True, exclude_none=True)
+                except BaseException as exc:
+                    error = error or exc
+            if raw is None and error is None and timing_error is None:
+                error = ScenarioFailure('SDK returned no CallToolResult')
+            if error is not None:
+                row['error'] = {'type': type(error).__name__, 'message': str(error)}
+            if timing_error is not None:
+                row['timing_error'] = {'type': type(timing_error).__name__, 'message': str(timing_error)}
+            if error is not None:
+                raise error
+            if timing_error is not None:
+                from tests.p06_call_clock import ClockError
+                raise ClockError('call-clock end sampling failed') from timing_error
+            evaluated = [evaluate_assertion(item, last, fixture) for item in assertion_spec]
+        else:
+            call_started, call_clock = utc_now(), time.monotonic()
+            try:
+                from tests.p05_pc026_governance import before_effect
+                before_effect()
+                raw = await session.call_tool(step["tool"], arguments)
+            except BaseException as exc:
+                calls.append({'arguments': arguments, 'attempt': attempt, 'sequence': len(calls)+1,
+                              'is_error': True, 'step_id': step['id'], 'structured': None,
+                              'tool': step['tool'], 'started_at': call_started, 'ended_at': utc_now(),
+                              'duration_ms': max(0,int((time.monotonic()-call_clock)*1000)),
+                              'error': {'type': type(exc).__name__, 'message': str(exc)}})
+                raise
+            last = result_value(raw)
+            evaluated = [evaluate_assertion(item, last, fixture) for item in assertion_spec]
+            calls.append(
+                {
+                    "arguments": arguments,
+                    "attempt": attempt,
+                    "sequence": len(calls) + 1,
+                    "is_error": last["isError"],
+                    "step_id": step["id"],
+                    "structured": last["structuredContent"],
+                    "mcp_result": raw.model_dump(mode='json',by_alias=True,exclude_none=True)
+                                  if hasattr(raw,'model_dump') else None,
+                    "tool": step["tool"],
+                    "started_at": call_started,
+                    "ended_at": utc_now(),
+                    "duration_ms": max(0, int((time.monotonic()-call_clock)*1000)),
+                }
+            )
         if all(item["passed"] for item in evaluated):
             return last, evaluated
         if last["isError"] and not any(item["op"] == "is_error" for item in assertion_spec):
@@ -1068,8 +1105,13 @@ async def run_scenario(
     stderr_path = Path(stderr_file.name)
     capture: HttpHeaderCapture | None = None
     resource_gate = None
+    run_clock = None
+    pending_base_error = None
     children_before = direct_child_pids(os.getpid())
     try:
+        if admission is not None:
+            from tests.p06_call_clock import RunClock
+            run_clock = RunClock()
         if transport == "stdio":
             env = {key: value for key, value in os.environ.items() if key.upper() in SAFE_ENV}
             env.setdefault("PYTHONUTF8", "1")
@@ -1195,9 +1237,9 @@ async def run_scenario(
                         if resource_gate:
                             (value,assertions),resource_row = await guarded_step(
                                 resource_gate, step['id'],
-                                lambda: execute_tool_step(session,step,completed,fixture,report['calls']))
+                                lambda: execute_tool_step(session,step,completed,fixture,report['calls'], _call_clock=run_clock))
                         else:
-                            value, assertions = await execute_tool_step(session,step,completed,fixture,report['calls'])
+                            value, assertions = await execute_tool_step(session,step,completed,fixture,report['calls'], _call_clock=run_clock)
                         completed[step["id"]] = value
                         report["steps"].append(
                             {"assertions": assertions, "id": step["id"], "kind": "tool", "passed": True,
@@ -1216,6 +1258,8 @@ async def run_scenario(
                         report["unexecuted_step_ids"] = [item["id"] for item in scenario["steps"][index + 1 :]]
                         break
                 for cleanup in scenario["cleanup"]:
+                    if run_clock is not None and run_clock.failed:
+                        break
                     when = cleanup["when"]
                     if when == "on_success" and scenario_failed:
                         continue
@@ -1224,7 +1268,7 @@ async def run_scenario(
                     cleanup_row = {"id": cleanup["id"], "passed": False, "tool": cleanup["tool"], "when": when}
                     try:
                         _, assertions = await execute_tool_step(
-                            session, cleanup, completed, fixture, report["calls"]
+                            session, cleanup, completed, fixture, report["calls"], _call_clock=run_clock
                         )
                         cleanup_row["assertions"] = assertions
                         cleanup_row["passed"] = True
@@ -1244,7 +1288,9 @@ async def run_scenario(
                     # the check outcome is reflected in the report status only.
                     validate_cross_step_invariants(scenario, completed, report["calls"])
         report["status"] = "failed" if scenario_failed else "success"
-    except Exception as exc:
+    except BaseException as exc:
+        if not isinstance(exc, Exception):
+            pending_base_error = exc
         scenario_failed = True
         report["status"] = "failed"
         if report["failure"] is None:
@@ -1256,7 +1302,10 @@ async def run_scenario(
             }
     finally:
         if capture is not None:
-            (run_dir/'http-headers.json').write_bytes(canonical_bytes(capture.responses))
+            try:
+                (run_dir/'http-headers.json').write_bytes(canonical_bytes(capture.responses))
+            except Exception as exc:
+                _mark_report_failed(report, exc)
             try:
                 await http_client.aclose()
             except Exception as exc:
@@ -1264,8 +1313,11 @@ async def run_scenario(
                 report['coverage'] = []
                 report['failure'] = report['failure'] or {
                     'type':type(exc).__name__,'message':str(exc),'step_id':None}
-        stderr_file.close()
-        stderr_path.unlink(missing_ok=True)
+        try:
+            stderr_file.close()
+            stderr_path.unlink(missing_ok=True)
+        except Exception as exc:
+            _mark_report_failed(report, exc)
         report["ended_at"] = utc_now()
         report["duration_ms"] = max(0, int((time.monotonic() - started) * 1000))
         if report["status"] == "success":
@@ -1306,18 +1358,55 @@ async def run_scenario(
                 "index_sha256": report["index_sha256"],
             }
             evidence_bytes = canonical_bytes(snapshot_evidence)
-            (run_dir / "snapshot-evidence.json").write_bytes(evidence_bytes)
-            report["snapshot_evidence_sha256"] = hashlib.sha256(evidence_bytes).hexdigest()
+            try:
+                (run_dir / "snapshot-evidence.json").write_bytes(evidence_bytes)
+                report["snapshot_evidence_sha256"] = hashlib.sha256(evidence_bytes).hexdigest()
+            except Exception as exc:
+                _mark_report_failed(report, exc)
         if admission is not None:
             admission.finish_report(report)
-        report_path.write_bytes(canonical_bytes(report))
-        if scenario_id.startswith('p06-') and transport == 'streamable-http':
+        _finalize_report(report, run_dir, evidence_root, run_clock,
+                         seal=scenario_id.startswith('p06-') and transport == 'streamable-http')
+    if pending_base_error is not None:
+        raise pending_base_error
+    return report, report_path
+
+
+def _mark_report_failed(report, exc):
+    report.update(status='failed', coverage=[], failure={
+        'type': type(exc).__name__, 'message': str(exc), 'previous_failure': report.get('failure')})
+
+
+def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal):
+    """Save a finalized new attempt; never repair a closed/historical clock."""
+    report_path = run_dir / 'report.json'
+    try:
+        if run_clock is not None and report['status'] == 'success':
+            from tests.p06_call_clock import validate_calls
+            validate_calls(report, run_clock.clock)
+        raw = canonical_bytes(report)
+        report_path.write_bytes(raw)
+        if run_clock is not None:
+            try:
+                run_clock.save(run_dir, report, raw)
+            except Exception as exc:
+                _mark_report_failed(report, exc)
+                report_path.write_bytes(canonical_bytes(report))
+        if seal:
             from tests.p06_package import member_inventory, verify_manifest
             (run_dir/'package-manifest.json').write_bytes(canonical_bytes(member_inventory(run_dir,evidence_root)))
             verify_manifest(run_dir,evidence_root)
             from tests.p06_receive import receive
             receive(run_dir,evidence_root)
-    return report, report_path
+    except BaseException as exc:
+        _mark_report_failed(report, exc)
+        # Best effort only in this new owned run: never replace a clock original
+        # or retry a receipt whose append outcome may be unknown.
+        try:
+            report_path.write_bytes(canonical_bytes(report))
+        except Exception as preservation_error:
+            exc.add_note('failed report preservation: ' + str(preservation_error))
+        raise
 
 
 def main() -> int:

@@ -260,7 +260,7 @@ class ScenarioResourceGate:
                             'data/p06_resource_policy.json','data/p03_invocations.json'}
         source_root = _admission.group.repository / 'tests' if _admission is not None else Path(__file__).parent
         if _admission is not None:
-            expected_sources |= {'p06_pc026_binding.py'}
+            expected_sources |= {'p06_pc026_binding.py', 'p06_call_clock.py'}
         if set(source)!=expected_sources or any(digest(source_root/name)!=value for name,value in source.items()):
             raise ValueError('qualification implementation changed; requalification required')
         verify_report_shape(report)

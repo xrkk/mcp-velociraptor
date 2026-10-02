@@ -230,7 +230,7 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
                             'files':{name:runner.sha256_file(REPO_ROOT/'tests'/name) for name in
                                      ('scenario_runner.py','p06_resource_gate.py','p06_formal_session.py',
                                       'p06_resource_qualification.py','p06_package.py','p06_evidence.py','p06_resource_policy.py',
-                                      'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py','data/p06_scenario_index.json',
+                                      'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py','p06_call_clock.py','data/p06_scenario_index.json',
                                       'data/p06_resource_policy.json','data/p03_invocations.json')}})
     try:
         if len(invocations) != 8:

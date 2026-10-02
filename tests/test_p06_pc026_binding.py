@@ -150,7 +150,7 @@ class CurrentConsumerTests(unittest.TestCase):
             name: ev._sha((self.root/'tests'/name).read_bytes()) for name in (
                 'scenario_runner.py','p06_resource_gate.py','p06_formal_session.py',
                 'p06_resource_qualification.py','p06_package.py','p06_evidence.py','p06_resource_policy.py',
-                'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py',
+                'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py','p06_call_clock.py',
                 'data/p06_scenario_index.json','data/p06_resource_policy.json','data/p03_invocations.json')}}] + rows
         report['calls'] = []; report['coverage'] = []
         def add(label, tool, arguments, structured):
@@ -228,8 +228,83 @@ class CurrentConsumerTests(unittest.TestCase):
         return run
 
     def seal(self, run):
+        # Synthetic fixture only: declared intervals are model observations,
+        # never appended to production/historical success originals.
+        from tests.p06_call_clock import RunClock
+        report = json.loads((run/'report.json').read_bytes())
+        if report['scenario'] not in {'resource-qualification', 'individual-acceptance'} and report['status']=='success':
+            clock_path = run/'call-clock.json'
+            metadata = (json.loads(clock_path.read_bytes())['clock'] if clock_path.exists()
+                        else RunClock().clock)
+            for i, call in enumerate(report['calls']):
+                call['monotonic'] = {'clock_id': metadata['clock_id'], 'invoked': True,
+                                     'started_ns': i*2_000_000, 'ended_ns': i*2_000_000+1_000_000}
+                call['duration_ms'] = 1
+            raw = ev.canonical_json(report); (run/'report.json').write_bytes(raw)
+            value = {'schema_version': 1, 'kind': 'pc026-p06-call-clock-v1',
+                     'run_id': report['run_id'], 'runner': report['runner'],
+                     'report_ref': {'path': 'report.json', 'size': len(raw), 'sha256': ev._sha(raw)},
+                     'clock': metadata, 'status': 'RECORDED'}
+            clock_path.write_bytes(ev.canonical_json(value))
         (run / 'package-manifest.json').write_bytes(p06_package.canonical_bytes(
             p06_package.member_inventory(run, self.received)))
+
+    def test_call_clock_actual_admission_matrix_and_tail_drift(self):
+        from tests import p06_call_clock
+        run, _ = self.attempt()
+        report_path = run/'report.json'; clock_path = run/'call-clock.json'
+        original_report = report_path.read_bytes(); original_clock = clock_path.read_bytes()
+        report = json.loads(original_report)
+        admission = binding._from_group(self.load())
+        admission.report(report, run, self.received)
+        self.assertIn(clock_path, admission.consumed)
+        self.assertIn('run/call-clock.json', {r['path'] for r in p06_package.member_inventory(run,self.received)['members']})
+        mutations = ['missing','bool','inverse','overlap','domain','run','ref','extra','duplicate']
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                report_path.write_bytes(original_report); clock_path.write_bytes(original_clock)
+                d=json.loads(original_report); c=json.loads(original_clock)
+                if mutation == 'bool':d['calls'][0]['monotonic']['started_ns']=True
+                if mutation == 'inverse':d['calls'][0]['monotonic']['ended_ns']=-1
+                if mutation == 'overlap':d['calls'][1]['monotonic']['started_ns']=0
+                if mutation == 'domain':d['calls'][0]['monotonic']['clock_id']=str(uuid.uuid4())
+                raw=ev.canonical_json(d);report_path.write_bytes(raw)
+                c['report_ref'].update(size=len(raw),sha256=ev._sha(raw))
+                if mutation == 'run':c['run_id']=str(uuid.uuid4())
+                if mutation == 'ref':c['report_ref']['sha256']='0'*64
+                if mutation == 'extra':c['clock']['extra']=1
+                clock_path.write_bytes(ev.canonical_json(c))
+                if mutation == 'missing':clock_path.unlink()
+                if mutation == 'duplicate':clock_path.write_bytes(b'{"schema_version":1,"schema_version":1}')
+                # Rebind only the synthetic package: the target is the actual
+                # clock consumer predicate, not an unrelated stale manifest.
+                (run/'package-manifest.json').write_bytes(p06_package.canonical_bytes(
+                    p06_package.member_inventory(run,self.received)))
+                with self.assertRaises((ValueError, p06_evidence.EvidenceError, OSError)):
+                    binding._from_group(self.load()).report(d,run,self.received)
+        report_path.write_bytes(original_report);clock_path.write_bytes(original_clock)
+        (run/'package-manifest.json').write_bytes(p06_package.canonical_bytes(
+            p06_package.member_inventory(run,self.received)))
+        admission=binding._from_group(self.load());admission.report(report,run,self.received)
+        changed=json.loads(original_clock);changed['clock']['implementation']+=' drift'
+        clock_path.write_bytes(ev.canonical_json(changed))
+        with self.assertRaisesRegex(ev.Pc020EvidenceError,'drift'):admission.recheck()
+
+    def test_call_clock_run_domain_cannot_be_reused(self):
+        run1,_=self.attempt();run2,_=self.attempt('p06-ransomware-root-cause')
+        old=json.loads((run1/'call-clock.json').read_bytes())['clock']['clock_id']
+        report=json.loads((run2/'report.json').read_bytes())
+        value=json.loads((run2/'call-clock.json').read_bytes())
+        value['clock']['clock_id']=old
+        for row in report['calls']:row['monotonic']['clock_id']=old
+        raw=ev.canonical_json(report);(run2/'report.json').write_bytes(raw)
+        value['report_ref'].update(size=len(raw),sha256=ev._sha(raw))
+        (run2/'call-clock.json').write_bytes(ev.canonical_json(value))
+        (run2/'package-manifest.json').write_bytes(p06_package.canonical_bytes(p06_package.member_inventory(run2,self.received)))
+        admission=binding._from_group(self.load())
+        admission.report(json.loads((run1/'report.json').read_bytes()),run1,self.received)
+        with self.assertRaisesRegex(ev.Pc020EvidenceError,'domain reused'):
+            admission.report(report,run2,self.received)
 
     def test_full_aggregate_and_selection_rejection_actual_entry(self):
         qualification = self.qualification()
@@ -303,7 +378,7 @@ def audit(event,args):
             raise AssertionError('consumer read escaped freeze: ' + str(path))
 sys.addaudithook(audit)
 from tests import p06_pc026_binding as binding
-from tests import scenario_runner, p06_receive, p06_aggregate_reports
+from tests import scenario_runner, p06_receive, p06_aggregate_reports, p06_call_clock
 from tests import p07_cost_measurement, p07_cost_measurement_r232, p06_resource_qualification
 admission = binding.load()
 modules = {}
@@ -329,7 +404,7 @@ print(json.dumps({'qualified':True,'modules':modules}))
         with tempfile.TemporaryDirectory(dir=os.environ['PC020_TEST_TEMP_ROOT']) as directory:
             root = Path(directory)
             fixture = ApprovalFixture(root,Path(os.environ['PC026_BOOTSTRAP_FIXTURE_ROOT']))
-            for name in ('tests/p06_pc026_binding.py','tests/p06_resource_qualification.py',
+            for name in ('tests/p06_call_clock.py',gov.CALL_CLOCK_CONTRACT,'tests/p06_pc026_binding.py','tests/p06_resource_qualification.py',
                          'tests/data/p03_invocations.json','tests/scenarios/full/p06-data-exfiltration.json'):
                 original = (root/name).read_bytes()
                 ref = fixture.freeze.pop(name); fixture.refs.pop(name); (root/name).unlink()
@@ -346,6 +421,7 @@ print(json.dumps({'qualified':True,'modules':modules}))
         run, _ = self.attempt()
         report = json.loads((run/'report.json').read_bytes())
         report.update(status='failed',coverage=[],failure={'type':'synthetic-test','message':'failed call'})
+        (run/'call-clock.json').unlink()
         (run/'report.json').write_bytes(ev.canonical_json(report)); self.seal(run)
         with patch.object(gov,'load',side_effect=AssertionError('failed attempt must not obtain qualification')):
             receipt = p06_receive.receive(run,self.received)

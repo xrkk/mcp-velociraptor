@@ -23,6 +23,7 @@ class Admission:
     canonical: bytes
     bindings: selector.ControllerBindings
     consumed: dict = field(default_factory=dict)
+    clock_runs: dict = field(default_factory=dict)
 
     def read(self, path: Path) -> bytes:
         data, identity, _ = self.group.read_path(path)
@@ -49,7 +50,8 @@ class Admission:
         from tests.p06_aggregate_reports import verify_report_shape, verify_tools_schema_binding
         from tests.p06_evidence import plain_file, verify_observation
         from tests.p06_package import member_inventory, member_sources, canonical_bytes
-        governance.require(json.loads(self.read(plain_file(run_dir, 'report.json'))) == report,
+        report_raw = self.read(plain_file(run_dir, 'report.json'))
+        governance.require(json.loads(report_raw) == report,
                            'report changed before consumption')
         governance.require(report.get('schema_version') == 2 and 'baseline_binding' not in report,
                            'current P06 requires restore-bound schema2, not schema3')
@@ -90,6 +92,11 @@ class Admission:
                 and report['fixture_spec_sha256'] == fixture['sha256'],
                 'qualification source/index/fixture differs from approval')
         else:
+            from tests import p06_call_clock
+            clock = p06_call_clock.validate(self.read(plain_file(run_dir, 'call-clock.json')), report_raw, report)
+            clock_id = clock['clock']['clock_id']
+            owner = self.clock_runs.setdefault(clock_id, report['run_id'])
+            governance.require(owner == report['run_id'], 'call-clock domain reused across runs')
             index_ref = self.group.freeze_refs['tests/data/p06_scenario_index.json']
             index = json.loads(self.group.read(index_ref))
             rows = [row for row in index['scenarios'] if row['scenario_id'] == report['scenario']]
