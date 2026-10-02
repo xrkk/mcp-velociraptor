@@ -92,9 +92,10 @@ class EndpointTests(unittest.TestCase):
         app = Starlette(routes=[Route("/chunkbin", _chunkbin_endpoint(holder), methods=["POST"])])
         client = TestClient(app)
         response = client.post("/chunkbin", headers={
+            "Content-Type": "application/octet-stream",
             "x-velo-direction": "pull", "x-velo-transfer-id": "trial",
             "x-velo-request-digest": req["request_digest"], "x-velo-offset": "0",
-            "x-velo-count-per-chunk": "4096", "x-velo-chunk-count": "2"})
+            "x-velo-count-per-chunk": "4096", "x-velo-chunk-count": "2"}, content=_vbt_frame({}, b""))
         self.assertEqual(response.status_code, 200)
         header, wire = _parse_vbt(response.content)
         self.assertEqual(header["status"], "success")
@@ -114,8 +115,8 @@ class EndpointTests(unittest.TestCase):
         app = Starlette(routes=[Route("/chunkbin", _chunkbin_endpoint(service), methods=["POST"])])
         client = TestClient(app)
         response = client.post("/chunkbin", headers={"x-velo-transfer-id": ""})
-        header, _ = _parse_vbt(response.content)
-        self.assertEqual(header["status"], "error")
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.json(), {"error": {"code": "unsupported_media_type"}})
 
 
 if __name__ == "__main__":

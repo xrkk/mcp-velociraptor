@@ -12,7 +12,7 @@ import threading
 from typing import Annotated, Any, Literal
 
 from jsonschema import Draft202012Validator
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import MCPServer, Context
 from mcp.types import CallToolResult
 from mcp.server.mcpserver.utilities.func_metadata import FuncMetadata
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, model_serializer, model_validator
@@ -242,8 +242,19 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
         raise ArtifactRegistryError("transfer tool name conflict")
     manager = TransferToolService(factory)
 
-    async def call(name, **args):
+    async def call(name, _context=None, **args):
         envelope = await asyncio.to_thread(manager.invoke, name, **args)
+        if name == "transfer_capabilities" and envelope.status == "success" and envelope.result.get("enabled") is True:
+            # Only the formal app can grant binary, for this actual SDK session.
+            # stdio, direct invocation and unsupported SDK managers remain null.
+            try:
+                request = _context.request_context.request if _context is not None else None
+            except ValueError:
+                request = None
+            bindings = getattr(getattr(request, "app", None), "state", None)
+            bindings = getattr(bindings, "transfer_bindings", None)
+            if bindings is not None and bindings.check(request.scope["headers"], request.scope.get("velo.bearer_owner")) is None:
+                envelope.result = {**envelope.result, "binary_wire": {"version":"VBT1","session_required":True}}
         # Publish only the structured payload. The SDK would otherwise also
         # serialize the same envelope into a text block, doubling every
         # response body; large chunk payloads are exactly where the client
@@ -251,8 +262,8 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
         return CallToolResult(content=[], structured_content=envelope.model_dump(
             mode="json", by_alias=True, exclude_none=True))
 
-    async def transfer_capabilities() -> TransferEnvelope:
-        return await call("transfer_capabilities")
+    async def transfer_capabilities(ctx: Context) -> TransferEnvelope:
+        return await call("transfer_capabilities", _context=ctx)
 
     async def transfer_begin(request: TransferRequest) -> TransferEnvelope:
         return await call("transfer_begin", request=request.model_dump(exclude_none=True))

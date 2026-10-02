@@ -112,6 +112,8 @@ def _classify(exc: Exception, operation: str | None = None) -> AdapterError:
             if item.code not in ("connection_unavailable", "protocol_error"):
                 return item
         return AdapterError("protocol_error", may_have_committed=unknown)
+    if isinstance(exc, HTTPBodyLimitError):
+        return AdapterError(str(exc), may_have_committed=unknown)
     if isinstance(exc, AdapterError):
         return exc
     if isinstance(exc, httpx2.ConnectError):
@@ -157,197 +159,113 @@ def _group_leaves(group: BaseExceptionGroup) -> list[BaseException]:
     return leaves
 
 
-_VBT_MAGIC = b"VBT1"
+from . import wire
+from .http_budget import CountedTransport, HTTPBodyLimitError, CALL_HTTP_FAILURE
+
+_VBT_MAGIC = wire.MAGIC
 
 
-def _header_bytes(header: dict) -> bytes:
-    return json.dumps(header, separators=(",", ":")).encode("utf-8")
+def _header_bytes(header):
+    return json.dumps(header, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
-def _parse_vbt(body: bytes):
-    if len(body) < 8 or body[:4] != _VBT_MAGIC:
-        raise AdapterError("malformed_response")
-    header_len = int.from_bytes(body[4:8], "little")
-    if header_len > 1 << 20 or 8 + header_len > len(body):
-        raise AdapterError("malformed_response")
-    header = json.loads(body[8:8 + header_len])
-    if not isinstance(header, dict):
-        raise AdapterError("malformed_response")
-    return header, body[8 + header_len:]
+def _parse_vbt(body):
+    try:
+        return wire.parse(body)
+    except wire.WireError:
+        raise AdapterError("malformed_response") from None
 
 
 class _DirectChunkChannel:
-    """Bypasses the mcp SDK's SSE reader for chunk payloads only.
+    """Binary encoding on the same HTTP client and official SDK live session.
 
-    Measured on .149: the SDK intermittently drops multi-hundred-KiB SSE
-    responses ("SSE stream ended without a response") while the same bodies
-    stream perfectly through plain httpx. This channel speaks the same
-    Streamable HTTP protocol (initialize, notifications/initialized, then
-    tools/call) over one dedicated session and validates responses with the
-    exact same schema rules the SDK path uses.
+    This channel never initializes another session, probes a write, retries a
+    write, or falls back to JSON after any uncertain outcome.
     """
+    def __init__(self, http, url, session_id, instance, deadline, timeout):
+        self.http = http; self.url = url.rsplit("/", 1)[0] + "/chunkbin"
+        self.session_id = session_id; self.instance = instance
+        self.deadline = deadline; self.timeout = timeout
 
-    def __init__(self, url: str, headers: dict, deadline: float, timeout: float):
-        self._url = url
-        self._headers = headers
-        self._deadline = deadline
-        self._timeout = timeout
-        self._session_id: str | None = None
-        self._http: httpx2.AsyncClient | None = None
-        self._binary_tried = False
-        self._binary_ok = False
-
-    async def close(self):
-        if self._http is not None:
-            await self._http.aclose()
-            self._http = None
-        self._session_id = None
-        self._binary_tried = False
-        self._binary_ok = False
-
-    async def _binary_pull(self, arguments: dict):
-        headers = dict(self._headers)
-        headers.update({
-            "x-velo-direction": "pull",
-            "x-velo-transfer-id": arguments["transfer_id"],
-            "x-velo-request-digest": arguments["request_digest"],
-            "x-velo-offset": str(arguments["offset"]),
-            "x-velo-count-per-chunk": str(arguments["count_per_chunk"]),
-            "x-velo-chunk-count": str(arguments["chunk_count"]),
-        })
-        response = await self._http.post(self._url.rsplit("/", 1)[0] + "/chunkbin", headers=headers)
-        if response.status_code != 200:
-            raise AdapterError("connection_failed")
-        self._binary_ok = True
-        header, payload = _parse_vbt(response.content)
-        if header.get("status") != "success":
-            _err = header.get("error") or {}
-            raise AdapterError(str(_err.get("code", "protocol_error")) +
-                               (":" + str(_err.get("detail")) if _err.get("detail") else ""))
-        result = header.get("result") or {}
-        meta = result.get("chunks") or []
-        chunks = []
-        cursor = 0
-        for item in meta:
-            count = item["count"]
-            data = payload[cursor:cursor + count]
-            if len(data) != count:
-                raise AdapterError("malformed_response")
-            chunks.append({"offset": item["offset"], "count": count, "data_base64":
-                           base64.b64encode(data).decode("ascii"),
-                           "chunk_sha256": item["chunk_sha256"]})
-            cursor += count
-        return {"schema": "velo.transfer.guest.response.v1", "chunks": chunks,
-                "verified_offset": result.get("verified_offset")}
-
-    async def _binary_push(self, name: str, arguments: dict):
-        items = arguments["chunks"]
-        payload = bytearray()
-        meta = []
-        for item in items:
-            raw = base64.b64decode(item["data_base64"])
-            payload.extend(raw)
-            meta.append({"count": item["count"], "chunk_sha256": item["chunk_sha256"]})
-        headers = dict(self._headers)
-        headers.update({
-            "x-velo-direction": "push",
-            "x-velo-transfer-id": arguments["transfer_id"],
-            "x-velo-request-digest": arguments["request_digest"],
-            "x-velo-offset": str(arguments["offset"]),
-            "Content-Type": "application/octet-stream",
-        })
-        header = _header_bytes({"chunks": meta})
-        body = _VBT_MAGIC + len(header).to_bytes(4, "little") + header + bytes(payload)
-        response = await self._http.post(self._url.rsplit("/", 1)[0] + "/chunkbin", headers=headers, content=body)
-        if response.status_code != 200:
-            raise AdapterError("connection_failed")
-        self._binary_ok = True
-        header, _ = _parse_vbt(response.content)
-        if header.get("status") != "success":
-            _err = header.get("error") or {}
-            raise AdapterError(str(_err.get("code", "protocol_error")) +
-                               (":" + str(_err.get("detail")) if _err.get("detail") else ""))
-        result = header.get("result") or {}
-        return {"schema": "velo.transfer.guest.response.v1",
-                "verified_offset": result.get("verified_offset"), "accepted": result.get("accepted", 0)}
-
-    async def _ensure(self):
-        if self._http is None:
-            self._http = httpx2.AsyncClient(headers=self._headers, timeout=self._timeout,
-                                            follow_redirects=False, trust_env=False)
-        if self._session_id is not None:
-            return
-        base = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
-        response = await self._http.post(self._url, headers=base, json={
-            "jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
-                "protocolVersion": "2024-11-05", "capabilities": {},
-                "clientInfo": {"name": "velo-transfer-direct", "version": "0"}}})
-        if response.status_code != 200:
-            raise AdapterError("connection_failed")
-        self._session_id = response.headers.get("mcp-session-id")
-        if not self._session_id:
-            raise AdapterError("protocol_error")
-        base["Mcp-Session-Id"] = self._session_id
-        await self._http.post(self._url, headers=base,
-                              json={"jsonrpc": "2.0", "method": "notifications/initialized"})
-
-    async def call(self, name: str, arguments: dict) -> dict:
-        # PC026 binary/session implementation is pending. Never probe a write
-        # then replay its unknown result through JSON.
+    async def call(self, name, arguments):
+        if name != "transfer_chunks":
+            raise AdapterError("invalid_operation")
+        push = "chunks" in arguments
+        direction = "push" if push else "pull"
+        headers = {"Mcp-Session-Id":self.session_id, "X-MCP-Server-Instance":self.instance,
+            "Content-Type":"application/octet-stream", "x-velo-direction":direction,
+            "x-velo-transfer-id":arguments["transfer_id"],
+            "x-velo-request-digest":arguments["request_digest"], "x-velo-offset":str(arguments["offset"])}
         try:
-            await self._ensure()
-        except AdapterError:
-            await self.close()
-            raise
-        base = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
-                "Mcp-Session-Id": self._session_id}
+            if push:
+                meta = [{k:c[k] for k in ("count", "chunk_sha256")} for c in arguments["chunks"]]
+                payload = b"".join(base64.b64decode(c["data_base64"], validate=True) for c in arguments["chunks"])
+                body = wire.encode({"chunks":meta},payload,"push_request")
+            else:
+                headers.update({"x-velo-count-per-chunk":str(arguments["count_per_chunk"]),
+                                "x-velo-chunk-count":str(arguments["chunk_count"])})
+                body = wire.encode({},b"","pull_request")
+        except (wire.WireError, ValueError):
+            raise AdapterError("invalid_arguments") from None
+        async def outgoing():
+            for i in range(0,len(body),65536):
+                _remaining(self.deadline,self.timeout)
+                yield body[i:i+65536]
         try:
-            async with self._http.stream("POST", self._url, headers=base, json={
-                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                    "params": {"name": name, "arguments": arguments}}) as response:
-                if response.status_code != 200:
-                    await response.aread()
-                    if response.status_code in (400, 401, 403, 421):
-                        raise AdapterError("authentication_denied")
-                    raise AdapterError("connection_failed")
-                data_lines = []
-                buffer = ""
-                async for text in response.aiter_text():
-                    buffer += text
-                    *complete, buffer = buffer.split("\n")
-                    for line in complete:
-                        line = line[:-1] if line.endswith("\r") else line
-                        if line.startswith("data: "):
-                            data_lines.append(line[6:])
-                for line in buffer.splitlines():
-                    if line.startswith("data: "):
-                        data_lines.append(line[6:])
-                if not data_lines:
-                    raise AdapterError("protocol_error")
-                payload = json.loads("\n".join(data_lines))
+            timeout = _remaining(self.deadline,self.timeout)
+            async with asyncio.timeout(timeout):
+                async with self.http.stream("POST",self.url,headers=headers,content=outgoing()) as response:
+                    if response.headers.get("x-mcp-server-instance") != self.instance:
+                        raise AdapterError("instance_changed",may_have_committed=push)
+                    data = bytearray()
+                    async for part in response.aiter_bytes():
+                        if len(data)+len(part)>wire.BODY_LIMIT:
+                            raise AdapterError("response_too_large",may_have_committed=push)
+                        data.extend(part)
+                    if response.status_code != 200:
+                        if response.headers.get("content-type") != "application/json":
+                            raise AdapterError("protocol_error",may_have_committed=push)
+                        try:
+                            error = wire.strict_json(bytes(data))
+                            code = error["error"]["code"]
+                            allowed = ("session_required","invalid_frame") if response.status_code == 400 else (wire.HTTP_ERRORS.get(response.status_code),)
+                            if error != {"error":{"code":code}} or code not in allowed:
+                                raise wire.WireError("invalid_frame")
+                        except (wire.WireError, KeyError, TypeError):
+                            raise AdapterError("protocol_error",may_have_committed=push) from None
+                        raise AdapterError(code)
+                    if response.headers.get("content-type") != "application/octet-stream":
+                        raise AdapterError("malformed_response",may_have_committed=push)
+                    header,payload = wire.parse(bytes(data))
+                    component = "error_response" if header.get("status")=="error" else direction+"_response"
+                    wire.validate(header,payload,component)
+                    if component=="error_response":
+                        raise AdapterError(header["error"]["code"])
+                    result = header["result"]
+                    if push:
+                        if result["accepted"]!=len(arguments["chunks"]) or result["verified_offset"]!=arguments["offset"]+sum(c["count"] for c in arguments["chunks"]):
+                            raise AdapterError("malformed_response",may_have_committed=True)
+                    else:
+                        meta = result["chunks"]
+                        if len(meta)>arguments["chunk_count"] or (meta and meta[0]["offset"]!=arguments["offset"]):
+                            raise AdapterError("malformed_response")
+                        chunks=[];cursor=0
+                        for index,item in enumerate(meta):
+                            count=item["count"]
+                            if count>arguments["count_per_chunk"] or (index<len(meta)-1 and count!=arguments["count_per_chunk"]):
+                                raise AdapterError("malformed_response")
+                            chunks.append(dict(item,data_base64=base64.b64encode(payload[cursor:cursor+count]).decode("ascii")))
+                            cursor+=count
+                        result=dict(result,chunks=chunks)
+                    return dict(result,schema="velo.transfer.guest.response.v1")
+        except wire.WireError:
+            raise AdapterError("malformed_response",may_have_committed=push) from None
+        except HTTPBodyLimitError as exc:
+            raise AdapterError(str(exc),may_have_committed=push) from None
         except AdapterError:
             raise
-        except (httpx2.HTTPError, ValueError) as exc:
-            raise _classify(exc, name) from None
-        error = payload.get("error")
-        if isinstance(error, dict):
-            raise AdapterError("host_rejected")
-        result = payload.get("result")
-        if not isinstance(result, dict):
-            raise AdapterError("protocol_error")
-        envelope = result.get("structuredContent")
-        if not isinstance(envelope, dict):
-            raise AdapterError("malformed_response")
-        if result.get("isError") is True:
-            raise AdapterError("tool_error")
-        if not Draft202012Validator(SCHEMAS[name]["outputSchema"]).is_valid(envelope):
-            raise AdapterError("malformed_response")
-        if result.get("content"):
-            content = result["content"]
-            if (len(content) != 1 or content[0].get("type") != "text" or
-                    json.loads(content[0]["text"], object_pairs_hook=_json_pairs) != envelope):
-                raise AdapterError("malformed_response")
-        return _guest_result(envelope)
+        except Exception as exc:
+            raise _classify(exc,name if push else "transfer_status") from None
 
 
 class TransportAdapter:
@@ -362,6 +280,8 @@ class TransportAdapter:
         self.batch_chunks = 1
         self._instances = instances
         self._direct = None
+        self._binary_factory = None
+        self._wire_selected = None
         self.observations: dict[str, Any] = {"endpoint": endpoint, "instance": instances[-1] if instances else None,
                                               "instance_changed": len(set(instances)) > 1}
         self.fallback_reason: str | None = None
@@ -376,7 +296,7 @@ class TransportAdapter:
 
     async def _invoke(self, name: str, arguments: dict):
         attempted = False
-        if name in ("transfer_chunk", "transfer_chunks") and self._direct is not None:
+        if name == "transfer_chunks" and self._direct is not None:
             attempted = True
             try:
                 return await self._direct.call(name, arguments)
@@ -387,6 +307,8 @@ class TransportAdapter:
                 raise
             except Exception as exc:
                 raise _classify(exc, name) from None
+        failure = {}
+        failure_token = CALL_HTTP_FAILURE.set(failure)
         try:
             timeout = _remaining(self.deadline_monotonic, self.request_timeout_seconds)
             attempted = True
@@ -415,12 +337,14 @@ class TransportAdapter:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            error = _classify(exc, name)
+            error = AdapterError(failure["code"]) if failure.get("code") else _classify(exc, name)
             if attempted and name not in READ_ONLY and error.code != "batch_not_allowed":
                 error.may_have_committed = True
                 # Unknown writes require coordinator proof reconciliation.
                 error.retryable = False
             raise error from None
+        finally:
+            CALL_HTTP_FAILURE.reset(failure_token)
 
     async def call(self, operation: str, arguments: dict) -> dict:
         if operation not in NAMES or not isinstance(arguments, dict):
@@ -431,6 +355,30 @@ class TransportAdapter:
             raise AdapterError("invalid_arguments")
         if operation == "transfer_chunk" and arguments["count"] > self.raw_chunk_bytes:
             raise AdapterError("chunk_too_large")
+        if operation in ("transfer_chunk", "transfer_chunks"):
+            chunks = arguments.get("chunks", [arguments] if "data_base64" in arguments else [])
+            total = 0
+            for item in chunks:
+                count = item["count"]
+                if count > self.raw_chunk_bytes or len(item["data_base64"]) > 4 * ((count + 2) // 3):
+                    raise AdapterError("chunk_too_large")
+                total += count
+                if total > wire.BATCH_LIMIT:
+                    raise AdapterError("chunk_too_large")
+                try:
+                    raw = base64.b64decode(item["data_base64"], validate=True)
+                except ValueError:
+                    raise AdapterError("invalid_chunk") from None
+                if len(raw) != count or hashlib.sha256(raw).hexdigest() != item["chunk_sha256"]:
+                    raise AdapterError("chunk_hash_mismatch")
+        # Count the JSON request before the SDK constructs its encoded body.
+        # iterencode bounds counting without joining an unbounded document.
+        size = 0
+        for part in json.JSONEncoder(ensure_ascii=False).iterencode({"jsonrpc":"2.0","id":0,
+                "method":"tools/call","params":{"name":operation,"arguments":arguments}}):
+            size += len(part.encode("utf-8"))
+            if size > wire.BODY_LIMIT - 4096:
+                raise AdapterError("request_too_large")
         attempts = 3 if operation in READ_ONLY else 1
         for i in range(attempts):
             try:
@@ -441,13 +389,21 @@ class TransportAdapter:
                     limit = result.get("limits", {}).get("max_chunk_bytes") if isinstance(result.get("limits"), dict) else None
                     if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
                         self.raw_chunk_bytes = min(1 << 20, limit)
+                    selected = result.get("binary_wire") == {"version":"VBT1","session_required":True}
+                    if self._wire_selected is not None and self._wire_selected != selected:
+                        raise AdapterError("protocol_error")
+                    self._wire_selected = selected
+                    if selected:
+                        if self._binary_factory is None:
+                            raise AdapterError("protocol_error")
+                        self._direct = self._binary_factory()
                     batch = result.get("max_batch_chunks")
-                    # This is only a grant-based development bound. T013 still
-                    # has to enforce the complete serialized HTTP body budget.
+                    # Leave room for JSON metadata and the SDK text mirror.
+                    # CountedTransport independently enforces actual body bytes.
                     if type(batch) is int and 1 <= batch <= 64:
                         response_budget = 100 * 1024 * 1024
                         encoded_chunk = 4 * (self.raw_chunk_bytes + 2) // 3
-                        self.batch_chunks = max(1, min(batch, response_budget // encoded_chunk))
+                        self.batch_chunks = max(1, min(batch, response_budget // (2 * (encoded_chunk + 2048))))
                     else:
                         self.batch_chunks = 1
                 self._last_result = result
@@ -649,8 +605,26 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
         raise AdapterError("channel_unconfigured")
     instances: list[str] = []
     denied_status: list[int] = []
+    session_ids: list[str] = []
 
     async def response_hook(response):
+        sid = response.headers.get("mcp-session-id")
+        if sid is not None:
+            session_ids.append(sid)
+        failure = CALL_HTTP_FAILURE.get()
+        if failure is not None and response.status_code >= 400:
+            try:
+                body = await response.aread()
+                value = wire.strict_json(body)
+                code = value["error"]["code"]
+                allowed = ("session_required", "invalid_frame") if response.status_code == 400 else (wire.HTTP_ERRORS.get(response.status_code),)
+                if response.headers.get("content-type") != "application/json" or value != {"error":{"code":code}} or code not in allowed:
+                    code = "protocol_error"
+                failure["code"] = code
+            except HTTPBodyLimitError as exc:
+                failure["code"] = str(exc)
+            except (wire.WireError, KeyError, TypeError):
+                failure["code"] = "protocol_error"
         if response.status_code in (400, 401, 403, 421):
             denied_status.append(response.status_code)
         value = response.headers.get("x-mcp-server-instance")
@@ -663,7 +637,8 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
         adapter = None
         timeout = _remaining(deadline_monotonic, request_timeout_seconds)
         headers = {"Authorization": "Bearer " + endpoint.token.read()} if endpoint.token is not None else {}
-        async with httpx2.AsyncClient(headers=headers,
+        async with httpx2.AsyncClient(headers={**headers,"Accept-Encoding":"identity"},
+                                      transport=CountedTransport(),
                                       timeout=timeout, follow_redirects=False, trust_env=False,
                                       event_hooks={"response": [response_hook]}) as http:
             async with streamable_http_client(endpoint.url, http_client=http) as (read, write):
@@ -678,8 +653,12 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
                     else:
                         adapter = TransportAdapter(session, channel, endpoint.url, deadline_monotonic,
                                                    request_timeout_seconds, instances)
-                        # Use the official SDK JSON session until T013 provides
-                        # a negotiated binary channel bound to that session.
+                        def binary_factory():
+                            if not session_ids or len(set(session_ids)) != 1 or not instances or len(set(instances)) != 1:
+                                raise AdapterError("protocol_error")
+                            return _DirectChunkChannel(http, endpoint.url, session_ids[0], instances[0],
+                                                       deadline_monotonic, request_timeout_seconds)
+                        adapter._binary_factory = binary_factory
                         opened = True
                         yield adapter
                     body_completed = True
@@ -697,6 +676,9 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
                 raise AdapterError("protocol_error", may_have_committed=True) from None
         if opened and not isinstance(exc, (AdapterError, BaseExceptionGroup)):
             raise
+        leaves = _group_leaves(exc) if isinstance(exc, BaseExceptionGroup) else [exc]
+        if any(isinstance(leaf, AdapterError) for leaf in leaves):
+            raise _classify(exc) from None
         if any(status in (401, 403) for status in denied_status):
             raise AdapterError("authentication_denied") from None
         if any(status in (400, 421) for status in denied_status):

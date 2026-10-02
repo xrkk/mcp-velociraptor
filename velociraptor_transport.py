@@ -140,6 +140,11 @@ async def _send_plain_response(
     await send({"type": "http.response.body", "body": body})
 
 
+async def _send_security_response(scope, receive, send, status, code):
+    from velo_transfer.http_wire import security_error
+    await security_error(status, code)(scope, receive, send)
+
+
 class BearerAuthGate:
     """Constant-time bearer check that runs before the MCP handler."""
 
@@ -156,19 +161,17 @@ class BearerAuthGate:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        header = b""
-        for name, value in scope.get("headers", []):
-            if name == b"authorization":
-                header = value
-                break
+        credentials = [value for name, value in scope.get("headers", []) if name.lower() == b"authorization"]
+        header = credentials[0] if len(credentials) == 1 else b""
         scheme, _, provided = header.partition(b" ")
         provided = provided.strip()
         if scheme.lower() != b"bearer" or not provided:
-            await _send_plain_response(send, 401, b"Unauthorized")
+            await _send_security_response(scope, receive, send, 401, "unauthorized")
             return
         if not hmac.compare_digest(provided, self._expected):
-            await _send_plain_response(send, 401, b"Unauthorized")
+            await _send_security_response(scope, receive, send, 401, "unauthorized")
             return
+        scope = {**scope, "velo.bearer_owner": __import__("hashlib").sha256(provided).digest()}
         await self.app(scope, receive, send)
 
 
@@ -205,15 +208,17 @@ class HostOriginGate:
         host = b""
         origin = b""
         for name, value in scope.get("headers", []):
-            if name == b"host" and not host:
+            if name.lower() == b"host" and not host:
                 host = value
-            elif name == b"origin" and not origin:
+            elif name.lower() == b"origin" and not origin:
                 origin = value
-        if not self._match(host.decode("latin-1"), self._hosts):
-            await _send_plain_response(send, 421, b"Invalid Host header")
+        hosts = [v for k,v in scope.get("headers", []) if k.lower() == b"host"]
+        origins = [v for k,v in scope.get("headers", []) if k.lower() == b"origin"]
+        if len(hosts) != 1 or not self._match(host.decode("latin-1"), self._hosts):
+            await _send_security_response(scope, receive, send, 421, "bad_host")
             return
-        if origin and not self._match(origin.decode("latin-1"), self._origins):
-            await _send_plain_response(send, 403, b"Invalid Origin header")
+        if len(origins) > 1 or (origins and not self._match(origin.decode("latin-1"), self._origins)):
+            await _send_security_response(scope, receive, send, 403, "origin_denied")
             return
         await self.app(scope, receive, send)
 
@@ -272,6 +277,7 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
     app = server.streamable_http_app(
         streamable_http_path=config.path,
         stateless_http=False,
+        max_request_body_size=100 << 20,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=[f"{config.host}:{config.port}"],
@@ -279,10 +285,15 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
         ),
         host=config.host,
     )
+    from velo_transfer.http_wire import SDKSessionBindings, TransferHTTPGate
+    instance = new_server_instance_id()
+    bindings = SDKSessionBindings(getattr(server, "session_manager", None), instance)
+    app.state.transfer_bindings = bindings
     service = getattr(server, "_guest_transfer_tools", None)
     if service is not None:
         from starlette.routing import Route
         app.router.routes.append(Route("/chunkbin", _chunkbin_endpoint(service), methods=["POST"]))
+    app.add_middleware(TransferHTTPGate, bindings=bindings, mcp_path=config.path)
     # Registered first so it wraps closest to the router: the bearer gate stays
     # the outermost rejection point on /mcp, while every appended route (the
     # binary chunk channel) passes the same Host/Origin rules as the SDK's own
@@ -292,115 +303,20 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
         allowed_hosts=(f"{config.host}:{config.port}",),
         allowed_origins=tuple(config.allowed_origins),
     )
-    app.add_middleware(ServerInstanceHeader, instance_id=new_server_instance_id())
+    app.add_middleware(ServerInstanceHeader, instance_id=instance)
     app.add_middleware(BearerAuthGate, token=config.bearer_token or "")
     return app
 
 
-_VBT_MAGIC = b"VBT1"
+# Compatibility names for Python tests; production uses context-selected codec.
+from velo_transfer.wire import MAGIC as _VBT_MAGIC, parse as _vbt_parse
+from velo_transfer.http_wire import chunk_endpoint as _chunkbin_endpoint
 
 
 def _vbt_frame(header: dict, payload: bytes) -> bytes:
-    import json as _json
-    raw = _json.dumps(header, separators=(",", ":")).encode("utf-8")
+    import json
+    raw = json.dumps(header, separators=(",", ":"), allow_nan=False).encode("utf-8")
     return _VBT_MAGIC + len(raw).to_bytes(4, "little") + raw + payload
-
-
-def _vbt_parse(body: bytes) -> tuple[dict, bytes]:
-    if len(body) < 8 or body[:4] != _VBT_MAGIC:
-        raise ValueError("bad_magic")
-    header_len = int.from_bytes(body[4:8], "little")
-    if header_len > 1 << 20 or 8 + header_len > len(body):
-        raise ValueError("bad_header")
-    import json as _json
-    header = _json.loads(body[8:8 + header_len])
-    if not isinstance(header, dict):
-        raise ValueError("bad_header")
-    return header, body[8 + header_len:]
-
-
-def _chunkbin_endpoint(service):
-    """Binary chunk batches over the authenticated formal app.
-
-    Envelope rules, budgets, hashes and ledger writes are exactly the
-    transfer_chunks tool's; only the wire form differs: a small JSON header
-    plus raw payload bytes, so multi-hundred-MiB batches stop paying
-    base64+JSON text encoding twice.
-    """
-    import asyncio
-    import base64
-
-    async def endpoint(request):
-        from starlette.responses import Response
-
-        tid = request.headers.get("x-velo-transfer-id", "")
-        digest = request.headers.get("x-velo-request-digest", "")
-        offset = request.headers.get("x-velo-offset", "")
-        if not tid or not digest or not offset.isdigit():
-            return Response(_vbt_frame({"status": "error", "error": {"code": "invalid_arguments"}}, b""),
-                            media_type="application/octet-stream", status_code=200)
-        try:
-            body = await request.body()
-        except Exception:
-            return Response(_vbt_frame({"status": "error", "error": {"code": "connection_failed"}}, b""),
-                            media_type="application/octet-stream")
-        push_header = None
-        arguments = None
-        direction = request.headers.get("x-velo-direction", "pull")
-        try:
-            if direction == "push":
-                header, payload = _vbt_parse(body)
-                push_header = header
-                items_meta = header.get("chunks")
-                if not isinstance(items_meta, list) or not items_meta:
-                    raise ValueError("chunks")
-                chunks = []
-                cursor = 0
-                for item in items_meta:
-                    count = item["count"]
-                    if not isinstance(count, int) or count <= 0 or cursor + count > len(payload):
-                        raise ValueError("count")
-                    chunks.append({"count": count,
-                                   "data_base64": base64.b64encode(payload[cursor:cursor + count]).decode("ascii"),
-                                   "chunk_sha256": item["chunk_sha256"]})
-                    cursor += count
-                if cursor != len(payload):
-                    raise ValueError("length")
-                arguments = {"transfer_id": tid, "request_digest": digest, "offset": int(offset),
-                             "chunks": chunks}
-            else:
-                per = request.headers.get("x-velo-count-per-chunk", "")
-                total = request.headers.get("x-velo-chunk-count", "")
-                if not per.isdigit() or not total.isdigit():
-                    raise ValueError("range")
-                arguments = {"transfer_id": tid, "request_digest": digest, "offset": int(offset),
-                             "count_per_chunk": int(per), "chunk_count": int(total)}
-        except (ValueError, KeyError, TypeError) as exc:
-            return Response(_vbt_frame({"status": "error", "error": {
-                "code": "invalid_arguments", "detail": f"{type(exc).__name__}: {exc}"[:160]}}, b""),
-                            media_type="application/octet-stream")
-        try:
-            envelope = await asyncio.to_thread(service.invoke, "transfer_chunks", **arguments)
-        except Exception:
-            envelope = service._failure("internal_error")
-        result = envelope.result if envelope.status == "success" else None
-        if result is None:
-            return Response(_vbt_frame({"status": "error", "error": {"code": envelope.error["code"]}}, b""),
-                            media_type="application/octet-stream")
-        if direction == "push":
-            return Response(_vbt_frame({"status": "success",
-                                        "result": {"verified_offset": result["verified_offset"],
-                                                   "accepted": result.get("accepted", 0)}}, b""),
-                            media_type="application/octet-stream")
-        items = result.get("chunks", [])
-        meta = [{"offset": c["offset"], "count": c["count"], "chunk_sha256": c["chunk_sha256"]} for c in items]
-        payload = b"".join(base64.b64decode(c["data_base64"]) for c in items)
-        return Response(_vbt_frame({"status": "success",
-                                    "result": {"verified_offset": result["verified_offset"], "chunks": meta}},
-                                   payload),
-                        media_type="application/octet-stream")
-
-    return endpoint
 
 
 def run_formal_http(

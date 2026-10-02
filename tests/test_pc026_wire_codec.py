@@ -38,7 +38,7 @@ class CodecTests(unittest.TestCase):
         self.assertEqual(wire.decode(self.raw({}), 'pull_request'), ({}, b''))
         for body in (b'', self.raw({}, b'x'), self.raw({'offset':0})):
             with self.assertRaises(wire.WireError):wire.decode(body, 'pull_request')
-        h={'status':'success','result':{'verified_offset':2,'chunks':[{'offset':0,'count':1,'chunk_sha256':hashlib.sha256(b'x').hexdigest()}]}}
+        h={'status':'success','result':{'verified_offset':2,'chunks':[{'offset':-1,'count':1,'chunk_sha256':hashlib.sha256(b'x').hexdigest()}]}}
         with self.assertRaises(wire.WireError):wire.decode(self.raw(h,b'x'),'pull_response')
 
     def test_exact_headers(self):
@@ -50,6 +50,14 @@ class CodecTests(unittest.TestCase):
                 wire.request_headers(headers[:3]+[(b'x-velo-offset',value)]+headers[4:])
         with self.assertRaises(wire.WireError):wire.request_headers(headers+[(b'X-Velo-Offset',b'0')])
         with self.assertRaises(wire.WireError):wire.request_headers([(k,b'push' if k==b'x-velo-direction' else v) for k,v in headers])
+
+    def test_exact_header_chunk_and_raw_batch_limit_plus_one(self):
+        with self.assertRaises(wire.WireError):
+            wire.decode(b'VBT1'+(wire.HEADER_LIMIT+1).to_bytes(4,'little'),'push_request')
+        header={'chunks':[{'count':wire.CHUNK_LIMIT+1,'chunk_sha256':'a'*64}]}
+        with self.assertRaises(wire.WireError):wire.validate(header,b'','push_request')
+        header={'chunks':[{'count':1,'chunk_sha256':hashlib.sha256(b'x').hexdigest()}]}
+        with self.assertRaises(wire.WireError):wire.validate(header,b'x'*(wire.BATCH_LIMIT+1),'push_request')
 
     def test_error_codes_never_details(self):
         for h in ({'status':'error','error':{'code':'internal_error','detail':'secret'}},

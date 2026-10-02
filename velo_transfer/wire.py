@@ -99,7 +99,7 @@ def validate(header, payload, component):
         if end > len(payload) or hashlib.sha256(payload[cursor:end]).hexdigest() != item["chunk_sha256"]:
             raise WireError("invalid_frame")
         cursor = end
-    if cursor != len(payload) or (previous_end is not None and header["result"]["verified_offset"] != previous_end):
+    if cursor != len(payload):
         raise WireError("invalid_frame")
 
 

@@ -180,10 +180,9 @@ class FormalAppWiringTests(unittest.TestCase):
             response = client.post(
                 "/chunkbin", content=b"", headers=self._headers()
             )
-            # No x-velo-* headers: the endpoint's own invalid-arguments frame.
-            self.assertEqual(response.status_code, 200)
-            self.assertTrue(response.content.startswith(b"VBT1"))
-            self.assertIn(b"invalid_arguments", response.content)
+            # Host passes, but the strict live-session gate still precedes the endpoint.
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json(), {"error": {"code": "session_required"}})
 
     def test_chunkbin_bearer_gate_still_first(self):
         with self._client() as client:
@@ -195,7 +194,7 @@ class FormalAppWiringTests(unittest.TestCase):
 
     def test_mcp_route_keeps_sdk_gate_and_gate_middleware(self):
         with self._client() as client:
-            good = client.post("/mcp", content=b"", headers=self._headers())
+            good = client.post("/mcp", content=b"{}", headers=self._headers())
             self.assertEqual(good.status_code, 200)
             bad_host = client.post(
                 "/mcp", content=b"", headers=self._headers(host="rebind.example")
