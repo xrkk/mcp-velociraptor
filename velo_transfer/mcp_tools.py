@@ -321,21 +321,11 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
                                    {"not": {"anyOf": [{"required": ["data_base64"]},
                                                         {"required": ["chunk_sha256"]}]}}]
         if name == "transfer_chunks":
-            props["offset"]["minimum"] = 0
-            props["chunks"] = {"type": "array", "minItems": 1, "maxItems": 64, "items": {
-                "type": "object", "additionalProperties": False,
-                "required": ["count", "data_base64", "chunk_sha256"],
-                "properties": {
-                    "count": {"title": "Count", "type": "integer", "minimum": 1},
-                    "data_base64": {"type": "string"},
-                    "chunk_sha256": {"type": "string", "pattern": r"^[0-9a-f]{64}$"},
-                }}}
-            props["count_per_chunk"] = {"title": "Count Per Chunk", "type": "integer", "minimum": 1}
-            props["chunk_count"] = {"title": "Chunk Count", "type": "integer", "minimum": 1, "maximum": 64}
-            parameters["additionalProperties"] = False
-            parameters["oneOf"] = [{"required": ["chunks"]},
-                                   {"required": ["count_per_chunk", "chunk_count"],
-                                    "not": {"anyOf": [{"required": ["chunks"]}]}}]
+            import json
+            from importlib.resources import files
+            parameters.clear()
+            parameters.update(json.loads(files("velo_transfer").joinpath(
+                "transfer_tools_schema.json").read_text())[name]["inputSchema"])
         if name == "transfer_finish":
             for receipt in ("prepare_receipt", "source_validation_receipt", "publication_receipt"):
                 model = {"prepare_receipt": "PrepareReceipt",

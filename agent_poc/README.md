@@ -1,5 +1,7 @@
 # Velociraptor Agent POC
 
+PC026 scoped implementation now prevalidates the complete JSON batch (including every decoded hash and total ledger/disk budget) before payload writes. Valid I/O failures retain an owned unacknowledged tail for bounded recovery. This is local development work; formal Windows acceptance and deployment remain separate. Binary session/frame hardening is pending and must not be treated as available.
+
 The current bridge now registers seven local guest transfer MCP tools (PC024 six plus the `transfer_chunks` batch increment) alongside its original 130 tools. They require a protected guest policy for transfer work and do not use this historical agent prototype. See [transfer MCP contract](../docs/transfer-mcp.md) and [guest engine documentation](../docs/transfer-guest-engine.md). Windows VM and host coordination remain unaccepted.
 
 Host transfer uses `python -m velo_transfer --spec /absolute/path/to/request.json`, with the original spec and `resume:true` for recovery or `--abort` for cancellation. Locally proven completion returns `complete` (exit 0); a host cleanup fault retains evidence as `cleanup_pending` (exit 5). An invalid connection profile returns one `velo.transfer.command-error.v1` JSON object with `error=invalid_profile` and exit code 3, without a result path. See [host coordinator](../docs/transfer-host-coordinator.md) and [host cleanup](../docs/transfer-host-cleanup.md). This historical agent is not the caller for that command.

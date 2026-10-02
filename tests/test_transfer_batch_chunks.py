@@ -127,6 +127,47 @@ class BatchChunkTests(unittest.TestCase):
         self.assertEqual(status["verified_offset"], 0,
                          "a failed batch must not advance the durable offset")
 
+    def physical_snapshot(self):
+        return {str(p.relative_to(self.work)): (p.read_bytes(), p.stat().st_ino,
+                p.stat().st_mtime_ns) for p in self.work.rglob("*") if p.is_file()}
+
+    def test_bad_second_chunk_keeps_all_physical_bytes_and_state(self):
+        payload = b"a" * 8192
+        req = self.push_request(payload)
+        self.service.transfer_begin(req)
+        good = self.batch(payload, 0, 4096)
+        for change in ({"chunk_sha256": "0" * 64}, {"data_base64": "!"},
+                       {"data_base64": None}, {"count": True}, {"count": 1.5}):
+            with self.subTest(change=change):
+                items = [dict(x) for x in good]
+                items[1].update(change)
+                before = self.physical_snapshot()
+                with self.assertRaises(Error):
+                    self.service.transfer_chunks("trial", req["request_digest"], 0, chunks=items)
+                self.assertEqual(self.physical_snapshot(), before)
+                self.assertFalse((self.work / "tasks/trial/received.part").exists())
+
+    def test_batch_metadata_budget_rejects_before_payload_creation(self):
+        req = self.push_request(b"ab")
+        req["budget"]["max_metadata_bytes"] = 150
+        req["request_digest"] = request_digest(req)
+        self.service.transfer_begin(req)
+        before = self.physical_snapshot()
+        with self.assertRaises(Error) as caught:
+            self.service.transfer_chunks("trial", req["request_digest"], 0,
+                                         chunks=self.batch(b"ab", 0, 1))
+        self.assertEqual(caught.exception.code, "metadata_budget_exceeded")
+        self.assertEqual(self.physical_snapshot(), before)
+
+    def test_batch_mutually_exclusive_arguments_before_side_effect(self):
+        req = self.push_request(b"ab")
+        self.service.transfer_begin(req)
+        before = self.physical_snapshot()
+        with self.assertRaises(Error):
+            self.service.transfer_chunks("trial", req["request_digest"], 0,
+                chunks=self.batch(b"ab", 0, 1), count_per_chunk=1)
+        self.assertEqual(self.physical_snapshot(), before)
+
     def test_push_batch_cancel_fails_closed(self):
         payload = b"b" * 8192
         req = self.push_request(payload)

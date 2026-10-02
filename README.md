@@ -1,4 +1,6 @@
 # Velociraptor MCP
+
+PC026 scoped implementation now prevalidates the complete JSON batch (including every decoded hash and total ledger/disk budget) before payload writes. Valid I/O failures retain an owned unacknowledged tail for bounded recovery. This is local development work; formal Windows acceptance and deployment remain separate. Binary session/frame hardening is pending and must not be treated as available.
 Velociraptor MCP is a POC Model Context Protocol bridge for exposing LLMs to MCP clients.
 
 The current local bridge registers 137 tools: the original 118 dynamic and 12 fixed tools, plus seven guest transfer tools (`transfer_capabilities`, `transfer_begin`, `transfer_status`, `transfer_chunk`, `transfer_chunks`, `transfer_finish`, `transfer_abort`). `transfer_chunks` batches consecutive chunks for bulk throughput and is only offered when the protected policy grants `max_batch_chunks`; it keeps the single-chunk budget, deadline and hash rules. See [transfer MCP contract](docs/transfer-mcp.md) and [guest engine](docs/transfer-guest-engine.md). A protected `VELOCIRAPTOR_TRANSFER_POLICY` enables local transfer operations; without it the seven tools remain listed, capabilities reports disabled, and the original 130 tools remain available. Windows VM and host coordinator acceptance follow separately.
