@@ -1093,12 +1093,25 @@ class GuestTransferService:
             batch_budget.space(partial.parent, total + sum(map(len, records)))
             # Account the future state before creating any payload file.
             prospective = copy.deepcopy(state)
+            prospective["prefix_verification"] = None
+            # New files have unknown inode/timestamp values. Reserve decimal
+            # widths beyond the OS's 64-bit identifiers and nanosecond times;
+            # these budget-only identities are never persisted.
+            reserved = (1 << 128) - 1
+            def reserve_identity(value, partial_size, metadata_size):
+                value["partial_identity"] = {
+                    "offset": value["offset"], "chunk_count": value["chunk_count"],
+                    "partial": [reserved, reserved, partial_size, reserved, reserved],
+                    "ledger": [reserved, reserved, metadata_size, reserved, reserved]}
+            reserve_identity(prospective, offset, ledger_size)
+            store._encode(transfer_id, fresh["binding"], fresh["revision"] + 1, prospective)
             prospective.update(offset=position, chunk_count=state["chunk_count"] + len(records))
+            reserve_identity(prospective, position, ledger_size + sum(map(len, records)))
             if position == state["package"]["size"]:
                 prospective["phase"] = "DEST_RECEIVED"
                 prospective["terminal"] = GuestTerminal(self._protocol_binding(state["request"], state["package"]),
                     state["request"]["expected_destination"]).snapshot()
-            store._encode(transfer_id, fresh["binding"], fresh["revision"] + 1, prospective)
+            store._encode(transfer_id, fresh["binding"], fresh["revision"] + 2, prospective)
             self._check_idle(store)
             self._verified_partial(state, short_call=True, observation=observed)
             batch_budget.check()
