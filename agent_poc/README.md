@@ -1,5 +1,7 @@
 # Velociraptor Agent POC
 
+The PC026 VBT1 codec now selects an exact request/response component, rejects duplicate JSON keys, non-finite values, unknown fields and malformed HTTP metadata, and validates complete payload lengths and hashes before use. Five local codec tests pass. HTTP session binding, streaming budgets and formal Windows qualification remain separate pending work.
+
 Batch continuation after a real prefix-verification worker now budgets both ownership registration and the final durable state with the consumed proof cleared. Invalid batches and state-budget rejection preserve the original proof and payload bytes; a legal batch invalidates the proof when writing begins. Regression tests link the host coordinator to the actual guest engine and workers for uncertain writes and subsequent batches. The test module now defers the Linux-only host coordinator import so its five guest cases run on Windows. All seven Linux cases and five isolated Windows cases pass; Windows uses the existing process-only `S-1-5-11` fixture grant. Default Windows ACL and service-principal qualification remain unverified; overall T012/P05 acceptance remains partial.
 
 PC026 now persists a worker-bound prefix verification only after full payload/ledger checks in the same protected state revision. Resume reuses the original deadline; writes, cancellation and revalidation clear the proof, and foreign tails are never truncated. Legacy state without a proof requires bounded revalidation.
