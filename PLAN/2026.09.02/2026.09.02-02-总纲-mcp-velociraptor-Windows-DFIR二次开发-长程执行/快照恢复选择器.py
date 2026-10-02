@@ -112,7 +112,8 @@ def read_state(path: Path, expected_workflow: str) -> dict[str, Any]:
         raise StateError("schema_version must be an integer")
     if schema_version == 6:
         try:
-            return schema6_adapter().read_schema6(raw.encode("utf-8"), expected_workflow)
+            return schema6_adapter().read_schema6(raw.encode("utf-8"), expected_workflow,
+                profile_id="pc026-snapshot191-v1" if state.get("active_snapshot", {}).get("name", "").startswith("Snapshot 191-") else None)
         except (ValueError, TypeError, KeyError) as exc:
             raise StateError(f"schema6 state validation failed: {exc}") from exc
     if schema_version == 1:
@@ -315,26 +316,23 @@ def schema6_adapter():
 
 
 def governed_bindings(state: dict[str, Any]):
-    """No policy discovery or archive fallback: an adopted binding is required.
-
-    The fixed P05 root is already governed. The current external policy and
-    epoch7 receipt locator have not been adopted for this CLI. Keep refusal
-    until the controller supplies that governance; no new CLI trust flags.
-    """
-    try:
-        schema6_adapter().resolve_refs(state, EVIDENCE_ROOT)
-    except (OSError, ValueError) as exc:
-        raise StateError(f"formal P05 evidence qualification failed: {exc}") from exc
-    raise StateError("current frozen policy and COMMITTED epoch7 receipt binding missing")
+    """Consume only the adopted, fixed PC026 runtime record and approval."""
+    from tests.p05_pc026_governance import load_bindings
+    return load_bindings(schema6_adapter().evidence.canonical_json(state))
 
 
-def revert_payload(state: dict[str, Any]) -> dict[str, Any]:
+def revert_payload(state: dict[str, Any], *, state_path: Path | None = None) -> dict[str, Any]:
     if state.get("schema_version") != 6:
         raise StateError("historical schemas 1–5 cannot select a current recovery argv")
     try:
+        bindings = governed_bindings(state)
+        if bindings.governed_group is not None:
+            from tests.p05_pc026_governance import CANONICAL
+            if state_path != bindings.governed_group.repository / CANONICAL:
+                raise StateError("production selection requires the fixed canonical path")
         qualification = schema6_adapter().qualify(
             schema6_adapter().evidence.canonical_json(state),
-            bindings=governed_bindings(state),
+            bindings=bindings,
             stage="P05_REPAIR_INITIAL" if state["epoch"] == 7 else "P06_ACTIVE",
         )
     except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -496,7 +494,7 @@ def main() -> int:
             raise StateError("canonical changed during selection")
         if args.validate_candidate is not None and args.validate_candidate != canonical["active_snapshot"]["name"]:
             raise StateError("candidate is not canonical-active; candidate-stage recovery requires its controller gate")
-        payload = revert_payload(canonical)
+        payload = revert_payload(canonical, state_path=state_path)
         if state_path.read_bytes() != original_bytes or next_exists(next_path):
             raise StateError("canonical or pending .next changed during qualification")
         if args.validate_candidate is not None:

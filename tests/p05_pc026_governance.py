@@ -1,0 +1,518 @@
+"""Fixed, read-only PC026 governance reader. No signing or publication API.
+
+The production root is code-owned. ``_load_at`` is an explicit isolated-file
+test seam; it is never selected through command-line arguments or environment.
+Historical archive coordinates are authenticated by the pinned bootstrap list.
+"""
+from __future__ import annotations
+
+import ast
+from dataclasses import dataclass, field
+import errno
+import json
+import os
+from pathlib import Path, PureWindowsPath
+import re
+import stat
+import struct
+import uuid
+
+from jsonschema import Draft202012Validator
+from tests import p05_pc020_evidence as evidence
+from tests import p05_pc021_readonly as readonly
+
+REPOSITORY = Path(__file__).absolute().parents[1]
+BASE = "PLAN/2026.10.02/"
+RUNTIME = BASE + "controller-runtime-record.json"
+APPROVAL = BASE + "controller-approval.json"
+FREEZE = BASE + "implementation-freeze.json"
+DEPLOYMENT = BASE + "deployment-configuration.json"
+CONTRACT = BASE + "2026.10.02-04-PC026-运行信任锚读取契约.md"
+CONTRACT_SHA = "5336acb8ed4a1536f2aac71792b976d849b1cc8cab0234063e735a1b5e28ad71"
+NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
+NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
+MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
+BOOTSTRAP = BASE + "pc026-r01/attachments/bootstrap-publication-manifest.json"
+EVIDENCE = "Logs/P05/wf-01a05d1d-p05"
+SELECTOR = "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py"
+CANONICAL = SELECTOR.rsplit("/", 1)[0] + "/快照恢复状态.json"
+PROFILE = "pc026-snapshot191-v1"
+VM_UUID = "55804d56-262e-33b0-9e8f-fa0bb583b865"
+SID = re.compile(r"S-1-(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*)){1,15}")
+# Explicit deployment entrypoints and resources. Local imports below are also
+# required, including lazily imported modules; this is not a directory scan.
+ENTRIES = frozenset({SELECTOR, "tests/p05_pc026_governance.py",
+    "tests/p05_selector_readonly.py", "tests/p06_pc021_consumer.py",
+    "mcp_velociraptor_bridge.py", "velociraptor_api.py",
+    "tests/test_p05_pc026_governance.py", "tests/pc026_governance_fixture.py",
+    "tests/test_p05_selector_schema6.py", "tests/test_p05_pc021_transition_output.py"})
+RESOURCES = frozenset({"requirements.txt", "requirements.lock",
+    "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
+    "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
+    "tests/p05_service_install.ps1", "docs/p05-security-receipt.schema.json",
+    "tests/fixtures/artifacts/Generic.Utils.KillProcess.yaml",
+    "tests/scenarios/schema-v1.json",
+    "tests/scenarios/representative/p05-flow-triage-repair-initial.json",
+    "tests/scenarios/representative/p05-flow-triage-repair-candidate.json"})
+SOURCE_RESOURCES = frozenset(path for path in RESOURCES
+    if path.startswith(("tests/data/", "tests/scenarios/")))
+
+
+class GovernanceError(evidence.Pc020EvidenceError):
+    pass
+
+
+def require(condition, message):
+    if not condition:
+        raise GovernanceError(message)
+
+
+def relative(value):
+    value = evidence._safe_relative(value, "governance coordinate")
+    require(":" not in value and "\0" not in value, "unsafe governance coordinate")
+    return value
+
+
+def ref(value):
+    require(isinstance(value, dict) and set(value) == evidence.REF_KEYS,
+            "governance Ref must have exactly three keys")
+    relative(value["path"])
+    require(type(value["size"]) is int and value["size"] >= 0
+            and evidence._valid_sha(value["sha256"]), "invalid governance Ref identity")
+    require(value["path"] != RUNTIME, "runtime record must remain outside dependency closure")
+    return value
+
+
+def refs(values):
+    require(isinstance(values, list) and bool(values), "nonempty Ref array required")
+    result = {}
+    for value in values:
+        ref(value)
+        require(value["path"] not in result, "duplicate governance Ref path")
+        result[value["path"]] = value
+    require(list(result) == sorted(result, key=lambda p: p.encode("utf-8")),
+            "Ref array is not UTF8-path sorted")
+    return result
+
+
+def nested_refs(value):
+    """Manifest rows may add provenance fields; byte identities remain exact."""
+    if isinstance(value, dict):
+        if evidence.REF_KEYS <= set(value):
+            yield ref({key: value[key] for key in evidence.REF_KEYS})
+        for child in value.values():
+            yield from nested_refs(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from nested_refs(child)
+
+
+def exact(value, keys, kind, status=None):
+    require(set(value) == set(keys.split()) and type(value.get("schema_version")) is int
+            and value["schema_version"] == 1 and value.get("kind") == kind,
+            "governance exact model differs: " + kind)
+    if "profile_id" in value:
+        require(value["profile_id"] == PROFILE and value["workflow_id"] == evidence.WORKFLOW_ID,
+                "governance profile/workflow differs")
+    if status is not None:
+        require(value.get("status") == status, "governance status differs")
+
+
+def _acl(fd, info):
+    # Linux fgetxattr reports absence distinctly from inability to read ACLs.
+    # Save the complete kernel ACL byte arrays, not a mode-only approximation.
+    require(os.name == "posix" and hasattr(os, "getxattr"), "unsupported host ACL reader")
+    rows = []
+    for name in ("system.posix_acl_access", "system.posix_acl_default"):
+        try:
+            value = os.getxattr(fd, name)
+        except OSError as exc:
+            if exc.errno != errno.ENODATA:
+                raise GovernanceError("host ACL observation unavailable") from exc
+            value = None
+        rows.append({"name": name, "value_hex": None if value is None else value.hex()})
+    return evidence.canonical_json({"mode": f"{stat.S_IMODE(info.st_mode):04o}",
+        "owner_uid": str(info.st_uid), "owner_gid": str(info.st_gid), "extended_acl": rows})
+
+
+def _read(path):
+    """Retain no-follow ancestor handles through bytes, owner and full ACL read."""
+    require(os.name == "posix", "production governance reader requires a POSIX host")
+    handles = []
+    try:
+        bound = readonly._walk(path, handles)
+        security = []
+        for fd, directory, _, _ in bound:
+            info = os.fstat(fd)
+            security.append((info.st_uid, info.st_gid, _acl(fd, info)))
+        leaf = os.fstat(bound[-1][0])
+        chunks = []
+        while chunk := os.read(bound[-1][0], 65536):
+            chunks.append(chunk)
+        data = b"".join(chunks)
+        fresh = readonly._walk(path, handles)
+        for original, current, sec in zip(bound, fresh, security):
+            info = os.fstat(original[0])
+            require(original[2] == current[2]
+                and (original[1] or original[3] == current[3] == readonly._metadata(info))
+                and sec == (info.st_uid, info.st_gid, _acl(original[0], info)),
+                "governance path identity/content/ACL drift")
+        require(len(data) == leaf.st_size, "governance read length differs")
+        identity = {"platform": "posix", "device": str(leaf.st_dev), "inode": str(leaf.st_ino),
+            "owner_uid": str(leaf.st_uid), "owner_gid": str(leaf.st_gid),
+            "principal_uid": str(os.geteuid()), "mode": f"{stat.S_IMODE(leaf.st_mode):04o}",
+            "acl_sha256": evidence._sha(security[-1][2])}
+        return data, (tuple(row[2] for row in bound), tuple(security), bound[-1][3]), identity
+    except (OSError, readonly.ContentReadError) as exc:
+        raise GovernanceError("safe governance read failed: " + str(exc)) from exc
+    finally:
+        for fd in reversed(handles):
+            os.close(fd)
+
+
+@dataclass
+class GovernedGroup:
+    repository: Path
+    approval: dict
+    allowed: dict
+    locked: dict
+    normative_refs: dict
+    freeze_refs: dict
+    bootstrap_refs: dict
+    synthetic_fixture: bool
+    validators: dict = field(default_factory=dict)
+
+    def read(self, reference):
+        reference = ref(reference)
+        require(self.allowed.get(reference["path"]) == reference,
+                "Ref absent or different in independent allowlist")
+        data, identity, _ = _read(self.repository / reference["path"])
+        require(len(data) == reference["size"] and evidence._sha(data) == reference["sha256"],
+                "governance Ref bytes drift: " + reference["path"])
+        require(reference["path"] not in self.locked
+                or self.locked[reference["path"]] == (data, identity), "governance identity drift")
+        self.locked[reference["path"]] = (data, identity)
+        return data
+
+    def document(self, reference, *, canonical=True):
+        return evidence._json_bytes(self.read(reference), "governance document", canonical=canonical)
+
+    def recheck(self):
+        for path, (data, identity) in self.locked.items():
+            current, current_identity, _ = _read(self.repository / path)
+            require((current, current_identity) == (data, identity), "governance consumption drift: " + path)
+
+
+def implementation_closure(group):
+    pending, found = list(ENTRIES), set(RESOURCES)
+    while pending:
+        path = pending.pop()
+        if path in found:
+            continue
+        require(path in group.freeze_refs, "implementation freeze omits required entry/import: " + path)
+        found.add(path)
+        tree = ast.parse(group.read(group.freeze_refs[path]), filename=path)
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [item.name for item in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                prefix = node.module or ""
+                if node.level:
+                    parts = path[:-3].split("/")[:-node.level]
+                    prefix = ".".join(parts + ([prefix] if prefix else []))
+                names = [prefix] + [prefix + "." + item.name for item in node.names]
+            for name in names:
+                candidate = name.replace(".", "/") + ".py"
+                package = name.replace(".", "/") + "/__init__.py"
+                # Only code-owned local modules, never scan a caller directory.
+                for local in (candidate, package):
+                    if (REPOSITORY / local).is_file() and local not in found:
+                        pending.append(local)
+    require(found <= set(group.freeze_refs), "implementation freeze omits required resources")
+    require(any(path.startswith("tests/test_") for path in group.freeze_refs),
+            "implementation freeze omits verification tests")
+
+
+def _model(group, value, name):
+    # JSON Schema numeric equality alone admits true==1; reject bool everywhere.
+    def no_bool_generation(item):
+        if isinstance(item, dict):
+            if "schema_version" in item:
+                require(type(item["schema_version"]) is int, "bool schema generation forbidden")
+            for child in item.values():
+                no_bool_generation(child)
+        elif isinstance(item, list):
+            for child in item:
+                no_bool_generation(child)
+    no_bool_generation(value)
+    try:
+        if name not in group.validators:
+            schema = group.document(group.allowed[MODEL], canonical=False)
+            schema["$ref"] = "#/$defs/" + name
+            group.validators[name] = Draft202012Validator(schema)
+        group.validators[name].validate(value)
+    except Exception as exc:
+        raise GovernanceError("governance schema differs: " + name) from exc
+
+
+def _publication(group, deployment):
+    approval = group.approval
+    receipt = group.document(approval["publication_receipt"])
+    _model(group, receipt, "publication_receipt")
+    require(str(uuid.UUID(receipt["publication_id"])) == receipt["publication_id"], "publication UUID differs")
+    for key in ("normative_manifest", "implementation_freeze", "bootstrap_manifest"):
+        require(receipt[key] == approval[key], "publication approval bundle differs")
+    root_hash = evidence._sha(evidence.canonical_json(approval["root_mapping"])[:-1])
+    require(receipt["root_mapping_sha256"] == root_hash
+            and receipt["guest_principal_sid"] == deployment["guest_principal_sid"],
+            "publication root/principal binding differs")
+    times = [receipt[key] for key in ("published_at", "guest_directory_fsynced_at", "guest_readback_at", "host_readback_at")]
+    for value in times:
+        evidence._utc(value, "publication action time")
+    expected = dict(group.normative_refs | group.freeze_refs | group.bootstrap_refs)
+    for key in ("normative_manifest", "implementation_freeze", "bootstrap_manifest"):
+        expected[approval[key]["path"]] = approval[key]
+    mapping_ref = approval["root_mapping"]["deployment_configuration"]
+    expected[mapping_ref["path"]] = mapping_ref
+    rows = receipt["members"]
+    require([row["relative_path"] for row in rows] == sorted(expected, key=lambda p: p.encode("utf-8")),
+            "publication is not exact unique complete dependency coverage")
+    identities = {}
+    for row in rows:
+        path = row["relative_path"]
+        reference = {"path": path, "size": row["size"], "sha256": row["sha256"]}
+        require(reference == expected[path], "publication member content binding differs")
+        group.read(reference)
+        _, _, actual = _read(group.repository / path)
+        require(row["host_identity"] == actual, "host publication identity differs from actual file")
+        require(row["guest_identity"]["principal_sid"] == deployment["guest_principal_sid"],
+                "guest publication principal differs")
+        for endpoint in ("host", "guest"):
+            identities[(path, endpoint)] = row[endpoint + "_identity"]
+    archive = group.document(receipt["identity_evidence"])
+    _model(group, archive, "identity_evidence")
+    seen = set()
+    for row in archive["members"]:
+        key = (row["relative_path"], row["endpoint"])
+        require(key not in seen and key in identities and row["identity"] == identities[key],
+                "identity archive duplicate/extra/cross-platform binding")
+        seen.add(key)
+        observation = group.document(row["observation_ref"])
+        _model(group, observation, "identity_observation")
+        require((observation["relative_path"], observation["endpoint"]) == key
+                and observation["identity"] == row["identity"], "identity observation binding differs")
+        evidence._utc(observation["observed_at"], "identity observation action time")
+        acl = group.read(observation["acl_original"])
+        require(evidence._sha(acl) == row["identity"]["acl_sha256"], "ACL original hash differs")
+        if key[1] == "guest":
+            _windows_descriptor(acl, row["identity"]["owner_sid"])
+    require(seen == set(identities), "identity archive misses endpoint coverage")
+
+
+def _windows_descriptor(data, owner_sid):
+    """Validate archived raw self-relative SD bytes, without native API claims."""
+    require(len(data) >= 20, "Windows ACL original lacks security descriptor header")
+    revision, reserved, control, owner, group, sacl, dacl = struct.unpack_from("<BBHIIII", data)
+    require(revision == 1 and reserved == 0 and control & 0x8000,
+            "Windows ACL original is not a self-relative security descriptor")
+    def sid(offset):
+        require(offset >= 20 and offset % 4 == 0 and offset + 8 <= len(data), "SD SID offset differs")
+        version, count = data[offset:offset + 2]
+        require(version == 1 and 1 <= count <= 15 and offset + 8 + count * 4 <= len(data), "SD SID bounds differ")
+        authority = int.from_bytes(data[offset + 2:offset + 8], "big")
+        values = struct.unpack_from("<" + "I" * count, data, offset + 8)
+        return "S-1-" + str(authority) + "".join("-" + str(value) for value in values)
+    require(sid(owner) == owner_sid, "Windows ACL original owner SID differs")
+    if group:
+        sid(group)
+    for offset in (sacl, dacl):
+        if offset:
+            require(offset >= 20 and offset % 4 == 0 and offset + 8 <= len(data), "SD ACL offset differs")
+            version, _, size, count, _ = struct.unpack_from("<BBHHH", data, offset)
+            require(version in (2, 4) and size >= 8 and offset + size <= len(data), "SD ACL bounds differ")
+            position = offset + 8
+            for _ in range(count):
+                require(position + 4 <= offset + size, "SD ACE header unavailable")
+                length = struct.unpack_from("<H", data, position + 2)[0]
+                require(length >= 4 and length % 4 == 0 and position + length <= offset + size,
+                        "SD ACE bounds differ")
+                position += length
+
+
+def _load_at(repository: Path, *, synthetic_fixture=False):
+    """Internal file-tree seam; all fixed model/hash/path gates still apply."""
+    require(repository.is_absolute() and str(repository) == str(repository.absolute())
+            and ".." not in repository.parts, "repository root must be canonical absolute")
+    contract, _, _ = _read(repository / CONTRACT)
+    require(len(contract) == 6559 and evidence._sha(contract) == CONTRACT_SHA, "adopted contract version anchor differs")
+    runtime_bytes, runtime_identity, runtime_host = _read(repository / RUNTIME)
+    require(runtime_host["owner_uid"] in {"0", str(os.geteuid())}
+            and not (int(runtime_host["mode"], 8) & 0o022), "runtime owner/ACL trust boundary differs")
+    for index, (identity, security) in enumerate(zip(runtime_identity[0][:-1], runtime_identity[1][:-1])):
+        mode = identity[2]
+        # OS-owned ancestors above the code root can use mapped/container UIDs.
+        # The controlled repository and its governance descendants must retain
+        # the reader/root owner boundary; do not infer UID 0 for filesystem /.
+        controlled = index >= len(repository.parts) - 1
+        require((not controlled or security[0] in {0, os.geteuid()})
+                and (not mode & 0o002 or not controlled and mode & stat.S_ISVTX)
+                and (not controlled or not mode & 0o020 or security[1] == os.getegid()),
+                "runtime ancestor owner/ACL trust boundary differs")
+    runtime = evidence._json_bytes(runtime_bytes, "fixed runtime record")
+    exact(runtime, "schema_version kind profile_id workflow_id contract_ref approval_ref allowed_refs status",
+          "pc026-controller-runtime-record-v1", "ADOPTED")
+    allowed = refs(runtime["allowed_refs"])
+    require(runtime["contract_ref"] == {"path": CONTRACT, "size": 6559, "sha256": CONTRACT_SHA}
+            and runtime["approval_ref"]["path"] == APPROVAL, "fixed runtime trust anchors differ")
+    group = GovernedGroup(repository, {}, allowed, {RUNTIME: (runtime_bytes, runtime_identity)}, {}, {}, {}, synthetic_fixture)
+    for path in allowed:
+        relative(path)
+        require(not path.startswith(".tmp/") and "candidate" not in path.split("/")[:-1], "unadopted governance source")
+    # The fixed normative anchor authenticates the historical path exception.
+    require(allowed.get(NORMATIVE, {}).get("sha256") == NORMATIVE_SHA, "normative manifest version anchor missing")
+    normative = group.document(allowed[NORMATIVE], canonical=False)
+    group.normative_refs = {row["path"]: row for row in nested_refs(normative)}
+    for row in group.normative_refs.values():
+        group.read(row)
+    require(BOOTSTRAP in group.normative_refs, "adopted bootstrap Ref missing")
+    bootstrap = group.document(group.normative_refs[BOOTSTRAP], canonical=False)
+    group.bootstrap_refs = refs([{"path": row["relative_path"], "size": row["size"],
+                                 "sha256": row["sha256"]} for row in bootstrap["members"]])
+    require(len(group.bootstrap_refs) == 452 and bootstrap["historical_recursive_member_count"] == 448
+            and bootstrap["fixed_bootstrap_anchor_count"] == 4, "historical 448+4 bootstrap differs")
+    for path, row in allowed.items():
+        if ".tmp" in path.split("/"):
+            historical = group.bootstrap_refs.get(path)
+            # A carries immutable preparation/migration copies. Admit only an
+            # independently listed copy of an exact approved bootstrap member,
+            # inside the fixed current A UUID; never repository .tmp sources.
+            prefix = EVIDENCE + "/activation-191/"
+            if historical is None and path.startswith(prefix):
+                parts = path[len(prefix):].split("/")
+                require(str(uuid.UUID(parts[0])) == parts[0], "historical copy A UUID differs")
+                historical = group.bootstrap_refs.get(EVIDENCE + "/" + "/".join(parts[1:]))
+            require(historical is not None and path.startswith(EVIDENCE + "/")
+                    and (row["size"], row["sha256"]) == (historical["size"], historical["sha256"]),
+                    "unapproved historical archive coordinate")
+        group.read(row)  # Includes extra unused entries: dangling allowlists fail.
+    for row in (runtime["contract_ref"], runtime["approval_ref"]):
+        group.read(row)
+    approval = group.document(runtime["approval_ref"])
+    _model(group, approval, "approval")
+    group.approval = approval
+    require(approval["normative_manifest"] == allowed[NORMATIVE]
+            and approval["bootstrap_manifest"] == group.normative_refs[BOOTSTRAP]
+            and approval["implementation_freeze"]["path"] == FREEZE,
+            "fixed approval bundle coordinates differ")
+    freeze = group.document(approval["implementation_freeze"])
+    exact(freeze, "schema_version kind profile_id workflow_id normative_manifest members status",
+          "pc026-implementation-freeze-v1", "FROZEN")
+    require(freeze["normative_manifest"] == approval["normative_manifest"], "freeze normative binding differs")
+    group.freeze_refs = refs(freeze["members"])
+    forbidden = {RUNTIME, APPROVAL, FREEZE, approval["publication_receipt"]["path"]}
+    require(not forbidden & set(group.freeze_refs)
+            and not any(path.startswith("Logs/") for path in group.freeze_refs),
+            "cyclic implementation freeze or future evidence member")
+    for row in group.freeze_refs.values():
+        group.read(row)
+    implementation_closure(group)
+    mapping = approval["root_mapping"]
+    require(mapping["deployment_configuration"]["path"] == DEPLOYMENT
+            and mapping["guest_canonical_coordinate"] == CANONICAL, "fixed deployment/canonical mapping differs")
+    deployment = group.document(mapping["deployment_configuration"])
+    exact(deployment, "schema_version kind profile_id workflow_id host_project_root guest_deployment_base guest_project_coordinate guest_canonical_coordinate vm_uuid guest_principal_sid",
+          "pc026-deployment-configuration-v1")
+    require(deployment["host_project_root"] == str(repository)
+            and deployment["guest_project_coordinate"] == relative(mapping["guest_project_coordinate"])
+            and deployment["guest_canonical_coordinate"] == CANONICAL
+            and deployment["vm_uuid"] == VM_UUID
+            and isinstance(deployment["guest_principal_sid"], str)
+            and SID.fullmatch(deployment["guest_principal_sid"]), "deployment root/VM/principal binding differs")
+    sid_parts = deployment["guest_principal_sid"].split("-")[2:]
+    require(int(sid_parts[0]) < 2 ** 48 and all(int(part) < 2 ** 32 for part in sid_parts[1:]),
+            "deployment principal SID numeric range differs")
+    base = deployment["guest_deployment_base"]
+    require(isinstance(base, str) and re.fullmatch(r"[A-Za-z]:\\[^:]+", base)
+            and PureWindowsPath(base).is_absolute()
+            and all(part not in {"", ".", ".."} for part in base[3:].split("\\"))
+            and "/" not in base and "\0" not in base, "unsafe Windows deployment base")
+    _publication(group, deployment)
+    group.recheck()
+    return group
+
+
+def load():
+    """Production entry: neither CLI, environment nor cwd can choose a root."""
+    return _load_at(REPOSITORY)
+
+
+def bindings_for(group, canonical_bytes):
+    """Build the two disjoint policies from independently authenticated bytes."""
+    from tests import p05_selector_readonly as selector
+    prefix = EVIDENCE + "/bootstrap-pc020/epoch7/"
+    c7 = group.read(group.bootstrap_refs[prefix + "epoch7-canonical.json"])
+    policy_doc = group.document(group.bootstrap_refs[prefix + "historical-policy.json"], canonical=False)
+    require(set(policy_doc) == {"source_inputs", "implementation_sources", "synthetic_fixture"}
+            and policy_doc["synthetic_fixture"] is False, "historical policy exact keys differ")
+    policies = {}
+    for key, values in policy_doc.items():
+        if key == "synthetic_fixture":
+            continue
+        require(isinstance(values, dict) and bool(values), "historical frozen policy empty")
+        policies[key] = {}
+        for path, value in values.items():
+            evidence._safe_relative(path, "historical source coordinate")
+            require(isinstance(value, list) and len(value) == 3 and type(value[0]) is int
+                    and value[0] >= 0 and evidence._valid_sha(value[1])
+                    and isinstance(value[2], str) and re.fullmatch(r"[0-9a-f]{40}", value[2]),
+                    "historical source frozen identity differs")
+            policies[key][path] = evidence.FrozenIdentity(*value)
+    historical = evidence.FrozenSourcePolicy(**policies, synthetic_fixture=group.synthetic_fixture)
+    intent = group.document(group.bootstrap_refs[prefix + "epoch7-intent.json"])
+    receipt = group.document(group.bootstrap_refs[prefix + "epoch7-receipt.json"])
+    require(set(intent) == {"schema_version", "kind", "workflow_id", "transition_id",
+                            "from_sha256", "next_sha256", "created_at"}
+            and type(intent["schema_version"]) is int and intent["schema_version"] == 1
+            and intent["kind"] == "pc020-canonical-transition-intent-v1"
+            and intent["workflow_id"] == evidence.WORKFLOW_ID
+            and intent["from_sha256"] == evidence.PREDECESSOR_SHA256
+            and intent["next_sha256"] == evidence._sha(c7)
+            and intent["transition_id"] == receipt.get("transition_id"), "historical intent/receipt binding differs")
+    evidence._utc(intent["created_at"], "historical intent created_at")
+    resource_sources = SOURCE_RESOURCES
+    current_sources = {path: row for path, row in group.normative_refs.items()
+                       if path != BOOTSTRAP}
+    current_sources[NORMATIVE] = group.allowed[NORMATIVE]
+    current_sources[CONTRACT] = group.allowed[CONTRACT]
+    current_sources.update({path: group.freeze_refs[path] for path in resource_sources})
+    def identities(values):
+        return {path: evidence.FrozenIdentity(row["size"], row["sha256"], evidence._blob(group.read(row)))
+                for path, row in values.items()}
+    current = evidence.FrozenSourcePolicy(identities(current_sources),
+        identities({path: row for path, row in group.freeze_refs.items() if path not in resource_sources}),
+        synthetic_fixture=group.synthetic_fixture)
+    canonical_path = group.repository / CANONICAL
+    data, identity, _ = _read(canonical_path)
+    require(data == canonical_bytes, "selector did not read the fixed canonical bytes")
+    group.locked[CANONICAL] = (data, identity)
+    state = evidence._json_bytes(data, "fixed canonical")
+    evidence.verify_schema6_shape(data, expected_epoch=state["epoch"], profile_id=PROFILE)
+    if state["epoch"] == 7:
+        require(data == c7, "initial canonical differs from immutable C7")
+    else:
+        # Every actual A member must be independently allowed before the legacy
+        # content helpers resolve their own package-relative coordinates.
+        activation = state["activation_evidence"]["evidence_path"]
+        evidence._fixed_evidence_path(activation, "activation-191", "activation-evidence.json", "current activation")
+        directory = group.repository / EVIDENCE / activation.rsplit("/", 1)[0]
+        for name, path in evidence._walk(directory).items():
+            coordinate = path.relative_to(group.repository).as_posix()
+            require(coordinate in group.allowed, "activation member absent from independent closure: " + coordinate)
+            group.read(group.allowed[coordinate])
+    return selector.ControllerBindings(group.repository / EVIDENCE, historical, c7,
+        group.repository / prefix / "epoch7-receipt.json", current, PROFILE, group)
+
+
+def load_bindings(canonical_bytes):
+    return bindings_for(load(), canonical_bytes)

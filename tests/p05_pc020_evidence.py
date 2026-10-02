@@ -748,8 +748,10 @@ def verify_migration(path: Path, *, original_preparation: Path, policy: FrozenSo
     return {"kind": "migration", "migration_id": migration_id, "migrated_at": document["migrated_at"], "predecessor_sha256": PREDECESSOR_SHA256, "synthetic_fixture": policy.synthetic_fixture, "operational_ready": False}
 
 
-def verify_schema6_shape(data: bytes, *, expected_epoch: int) -> dict[str, Any]:
+def verify_schema6_shape(data: bytes, *, expected_epoch: int, profile_id: str | None = None) -> dict[str, Any]:
     """Validate state shape only; never validates activation graph readiness."""
+    if profile_id not in (None, "pc026-snapshot191-v1"):
+        raise Pc020EvidenceError("unreviewed canonical profile")
     document = _json_bytes(data, "schema6 canonical")
     if set(document) != STATE_KEYS or not _exact_int(document.get("schema_version"), 6) or document.get("workflow_id") != WORKFLOW_ID or not _exact_int(document.get("epoch"), expected_epoch):
         raise Pc020EvidenceError("schema6 canonical root differs")
@@ -777,10 +779,15 @@ def verify_schema6_shape(data: bytes, *, expected_epoch: int) -> dict[str, Any]:
             raise Pc020EvidenceError("epoch7 canonical shape differs")
     elif expected_epoch == 8:
         expected_retired = ["Snapshot 183-FakenetNG测试专用", "Snapshot 184-Velociraptor-MCP测试基线", "Snapshot 1-开启Windows-MCP", "Snapshot 186-Velociraptor-MCP网络部署基线", SNAPSHOT_188, SNAPSHOT_187]
+        number, snapshot = 189, SNAPSHOT_189
+        if profile_id is not None:
+            from tests.p05_pc026_profile import CURRENT
+            number, snapshot = CURRENT.number, CURRENT.snapshot
+            expected_retired.extend(CURRENT.retired_append[1:])
         activation = document.get("activation_evidence")
-        if document.get("phase") != "NETWORK_ACTIVE" or active.get("name") != SNAPSHOT_189 or retired_names != expected_retired or not isinstance(activation, dict) or set(activation) != ACTIVATION_REF_KEYS or activation.get("source") != "snapshot189-activation" or not _valid_sha(activation.get("evidence_sha256")):
+        if document.get("phase") != "NETWORK_ACTIVE" or active.get("name") != snapshot or retired_names != expected_retired or not isinstance(activation, dict) or set(activation) != ACTIVATION_REF_KEYS or activation.get("source") != f"snapshot{number}-activation" or not _valid_sha(activation.get("evidence_sha256")):
             raise Pc020EvidenceError("epoch8 canonical shape differs")
-        _fixed_evidence_path(activation.get("evidence_path"), "activation-189", "activation-evidence.json", "activation evidence path")
+        _fixed_evidence_path(activation.get("evidence_path"), f"activation-{number}", "activation-evidence.json", "activation evidence path")
         _utc(activation.get("activated_at"), "activation activated_at")
     else:
         raise Pc020EvidenceError("only schema6 epoch7/8 shapes are reviewed")

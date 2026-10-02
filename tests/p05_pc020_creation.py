@@ -13,6 +13,7 @@ from typing import Any
 
 from tests import p05_pc020_evidence as evidence
 from tests import p05_snapshot_raw as raw
+from tests import p05_pc026_profile as profiles
 
 
 CREATION_KEYS = {
@@ -81,7 +82,9 @@ def _verify(
     preparation_admission: Path,
     policy: evidence.FrozenSourcePolicy,
     expected_marker: str,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
+    profiles.reviewed(generation)
     if (
         not isinstance(creation_path, Path)
         or not creation_path.is_absolute()
@@ -102,7 +105,7 @@ def _verify(
         set(document) != CREATION_KEYS
         or not evidence._exact_int(document.get("schema_version"), 1)
         or document.get("workflow_id") != evidence.WORKFLOW_ID
-        or document.get("candidate") != evidence.SNAPSHOT_189
+        or document.get("candidate") != generation.snapshot
         or document.get("checkpoint_marker") != expected_marker
         or document.get("vmx") != evidence.VMX
     ):
@@ -121,7 +124,7 @@ def _verify(
         raise Creation189Error("Snapshot189 creation operation_id is empty")
     argv = {
         "tree_before": ["/usr/bin/vmrun", "-T", "ws", "listSnapshots", evidence.VMX, "showTree"],
-        "create_operation": ["/usr/bin/vmrun", "-T", "ws", "snapshot", evidence.VMX, evidence.SNAPSHOT_189],
+        "create_operation": ["/usr/bin/vmrun", "-T", "ws", "snapshot", evidence.VMX, generation.snapshot],
         "tree_after": ["/usr/bin/vmrun", "-T", "ws", "listSnapshots", evidence.VMX, "showTree"],
         "metadata_readback": ["/usr/bin/cat", str(PurePosixPath(evidence.VMX).with_suffix(".vmsd"))],
     }
@@ -150,46 +153,42 @@ def _verify(
 
     before = raw.snapshot_names(originals["tree_before"]["response"]["stdout"])
     after = raw.snapshot_names(originals["tree_after"]["response"]["stdout"])
-    if len(before) != 2 or set(before) != {evidence.SNAPSHOT_187, evidence.SNAPSHOT_188}:
+    if len(before) != len(generation.retained) or set(before) != set(generation.retained):
         raise Creation189Error("tree_before is not exactly retained 187/188 with zero 189")
-    if len(after) != 3 or set(after) != {
-        evidence.SNAPSHOT_187,
-        evidence.SNAPSHOT_188,
-        evidence.SNAPSHOT_189,
-    }:
+    if len(after) != len(generation.retained) + 1 or set(after) != {*generation.retained, generation.snapshot}:
         raise Creation189Error("tree_after is not exactly retained 187/188 plus one 189")
 
     metadata_stdout = originals["metadata_readback"]["response"]["stdout"]
     fields = raw.vmsd_fields(metadata_stdout)
     display_names = [value for key, value in fields.items() if key.endswith(".displayName")]
     if (
-        fields.get("snapshot.numSnapshots") != "3"
-        or len(display_names) != 3
-        or set(display_names) != {evidence.SNAPSHOT_187, evidence.SNAPSHOT_188, evidence.SNAPSHOT_189}
+        fields.get("snapshot.numSnapshots") != str(len(generation.retained) + 1)
+        or len(display_names) != len(generation.retained) + 1
+        or set(display_names) != {*generation.retained, generation.snapshot}
     ):
         raise Creation189Error("post-creation metadata snapshot set or count differs")
     post = {
         name: _snapshot_identity(fields, name)
-        for name in (evidence.SNAPSHOT_187, evidence.SNAPSHOT_188, evidence.SNAPSHOT_189)
+        for name in (*generation.retained, generation.snapshot)
     }
     for name in (evidence.SNAPSHOT_187, evidence.SNAPSHOT_188):
         if post[name] != preparation[name]:
             raise Creation189Error(f"retained snapshot identity changed for {name}")
-    marker, candidate_uid = raw.snapshot_marker(metadata_stdout, evidence.SNAPSHOT_189)
+    marker, candidate_uid = raw.snapshot_marker(metadata_stdout, generation.snapshot)
     if (
         marker != document["checkpoint_marker"]
         or marker != expected_marker
-        or candidate_uid in {post[evidence.SNAPSHOT_187]["uid"], post[evidence.SNAPSHOT_188]["uid"]}
+        or candidate_uid in {post[name]["uid"] for name in generation.retained}
         or fields.get("snapshot.lastUID") != candidate_uid
-        or not post[evidence.SNAPSHOT_189]["parent_present"]
-        or post[evidence.SNAPSHOT_189]["parent"] != preparation[evidence.SNAPSHOT_187]["uid"]
+        or not post[generation.snapshot]["parent_present"]
+        or post[generation.snapshot]["parent"] != preparation[evidence.SNAPSHOT_187]["uid"]
     ):
         raise Creation189Error("Snapshot189 marker, UID, current/lastUID, or parent binding differs")
 
     return {
-        "scope": "single_snapshot189_creation_evidence",
+        "scope": f"single_snapshot{generation.number}_creation_evidence",
         "operation_id": operation_id,
-        "candidate": evidence.SNAPSHOT_189,
+        "candidate": generation.snapshot,
         "candidate_uid": candidate_uid,
         "vmx": evidence.VMX,
         "checkpoint_marker": marker,
@@ -209,6 +208,7 @@ def verify_snapshot189_creation(
     preparation_admission: Path,
     policy: evidence.FrozenSourcePolicy,
     expected_marker: str,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
     """Verify one immutable live 187/188→187/188/189 creation sequence."""
     try:
@@ -216,7 +216,7 @@ def verify_snapshot189_creation(
             creation_path,
             preparation_admission=preparation_admission,
             policy=policy,
-            expected_marker=expected_marker,
+            expected_marker=expected_marker, generation=generation,
         )
     except Creation189Error:
         raise

@@ -16,6 +16,7 @@ from tests import p05_pc020_evidence as evidence
 from tests import p05_pc020_restore as restore7
 from tests import p05_pc021_package as pkg
 from tests import p06_evidence as legacy
+from tests import p05_pc026_profile as profiles
 
 
 ROOT_KEYS = {
@@ -79,7 +80,8 @@ def _utc(value: Any, label: str) -> datetime:
 
 
 def _source_graph(
-    sources: dict[str, Path], implementations: dict[str, Path]
+    sources: dict[str, Path], implementations: dict[str, Path],
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, tuple[dict[str, Any], str, str, str]]:
     required = {INDEX, FIXTURE, SCHEMA, *(row[0] for row in SCENARIOS.values())}
     mixed = required & set(implementations)
@@ -108,6 +110,8 @@ def _source_graph(
     for position, row in enumerate(index["scenarios"]):
         scenario_id = expected_order[position]
         path, stage, snapshot = SCENARIOS[scenario_id]
+        if stage == "P05_REPAIR_CANDIDATE":
+            snapshot = generation.snapshot
         if not isinstance(row, dict) or set(row) != {
             "fixture_spec_sha256", "path", "required_snapshot", "scenario_id",
             "sha256", "snapshot_stage",
@@ -312,6 +316,7 @@ def _phase(
     root: Path, phase: Any, scenario_id: str, graph: dict[str, tuple[dict[str, Any], str, str, str]],
     policy: evidence.FrozenSourcePolicy, creation_path: Path | None,
     seen: dict[str, tuple[int, str]],
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
     if not isinstance(phase, dict) or set(phase) != PHASE_KEYS:
         raise Activation189Error("activation phase keys differ")
@@ -351,7 +356,7 @@ def _phase(
     flows = _business_chain(report, refs["package_manifest"].parent)
     _package_downloads(report, refs["package_manifest"].parent)
     legacy._verify_phase_execution(report, scenario, fixture)
-    restore_result = restore7.verify_epoch7_restore(snapshot.get("restore"), root, policy=policy, creation_path=creation_path)
+    restore_result = restore7.verify_epoch7_restore(snapshot.get("restore"), root, policy=policy, creation_path=creation_path, generation=generation)
     if restore_result["run_id"] != phase["run_id"] or restore_result["restore_attempt_id"] != phase["restore_attempt_id"]:
         raise Activation189Error("restore decoded identity differs from its phase")
     legacy._verify_ready(root, phase, seen, expected_restore=snapshot["restore"])
@@ -372,7 +377,8 @@ def activation_path_bytes(root: Path) -> bytes:
 
 
 def _verify_receipt(
-    root: Path, document: dict[str, Any], epoch7_canonical: bytes, seen: dict[str, tuple[int, str]]
+    root: Path, document: dict[str, Any], epoch7_canonical: bytes, seen: dict[str, tuple[int, str]],
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> None:
     """Verify the same-layer PC022 v2 issuance receipt (P05 v19 0.PC021.2.1).
 
@@ -389,8 +395,8 @@ def _verify_receipt(
     if set(receipt) != RECEIPT_KEYS:
         raise Activation189Error("issuance receipt keys differ")
     if (
-        receipt.get("schema_version") != 2
-        or receipt.get("kind") != RECEIPT_KIND
+        type(receipt.get("schema_version")) is not int or receipt.get("schema_version") != 2
+        or receipt.get("kind") != f"snapshot{generation.number}-activation-issuance-receipt-v2"
         or receipt.get("workflow_id") != evidence.WORKFLOW_ID
         or receipt.get("operation") != "P05_ACTIVATION_ISSUE"
         or receipt.get("status") != "ROOT_VALIDATED"
@@ -413,8 +419,8 @@ def _verify_receipt(
         raise Activation189Error("issuance receipt epoch7 keys differ")
     if (
         epoch7.get("canonical_sha256") != evidence._sha(epoch7_canonical)
-        or epoch7.get("schema_version") != 6
-        or epoch7.get("epoch") != 7
+        or type(epoch7.get("schema_version")) is not int or epoch7.get("schema_version") != 6
+        or type(epoch7.get("epoch")) is not int or epoch7.get("epoch") != 7
         or epoch7.get("phase") != "PREPARATION_BASELINE"
         or epoch7.get("active_snapshot") != evidence.SNAPSHOT_187
     ):
@@ -435,6 +441,7 @@ def _verify_receipt(
         not isinstance(activation_root, dict)
         or set(activation_root) != {"path", "size", "sha256"}
         or activation_root.get("path") != "activation-evidence.json"
+        or type(activation_root.get("size")) is not int
         or activation_root.get("size") != (root / "activation-evidence.json").stat().st_size
         or activation_root.get("sha256") != evidence._sha(activation_path_bytes(root))
     ):
@@ -446,7 +453,7 @@ def _verify_receipt(
         if (
             not isinstance(event, dict)
             or set(event) != EVENT_KEYS
-            or event.get("sequence") != position
+            or type(event.get("sequence")) is not int or event.get("sequence") != position
             or event.get("event") != EVENT_ORDER[position - 1]
         ):
             raise Activation189Error("issuance receipt event order or shape differs")
@@ -460,12 +467,13 @@ def _verify_receipt(
         )
 
 
-def _root_layout(activation_path: Path) -> Path:
+def _root_layout(activation_path: Path, generation: profiles.Generation = profiles.HISTORICAL) -> Path:
+    profiles.reviewed(generation)
     if not isinstance(activation_path, Path) or not activation_path.is_absolute() or activation_path.is_symlink():
         raise Activation189Error("activation root must be an absolute plain file")
     root = activation_path.parent
     info = root.lstat()
-    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or root.parent.name != "activation-189":
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or root.parent.name != f"activation-{generation.number}":
         raise Activation189Error("activation root is outside activation-189 layout")
     try:
         uuid.UUID(root.name)
@@ -477,11 +485,13 @@ def _root_layout(activation_path: Path) -> Path:
 def _root_graph(
     root: Path, document: dict[str, Any], *, policy: evidence.FrozenSourcePolicy,
     epoch7_canonical: bytes, root_policy: evidence.FrozenSourcePolicy | None = None,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> tuple[dict[str, Any], dict[str, tuple[int, str]]]:
     """One complete content predicate shared by all three private/public stages."""
     if (
-        document.get("schema_version") != 1 or document.get("kind") != "snapshot189-activation-evidence-v1"
-        or document.get("workflow_id") != evidence.WORKFLOW_ID or document.get("candidate") != evidence.SNAPSHOT_189
+        type(document.get("schema_version")) is not int or document.get("schema_version") != 1
+        or document.get("kind") != f"snapshot{generation.number}-activation-evidence-v1"
+        or document.get("workflow_id") != evidence.WORKFLOW_ID or document.get("candidate") != generation.snapshot
     ):
         raise Activation189Error("activation identity is not Snapshot189")
     marker = document.get("checkpoint_marker")
@@ -502,17 +512,17 @@ def _root_graph(
     binding = root_policy or policy
     sources = evidence._sources(root, document["source_inputs"], binding.source_inputs, "source_inputs", seen)
     implementations = evidence._sources(root, document["implementation_sources"], binding.implementation_sources, "implementation_sources", seen)
-    graph = _source_graph(sources, implementations)
+    graph = _source_graph(sources, implementations, generation)
     creation_result = creation.verify_snapshot189_creation(
-        creation_path, preparation_admission=preparation_path, policy=policy, expected_marker=marker,
+        creation_path, preparation_admission=preparation_path, policy=policy, expected_marker=marker, generation=generation,
     )
     cycles = document.get("candidate_cycles")
     if not isinstance(cycles, list) or len(cycles) != 2:
         raise Activation189Error("activation requires exactly two candidate cycles")
     phases = [
-        _phase(root, document["initial"], "p05-flow-triage-repair-initial", graph, policy, None, seen),
-        _phase(root, cycles[0], "p05-flow-triage-repair-candidate", graph, policy, creation_path, seen),
-        _phase(root, cycles[1], "p05-flow-triage-repair-candidate", graph, policy, creation_path, seen),
+        _phase(root, document["initial"], "p05-flow-triage-repair-initial", graph, policy, None, seen, generation),
+        _phase(root, cycles[0], "p05-flow-triage-repair-candidate", graph, policy, creation_path, seen, generation),
+        _phase(root, cycles[1], "p05-flow-triage-repair-candidate", graph, policy, creation_path, seen, generation),
     ]
     phase_docs = [document["initial"], *cycles]
     for key in ("run_id", "restore_attempt_id"):
@@ -531,8 +541,8 @@ def _root_graph(
     # command readings, and issued_at is an issuer clock reading; compare none
     # of their magnitudes across domains (P05 PC020 section 6).
     return {
-        "scope": "snapshot189_three_phase_activation_evidence",
-        "workflow_id": evidence.WORKFLOW_ID, "candidate": evidence.SNAPSHOT_189,
+        "scope": f"snapshot{generation.number}_three_phase_activation_evidence",
+        "workflow_id": evidence.WORKFLOW_ID, "candidate": generation.snapshot,
         "checkpoint_marker": marker, "issued_at": document.get("issued_at"),
         "phase_count": 3, "preparation_id": preparation["admission_id"],
         "migration_id": migration["migration_id"], "creation_operation_id": creation_result["operation_id"],
@@ -560,21 +570,23 @@ def _verify_immutable_root(activation_path: Path, root_payload: bytes, **binding
 def _verify(
     activation_path: Path, *, policy: evidence.FrozenSourcePolicy, epoch7_canonical: bytes,
     root_policy: evidence.FrozenSourcePolicy | None = None,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
-    root = _root_layout(activation_path)
+    root = _root_layout(activation_path, generation)
     document = _json(activation_path, "activation root")
     if set(document) != ROOT_KEYS:
         raise Activation189Error("activation root keys differ")
     _utc(document.get("issued_at"), "issued_at")
     facts, seen = _root_graph(root, document, policy=policy,
-                              epoch7_canonical=epoch7_canonical, root_policy=root_policy)
-    _verify_receipt(root, document, epoch7_canonical, seen)
+                              epoch7_canonical=epoch7_canonical, root_policy=root_policy, generation=generation)
+    _verify_receipt(root, document, epoch7_canonical, seen, generation)
     return facts
 
 
 def verify_snapshot189_activation(
     activation_path: Path, *, policy: evidence.FrozenSourcePolicy, epoch7_canonical: bytes,
     root_policy: evidence.FrozenSourcePolicy | None = None,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
     """Verify immutable bytes only; never execute input commands or write state.
 
@@ -585,7 +597,7 @@ def verify_snapshot189_activation(
     try:
         return _verify(
             activation_path, policy=policy, epoch7_canonical=epoch7_canonical,
-            root_policy=root_policy,
+            root_policy=root_policy, generation=generation,
         )
     except Activation189Error:
         raise

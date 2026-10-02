@@ -16,6 +16,7 @@ from tests import p05_pc020_creation as creation
 from tests import p05_pc020_evidence as evidence
 from tests import p05_snapshot_raw as snapshot_raw
 from tests import p06_evidence as legacy
+from tests import p05_pc026_profile as profiles
 
 
 RESTORE_KEYS = {
@@ -130,6 +131,7 @@ def _verify_raw(
     restore: dict[str, Any],
     paths: dict[str, Path],
     expected_snapshot: str,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> None:
     try:
         legacy._verify_restore_action_originals(
@@ -155,9 +157,9 @@ def _verify_raw(
         )
     except snapshot_raw.SnapshotRawError as exc:
         raise Epoch7RestoreError(str(exc)) from exc
-    expected_names = {evidence.SNAPSHOT_187, evidence.SNAPSHOT_188}
-    if expected_snapshot == evidence.SNAPSHOT_189:
-        expected_names.add(evidence.SNAPSHOT_189)
+    expected_names = set(generation.retained)
+    if expected_snapshot == generation.snapshot:
+        expected_names.add(generation.snapshot)
     if (
         len(names) != len(expected_names)
         or len(set(names)) != len(names)
@@ -172,13 +174,16 @@ def _verify(
     *,
     policy: evidence.FrozenSourcePolicy,
     creation_path: Path | None,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
     if not isinstance(root, Path) or not root.is_absolute():
         raise Epoch7RestoreError("controlled package root must be absolute")
     if not isinstance(restore, dict) or set(restore) != RESTORE_KEYS:
         raise Epoch7RestoreError("epoch7 restore root keys differ")
     stage = restore.get("snapshot_stage")
-    expected_snapshot = STAGES.get(stage)
+    profiles.reviewed(generation)
+    expected_snapshot = {"P05_REPAIR_INITIAL": evidence.SNAPSHOT_187,
+                         "P05_REPAIR_CANDIDATE": generation.snapshot}.get(stage)
     if expected_snapshot is None:
         raise Epoch7RestoreError("restore stage is not an epoch7 P05 stage")
     _nonempty(restore.get("run_id"), "restore run_id")
@@ -224,11 +229,11 @@ def _verify(
             creation_path,
             preparation_admission=paths["pc020_preparation"],
             policy=policy,
-            expected_marker=marker,
+            expected_marker=marker, generation=generation,
         )
         if creation_result["checkpoint_marker"] != marker:
             raise Epoch7RestoreError("candidate restore marker differs from verified creation")
-    _verify_raw(restore, paths, expected_snapshot)
+    _verify_raw(restore, paths, expected_snapshot, generation)
     return {
         "scope": "single_epoch7_p05_restore_evidence",
         "stage": stage,
@@ -256,10 +261,11 @@ def verify_epoch7_restore(
     *,
     policy: evidence.FrozenSourcePolicy,
     creation_path: Path | None = None,
+    generation: profiles.Generation = profiles.HISTORICAL,
 ) -> dict[str, Any]:
     """Verify one INITIAL/187 or CANDIDATE/189 epoch7 restore record."""
     try:
-        return _verify(restore, root, policy=policy, creation_path=creation_path)
+        return _verify(restore, root, policy=policy, creation_path=creation_path, generation=generation)
     except Epoch7RestoreError:
         raise
     except (

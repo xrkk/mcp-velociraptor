@@ -194,7 +194,7 @@ class SelectorGraphTests(CapabilityFixture):
         self.assertEqual(self.tree(), before)
         with patch.object(self.selector, "EVIDENCE_ROOT", self.parent):
             result, out, error = self.cli("--emit-active")
-        self.assertEqual((result, out), (2, "")); self.assertIn("frozen policy", error)
+        self.assertEqual((result, out), (2, "")); self.assertIn("governance", error)
         with self.assertRaisesRegex(ValueError, "stage"):
             adapter.qualify(type(self).c7, bindings=self.binding, stage="P05_REPAIR_CANDIDATE")
 

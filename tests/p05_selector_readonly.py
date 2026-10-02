@@ -1,8 +1,7 @@
 """Read-only selector predicates; trust bindings belong to the controller.
 
-This adapter does not discover policies from bundles, archives, or environment
-variables. The CLI has no adopted policy/receipt binding yet and must refuse.
-Explicit bindings below are an internal integration seam, not a CLI override.
+Production bindings come from the fixed PC026 governance reader. Explicit
+bindings below remain an internal integration seam, never a CLI override.
 """
 from __future__ import annotations
 
@@ -26,11 +25,13 @@ class ControllerBindings:
     epoch7_canonical: bytes
     epoch7_receipt: Path
     root_policy: evidence.FrozenSourcePolicy | None = None
+    profile_id: str | None = None
+    governed_group: object | None = None
 
 
-def read_schema6(data: bytes, expected_workflow: str) -> dict:
+def read_schema6(data: bytes, expected_workflow: str, *, profile_id: str | None = None) -> dict:
     state = evidence._json_bytes(data, "selector canonical")
-    evidence.verify_schema6_shape(data, expected_epoch=state.get("epoch"))
+    evidence.verify_schema6_shape(data, expected_epoch=state.get("epoch"), profile_id=profile_id)
     if expected_workflow != evidence.WORKFLOW_ID:
         raise evidence.Pc020EvidenceError("workflow_id mismatch")
     marker = state["active_snapshot"]["checkpoint_marker"]
@@ -91,8 +92,16 @@ def _receipt(root: Path, path: Path, keys: set, generation: int, kind: str,
 
 def qualify(data: bytes, *, bindings: ControllerBindings, stage: str) -> dict:
     """Verify current selection content, without executing recovery or a writer."""
-    state = read_schema6(data, evidence.WORKFLOW_ID)
+    state = read_schema6(data, evidence.WORKFLOW_ID, profile_id=bindings.profile_id)
     rule = stages.STAGE_RULES.get(stage)
+    if bindings.profile_id == "pc026-snapshot191-v1" and rule is not None:
+        from tests.p05_pc026_profile import CURRENT
+        rule = dict(rule)
+        rule["canonical"] = dict(rule["canonical"])
+        if stage == "P06_ACTIVE":
+            rule["canonical"]["active_snapshot"] = CURRENT.snapshot
+        if stage != "P05_REPAIR_INITIAL":
+            rule["restored_snapshot"] = CURRENT.snapshot
     actual = {"schema_version": state["schema_version"], "epoch": state["epoch"],
               "phase": state["phase"], "active_snapshot": state["active_snapshot"]["name"]}
     if rule is None or rule["canonical"] != actual or rule["restored_snapshot"] != actual["active_snapshot"]:
@@ -143,6 +152,9 @@ def qualify(data: bytes, *, bindings: ControllerBindings, stage: str) -> dict:
         evidence._utc(intent["created_at"], "epoch8 intent created_at")
         consumer.verify_p06_admission(activation.parent, epoch7_canonical=bindings.epoch7_canonical,
             epoch8_canonical=data, epoch8_receipt_path=receipt_path,
-            policy=bindings.policy, root_policy=bindings.root_policy)
+            policy=bindings.policy, root_policy=bindings.root_policy,
+            profile_id=bindings.profile_id)
+    if bindings.governed_group is not None:
+        bindings.governed_group.recheck()
     return {"stage": stage, "content_graph_validated": True,
             "canonical_sha256": evidence._sha(data), "synthetic_fixture": bindings.policy.synthetic_fixture}

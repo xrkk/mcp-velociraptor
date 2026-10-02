@@ -23,7 +23,8 @@ RECEIPT_KEYS = {
 
 
 def verify_committed_bytes(intent_bytes: bytes, receipt_bytes: bytes, *,
-                           epoch7: bytes, epoch8: bytes, root: bytes, issuance: bytes) -> dict:
+                           epoch7: bytes, epoch8: bytes, root: bytes, issuance: bytes,
+                           profile_id: str | None = None) -> dict:
     """Content only; does not reconstruct a capability or attest past API calls."""
     intent = evidence._json_bytes(intent_bytes, "epoch8 intent")
     receipt = evidence._json_bytes(receipt_bytes, "epoch8 receipt")
@@ -50,7 +51,7 @@ def verify_committed_bytes(intent_bytes: bytes, receipt_bytes: bytes, *,
     if any(document[key] != digest for document in (intent, receipt) for key, digest in hashes.items()):
         raise evidence.Pc020EvidenceError("intent/v3 COMMITTED receipt hashes do not bind C7/R/S/H8")
     evidence.verify_schema6_shape(epoch7, expected_epoch=7)
-    evidence.verify_schema6_shape(epoch8, expected_epoch=8)
+    evidence.verify_schema6_shape(epoch8, expected_epoch=8, profile_id=profile_id)
     c7, c8 = evidence._json_bytes(epoch7, "C7"), evidence._json_bytes(epoch8, "C8")
     root_document = evidence._json_bytes(root, "activation root")
     if (any(c8[key] != c7[key] for key in ("migration_evidence", "preparation_evidence"))

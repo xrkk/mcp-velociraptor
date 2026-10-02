@@ -35,6 +35,7 @@ from tests import p05_pc020_activation as graph
 from tests import p05_pc020_evidence as evidence
 from tests import p05_pc021_stage_rules as stage_rules
 from tests import p05_pc021_transition_evidence as transition
+from tests import p05_pc026_profile as profiles
 
 
 class ConsumerError(ValueError):
@@ -53,21 +54,25 @@ def verify_p06_admission(
     epoch8_receipt_path: Path,
     policy: evidence.FrozenSourcePolicy,
     root_policy: evidence.FrozenSourcePolicy,
+    profile_id: str | None = None,
 ) -> dict[str, Any]:
     """Admit one activation bundle plus its committed epoch8 transition."""
     root_path = activation_dir / "activation-evidence.json"
+    if profile_id not in (None, "pc026-snapshot191-v1"):
+        raise ConsumerError("unreviewed consumer profile")
+    generation = profiles.HISTORICAL if profile_id is None else profiles.CURRENT
     facts = graph.verify_snapshot189_activation(
         root_path, policy=policy, epoch7_canonical=epoch7_canonical,
-        root_policy=root_policy,
+        root_policy=root_policy, generation=generation,
     )
-    if activation_dir.parent.name != "activation-189":
+    if activation_dir.parent.name != f"activation-{generation.number}":
         raise ConsumerError("activation bundle is outside the fixed activation-189 layout")
     epoch8 = evidence._json_bytes(epoch8_canonical, "epoch8 canonical")
-    evidence.verify_schema6_shape(epoch8_canonical, expected_epoch=8)
+    evidence.verify_schema6_shape(epoch8_canonical, expected_epoch=8, profile_id=profile_id)
     if (
         epoch8.get("phase") != "NETWORK_ACTIVE"
-        or epoch8.get("active_snapshot", {}).get("name") != evidence.SNAPSHOT_189
-        or epoch8.get("automatic_restore_allowlist") != [evidence.SNAPSHOT_189]
+        or epoch8.get("active_snapshot", {}).get("name") != generation.snapshot
+        or epoch8.get("automatic_restore_allowlist") != [generation.snapshot]
     ):
         raise ConsumerError("epoch8 canonical is not the active Snapshot189 state")
     activation_ref = epoch8.get("activation_evidence")
@@ -75,9 +80,9 @@ def verify_p06_admission(
     root_bytes = root_path.read_bytes()
     if (
         not isinstance(activation_ref, dict)
-        or activation_ref.get("source") != "snapshot189-activation"
+        or activation_ref.get("source") != f"snapshot{generation.number}-activation"
         or activation_ref.get("evidence_path")
-        != f"activation-189/{activation_dir.name}/activation-evidence.json"
+        != f"activation-{generation.number}/{activation_dir.name}/activation-evidence.json"
         or activation_ref.get("evidence_sha256") != _sha(root_bytes)
         or activation_ref.get("activated_at") != root_document.get("issued_at")
     ):
@@ -87,7 +92,8 @@ def verify_p06_admission(
         intent_bytes, receipt_bytes = transition.read_fixed(activation_dir, epoch8_receipt_path)
         committed = transition.verify_committed_bytes(intent_bytes, receipt_bytes,
             epoch7=epoch7_canonical, epoch8=epoch8_canonical, root=root_bytes,
-            issuance=evidence._plain_file(activation_dir, "issuance-receipt.json", "issuance receipt").read_bytes())
+            issuance=evidence._plain_file(activation_dir, "issuance-receipt.json", "issuance receipt").read_bytes(),
+            profile_id=profile_id)
     except (ValueError, OSError, TypeError, KeyError) as exc:
         raise ConsumerError(str(exc)) from exc
     return {

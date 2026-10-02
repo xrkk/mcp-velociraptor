@@ -1,5 +1,19 @@
 # Velociraptor Agent POC
 
+The read-only recovery selector now consumes the fixed PC026 runtime record
+and exact READY approval under `PLAN/2026.10.02/`, from its code-owned repository
+root. It checks the adopted interface hash, independent exact Ref allowlist,
+complete implementation/bootstrap/publication identity and ACL archive, then
+rechecks file identities and bytes before returning a selection. Missing records,
+unsafe paths, drift, old 189 evidence and incomplete COMMITTED transitions produce
+no recovery argv. There is no CLI/environment policy or root override. The
+explicit isolated fixture seam verifies complete 191 content while preserving
+historical 448+4 originals and the old 189 verifier defaults. This reader never
+publishes evidence, writes canonical state, mints capabilities or executes VMware.
+Native Windows observations, service-principal/default ACL qualification and
+actual READY issuance remain separate; runner/receiver/aggregate/P07 integration
+is still pending. The historical agent does not acquire a recovery feature.
+
 PC026 VBT1 now uses the same formal HTTP app, bearer, process instance and live session established by the official SDK. Strict frames and headers validate complete payloads before the existing guest engine runs. Actual request/response stream counters enforce the 100 MiB body limit, including JSON/SSE wrappers; chunk, header, batch and guest policy limits remain stricter where applicable. The client negotiates binary once on that session, preserves HTTP error codes and never replays an uncertain write through another encoding. stdio and unsupported session managers advertise `binary_wire:null`. Local and isolated Windows verification use development fixtures; formal port 28790, service-principal/default ACL and source firewall qualification remain pending.
 
 Non-200 binary responses are classified from exact HTTP safety JSON before checking the instance header: a genuine bearer rejection is `unauthorized` even without that header. HTTP 200 still requires the bound instance and full frame validation; malformed safety responses remain `protocol_error`. Unknown writes keep their reconciliation requirement and are never replayed or switched to JSON. Linux ASGI composition and loopback HTTP checks cover these client gates; they do not qualify the formal Windows deployment.
