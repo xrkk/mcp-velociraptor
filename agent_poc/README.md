@@ -11,9 +11,23 @@ already raised business exceptions and cancellation retain their identity.
 The cache gains no global concurrency guarantee. The middleware remains
 uninstalled in production. The new core import is listed in the code catalog;
 changed source fingerprints require a new real freeze and qualification, not
-repairs to historical approvals or evidence. Flow/results/files hooks and
+repairs to historical approvals or evidence. Results/files hooks and
 controlled archival remain separate work. Fake-backend and loopback checks
 observe MODEL clients and do not prove a Windows endpoint selection.
+
+Flow creation also emits an exact internal whitelist within that operation:
+`flow.create.begin` hashes the actual normalized env string and records the
+actual API resource limits; `flow.create.return` projects the existing rows,
+including server resource values and canonical specs hashes; `flow.metadata.return`
+records the backend's existing successful state read. Call-local operation and
+creation UUIDs restore on nested exit; no last-flow cache or extra query is used.
+A creation return remains visible if metadata fails. Observation faults stay
+sticky and prevent target probes/retries; an observed creation without matching
+operation/client association is refused before its creation RPC. With no scope,
+API return objects and existing validation/recovery remain unchanged. Facts omit
+parameter bodies, VQL, unrelated response fields and exception text. These are
+in-memory diagnostics with MODEL query-boundary and loopback SDK verification;
+real Velociraptor/Windows, production enablement and archival remain separate.
 
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service

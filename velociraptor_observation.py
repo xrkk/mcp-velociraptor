@@ -8,6 +8,8 @@ are unsupported. Request snapshots are diagnostic until sealed.
 from __future__ import annotations
 
 import contextvars
+from contextlib import contextmanager
+import uuid
 import hashlib
 import json
 import math
@@ -127,6 +129,137 @@ def emit_target_fact(kind: str, facts: dict[str, Any]) -> None:
         with scope._lock:
             if not scope._sealed:
                 scope._failed = True
+        raise
+
+
+# Internal call-local associations. Neither is an API parameter or a last-flow cache.
+_operation_current = contextvars.ContextVar("velociraptor_operation", default=None)
+_creation_current = contextvars.ContextVar("velociraptor_creation", default=None)
+_FLOW_FIELDS = {
+    "flow.create.begin": {"operation_id", "attempt", "creation_id", "client_id",
+                          "artifact", "parameters_sha256", "timeout", "max_bytes", "org_id", "root_org"},
+    "flow.create.return": {"operation_id", "attempt", "creation_id", "client_id", "rows"},
+    "flow.metadata.return": {"operation_id", "attempt", "creation_id", "client_id", "flow_id", "state"},
+}
+
+
+def _fail(scope):
+    with scope._lock:
+        if not scope._sealed:
+            scope._failed = True
+
+
+@contextmanager
+def operation_context(facts):
+    """Only TargetContext's actual operation interval establishes association."""
+    scope = _current.get()
+    token = _operation_current.set((scope, dict(facts)) if scope is not None else None)
+    try:
+        yield
+    finally:
+        _operation_current.reset(token)
+
+
+@contextmanager
+def creation_context():
+    """Backend-owned slot for exactly its API call, restored on nested exit."""
+    holder = {"owner": (_current.get(), _operation_current.get())} if observation_active() else None
+    token = _creation_current.set(holder)
+    try:
+        yield holder
+    finally:
+        _creation_current.reset(token)
+
+
+def _operation(scope, client):
+    association = _operation_current.get()
+    if association is None or association[0] is not scope or association[1]["client_id"] != client:
+        raise ObservationError("missing or mismatched creation operation")
+    return association[1]
+
+
+def _flow_emit(scope, kind, facts):
+    if set(facts) != _FLOW_FIELDS[kind]:
+        raise ObservationError("invalid flow fact fields")
+    scope.emit(kind, facts)
+
+
+def flow_creation_begin(client, artifact, normalized_parameters, timeout, max_bytes, org_id, root_org):
+    scope = _current.get()
+    if scope is None:
+        return None
+    try:
+        operation = _operation(scope, client)
+        if (org_id is not None and type(org_id) is not str) or type(root_org) is not bool:
+            raise ObservationError("invalid creation organization")
+        holder = _creation_current.get()
+        # A nested direct API call must not replace the backend's outer association.
+        if holder is None or "base" in holder or holder["owner"] != (scope, _operation_current.get()):
+            holder = {}
+        base = {**operation, "creation_id": str(uuid.uuid4())}
+        holder.update(scope=scope, base=base, returned=False)
+        _flow_emit(scope, "flow.create.begin", {
+            **base, "artifact": artifact,
+            "parameters_sha256": hashlib.sha256(normalized_parameters.encode("utf-8")).hexdigest(),
+            "timeout": timeout, "max_bytes": max_bytes, "org_id": org_id, "root_org": root_org,
+        })
+        return holder
+    except BaseException:
+        _fail(scope)
+        raise
+
+
+def _creation(scope, holder, client):
+    operation = _operation(scope, client)
+    if not holder or holder["scope"] is not scope or any(holder["base"][k] != v for k, v in operation.items()):
+        raise ObservationError("mismatched creation association")
+    return holder["base"]
+
+
+def flow_creation_return(holder, rows):
+    if holder is None:
+        return
+    scope = _current.get()
+    try:
+        base = _creation(scope, holder, holder["base"]["client_id"])
+        if type(rows) is not list:
+            raise ObservationError("invalid creation rows")
+        projected = []
+        for index, row in enumerate(rows):
+            if type(row) is not dict:
+                raise ObservationError("invalid creation row")
+            flow, artifacts = row.get("flow_id"), row.get("artifacts")
+            if flow is not None and type(flow) is not str:
+                raise ObservationError("invalid returned flow identity")
+            if artifacts is not None and (type(artifacts) is not list or any(type(a) is not str for a in artifacts)):
+                raise ObservationError("invalid returned artifacts")
+            timeout, max_bytes = row.get("timeout"), row.get("max_upload_bytes")
+            if any(v is not None and type(v) is not int for v in (timeout, max_bytes)):
+                raise ObservationError("invalid returned resource")
+            specs_sha = hashlib.sha256(_canonical(_json_copy(row["specs"]))).hexdigest() if "specs" in row else None
+            projected.append(dict(row_index=index, flow_id=flow, artifacts=artifacts,
+                                  timeout=timeout, max_upload_bytes=max_bytes, specs_sha256=specs_sha))
+        _flow_emit(scope, "flow.create.return", {**base, "rows": projected})
+        holder["returned"] = True
+        holder["first_flow"] = projected[0]["flow_id"] if projected else None
+    except BaseException:
+        if scope is not None:
+            _fail(scope)
+        raise
+
+
+def flow_metadata_return(holder, client, flow, state):
+    if holder is None:
+        return
+    scope = _current.get()
+    try:
+        base = _creation(scope, holder, client)
+        if not holder["returned"] or holder["first_flow"] != flow or type(flow) is not str or type(state) is not str or not state:
+            raise ObservationError("invalid metadata association")
+        _flow_emit(scope, "flow.metadata.return", {**base, "flow_id": flow, "state": state})
+    except BaseException:
+        if scope is not None:
+            _fail(scope)
         raise
 
 

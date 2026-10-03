@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from velociraptor_observation import (
     ObservationError, emit_target_fact, observation_active, observation_failed,
+    operation_context, creation_context, flow_metadata_return,
 )
 
 
@@ -696,7 +697,8 @@ class TargetContext:
         # Outside the business exception handler: observation faults cannot retry.
         emit_target_fact("target.operation.begin", facts)
         try:
-            result = operation(client_id)
+            with operation_context(facts):
+                result = operation(client_id)
         except BaseException as exc:
             outcome = "cancelled" if isinstance(exc, asyncio.CancelledError) else "raised"
             try:
@@ -786,32 +788,34 @@ class VelociraptorBackend:
             timeout = max(timeout or 0, self.MEMORY_ACQUISITION_TIMEOUT_SECONDS)
             max_bytes = self.MEMORY_ACQUISITION_MAX_UPLOAD_BYTES
 
-        rows = start_collection(
-            client_id,
-            artifact,
-            parameters,
-            timeout=timeout,
-            max_bytes=max_bytes,
-            org_id=None,
-            root_org=True,
-        )
-        if not rows or not isinstance(rows[0].get("flow_id"), str):
-            raise BackendError(
-                details={"operation": "start_collection", "reason": "missing_flow_id"}
+        with creation_context() as creation:
+            rows = start_collection(
+                client_id,
+                artifact,
+                parameters,
+                timeout=timeout,
+                max_bytes=max_bytes,
+                org_id=None,
+                root_org=True,
             )
-        flow_id = rows[0]["flow_id"]
-        details = get_flow_details(client_id, flow_id, org_id=None, root_org=True)
-        state = details.get("state") if details else None
-        if not isinstance(state, str) or not state:
-            raise BackendError(
-                details={"operation": "get_flow_details", "reason": "missing_state"}
+            if not rows or not isinstance(rows[0].get("flow_id"), str):
+                raise BackendError(
+                    details={"operation": "start_collection", "reason": "missing_flow_id"}
+                )
+            flow_id = rows[0]["flow_id"]
+            details = get_flow_details(client_id, flow_id, org_id=None, root_org=True)
+            state = details.get("state") if details else None
+            if not isinstance(state, str) or not state:
+                raise BackendError(
+                    details={"operation": "get_flow_details", "reason": "missing_state"}
+                )
+            flow_metadata_return(creation, client_id, flow_id, state)
+            return FlowReferenceResult(
+                operation="start_collection",
+                status=state,
+                warnings=[],
+                flow_id=flow_id,
             )
-        return FlowReferenceResult(
-            operation="start_collection",
-            status=state,
-            warnings=[],
-            flow_id=flow_id,
-        )
 
     def run_vql(self, query: str, *, max_rows: int) -> list[dict[str, Any]]:
         from velociraptor_api import run_vql_query_bounded

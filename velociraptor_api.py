@@ -8,6 +8,7 @@ from typing import Mapping
 import grpc
 import yaml
 from pyvelociraptor import api_pb2, api_pb2_grpc
+from velociraptor_observation import flow_creation_begin, flow_creation_return
 from velociraptor_env import load_environment
 
 load_environment()
@@ -722,7 +723,11 @@ def start_collection(
         "FROM foreach(row=collection) "
     )
 
-    return run_vql_query(vql, org_id=org_id, root_org=root_org)
+    creation = flow_creation_begin(client_id, normalized_artifact, normalized_parameters,
+                                   timeout, max_bytes, org_id, root_org)
+    rows = run_vql_query(vql, org_id=org_id, root_org=root_org)
+    flow_creation_return(creation, rows)
+    return rows
 
 
 def get_flow_status(client_id: str, flow_id: str, artifact: str, org_id: str | None = None) -> str:
