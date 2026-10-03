@@ -1,5 +1,20 @@
 # Velociraptor MCP
 
+TargetContext now emits an exact internal whitelist when a request scope is
+present: actual resolution/cache hits, operation begin/end, existing existence
+probes and actual cache clears. Per-operation UUIDs and attempts associate
+nested calls and the original single reselection; facts use the actual local
+client argument and omit return bodies and exception text. With no scope the
+adapter is a no-op, while the explicit `emit` API still rejects missing parents.
+Observation failures do not trigger client recovery or repeat an operation;
+already raised business exceptions and cancellation retain their identity.
+The cache gains no global concurrency guarantee. The middleware remains
+uninstalled in production. The new core import is listed in the code catalog;
+changed source fingerprints require a new real freeze and qualification, not
+repairs to historical approvals or evidence. Flow/results/files hooks and
+controlled archival remain separate work. Fake-backend and loopback checks
+observe MODEL clients and do not prove a Windows endpoint selection.
+
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service
 instance and positive request/event/byte budgets and install its middleware.
@@ -15,7 +30,7 @@ chains are unsupported. Returned `isError` is still a returned protocol result.
 
 The bridge and historical agent do not enable this module. It adds no tools,
 parameters, headers, CLI/environment switches, RPCs or persistent archive and is
-not yet part of the production freeze/catalog. Business fact hooks, controlled
+not part of a newly approved production freeze. Further business fact hooks, controlled
 archival and host association require separate contracts and integration.
 Loopback SDK/model tests do not qualify Windows, real client/Flow identity,
 pagination completeness, Admission or P07 costs.

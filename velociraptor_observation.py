@@ -1,6 +1,6 @@
 """Opt-in in-memory tools/call observation for the default MCP HTTP SDK chain.
 
-Not installed by the bridge. No business hooks, persistence or authentication.
+Not installed by the bridge. Target facts are opt-in; no persistence or authentication.
 Middleware completion is a worker-exit boundary only for the normal awaited SDK
 sync dispatch (AnyIO's default non-abandoning worker); detached/custom workers
 are unsupported. Request snapshots are diagnostic until sealed.
@@ -71,6 +71,63 @@ def current_scope() -> ObservationScope:
 def emit(kind: str, facts: dict[str, Any]) -> None:
     """Append an explicitly supplied fact to the current request, or refuse."""
     current_scope().emit(kind, facts)
+
+
+def observation_active() -> bool:
+    """Internal business activation check, without treating failures as absent."""
+    return _current.get() is not None
+
+
+def observation_failed() -> bool:
+    scope = _current.get()
+    if scope is None:
+        return False
+    with scope._lock:
+        return scope._failed
+
+
+_TARGET_FIELDS = {
+    "target.resolve": {"operation_id", "mode", "client_id"},
+    "target.operation.begin": {"operation_id", "attempt", "client_id"},
+    "target.operation.end": {"operation_id", "attempt", "client_id", "outcome"},
+    "target.exists": {"operation_id", "attempt", "client_id", "exists"},
+    "target.clear": {"operation_id", "previous_client_id"},
+}
+
+
+def emit_target_fact(kind: str, facts: dict[str, Any]) -> None:
+    """Internal exact target whitelist; absent scope is the only no-op case."""
+    scope = _current.get()
+    if scope is None:
+        return
+    try:
+        if type(facts) is not dict or kind not in _TARGET_FIELDS or set(facts) != _TARGET_FIELDS[kind]:
+            raise ObservationError("invalid target fact fields")
+        operation_id = facts["operation_id"]
+        if operation_id is not None:
+            import uuid
+            if type(operation_id) is not str or str(uuid.UUID(operation_id)) != operation_id:
+                raise ObservationError("invalid operation identity")
+        if kind in ("target.operation.begin", "target.operation.end", "target.exists"):
+            if operation_id is None or type(facts["attempt"]) is not int or facts["attempt"] not in (1, 2):
+                raise ObservationError("invalid operation attempt")
+        field = "previous_client_id" if kind == "target.clear" else "client_id"
+        client = facts[field]
+        if not (kind == "target.clear" and client is None) and (type(client) is not str or not client):
+            raise ObservationError("invalid target client identity")
+        if kind == "target.resolve" and facts["mode"] not in ("selected", "cache_hit"):
+            raise ObservationError("invalid resolution mode")
+        if kind == "target.operation.end" and facts["outcome"] not in ("returned", "raised", "cancelled"):
+            raise ObservationError("invalid operation outcome")
+        if kind == "target.exists" and type(facts["exists"]) is not bool:
+            raise ObservationError("invalid existence fact")
+        scope.emit(kind, facts)
+    except BaseException:
+        # Keep failures sticky even if an injected emitter fails before append.
+        with scope._lock:
+            if not scope._sealed:
+                scope._failed = True
+        raise
 
 
 class ObservationScope:

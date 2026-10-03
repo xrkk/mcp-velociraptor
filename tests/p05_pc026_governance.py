@@ -179,6 +179,7 @@ LOCAL_MODULES = frozenset({
     'velociraptor_env.py',
     'velociraptor_fixed_tools.py',
     'velociraptor_mcp_core.py',
+    'velociraptor_observation.py',
     'velociraptor_transport.py',
 })
 LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/pc026_raw_fixture.py'}) | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})

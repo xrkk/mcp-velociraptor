@@ -7,6 +7,7 @@ instead of duplicating target or output policy.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -15,6 +16,11 @@ from typing import Any, Literal, Protocol, TypeVar
 import grpc
 from mcp.types import CallToolResult
 from pydantic import BaseModel, ConfigDict, Field
+
+
+from velociraptor_observation import (
+    ObservationError, emit_target_fact, observation_active, observation_failed,
+)
 
 
 RESULT_ROW_LIMIT = 250
@@ -649,11 +655,25 @@ class TargetContext:
         self._client_id: str | None = None
 
     def clear(self) -> None:
+        self._clear(None)
+
+    def _clear(self, operation_id: str | None) -> None:
+        previous = self._client_id
         self._client_id = None
+        emit_target_fact("target.clear", {
+            "operation_id": operation_id, "previous_client_id": previous,
+        })
 
     def get_client_id(self) -> str:
+        return self._resolve_client_id(None)
+
+    def _resolve_client_id(self, operation_id: str | None) -> str:
         if self._client_id is not None:
-            return self._client_id
+            client_id = self._client_id
+            emit_target_fact("target.resolve", {
+                "operation_id": operation_id, "mode": "cache_hit", "client_id": client_id,
+            })
+            return client_id
         candidates = self._backend.list_windows_clients()
         count = len(candidates)
         if count == 0:
@@ -664,33 +684,68 @@ class TargetContext:
         if not isinstance(client_id, str) or not client_id:
             raise BackendError(details={"operation": "list_windows_clients", "reason": "missing_client_id"})
         self._client_id = client_id
+        emit_target_fact("target.resolve", {
+            "operation_id": operation_id, "mode": "selected", "client_id": client_id,
+        })
         return client_id
 
-    def run_with_client(self, operation: Callable[[str], T]) -> T:
-        client_id = self.get_client_id()
+    @staticmethod
+    def _operation(operation: Callable[[str], T], client_id: str,
+                   operation_id: str | None, attempt: int) -> T:
+        facts = {"operation_id": operation_id, "attempt": attempt, "client_id": client_id}
+        # Outside the business exception handler: observation faults cannot retry.
+        emit_target_fact("target.operation.begin", facts)
         try:
-            return operation(client_id)
+            result = operation(client_id)
+        except BaseException as exc:
+            outcome = "cancelled" if isinstance(exc, asyncio.CancelledError) else "raised"
+            try:
+                emit_target_fact("target.operation.end", {**facts, "outcome": outcome})
+            except BaseException:
+                try:
+                    exc.add_note("Target observation end failed; original exception preserved.")
+                except BaseException:
+                    pass  # Optional diagnostics must never replace the primary.
+            raise
+        emit_target_fact("target.operation.end", {**facts, "outcome": "returned"})
+        return result
+
+    def run_with_client(self, operation: Callable[[str], T]) -> T:
+        operation_id = str(uuid.uuid4()) if observation_active() else None
+        client_id = self._resolve_client_id(operation_id)
+        try:
+            return self._operation(operation, client_id, operation_id, 1)
         except Exception as operation_error:
+            if observation_failed() or (observation_active() and isinstance(operation_error, ObservationError)):
+                raise
             try:
                 exists = self._backend.client_id_exists(client_id)
             except Exception:
                 raise operation_error
+            emit_target_fact("target.exists", {
+                "operation_id": operation_id, "attempt": 1, "client_id": client_id, "exists": exists,
+            })
             if exists:
                 raise operation_error
 
-        self.clear()
+        self._clear(operation_id)
         try:
-            replacement = self.get_client_id()
+            replacement = self._resolve_client_id(operation_id)
         except ClientNotFoundError as exc:
             raise ClientIdNotFoundError(details={"retries": 1}) from exc
 
         try:
-            return operation(replacement)
+            return self._operation(operation, replacement, operation_id, 2)
         except Exception as exc:
+            if observation_failed() or (observation_active() and isinstance(exc, ObservationError)):
+                raise
             try:
                 exists = self._backend.client_id_exists(replacement)
             except Exception:
                 raise exc
+            emit_target_fact("target.exists", {
+                "operation_id": operation_id, "attempt": 2, "client_id": replacement, "exists": exists,
+            })
             if not exists:
                 raise ClientIdNotFoundError(details={"retries": 1}) from exc
             raise exc
