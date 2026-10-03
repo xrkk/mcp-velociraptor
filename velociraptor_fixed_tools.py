@@ -58,6 +58,8 @@ from velociraptor_mcp_core import (
     success_result,
 )
 
+from velociraptor_observation import emit_flow_read_fact, flow_read_guard, flow_rows_sha256
+
 
 FIXED_TOOL_NAMES = (
     "run_vql",
@@ -493,6 +495,7 @@ class FixedToolService:
 
     def _flow(self, client_id: str, flow_id: str) -> dict[str, Any]:
         _require_text(flow_id, "flow_id")
+        flow_read_guard(client_id, flow_id)
         row = _backend_call(
             "get_flow_status",
             lambda: self._backend.get_flow_details(client_id, flow_id),
@@ -503,6 +506,14 @@ class FixedToolService:
             raise BackendError(
                 details={"operation": "get_flow_status", "reason": "invalid_flow"}
             )
+        def metadata_facts():
+            request = row.get("request") if isinstance(row.get("request"), Mapping) else {}
+            return {
+                "state": row.get("state"),
+                "artifacts": _string_list(row.get("artifacts") or request.get("artifacts") or [], field="artifacts"),
+                "sources": _string_list(row.get("artifacts_with_results"), field="artifacts_with_results"),
+            }
+        emit_flow_read_fact("flow.read.metadata", client_id, flow_id, metadata_facts)
         return row
 
     def _flow_status_model(self, flow_id: str, row: Mapping[str, Any]) -> FlowStatusResult:
@@ -744,18 +755,23 @@ class FixedToolService:
             else:
                 selected_sources = [source_suffix(item) for item in known]
 
-            totals = [
-                _backend_call(
+            emit_flow_read_fact("flow.results.plan", client_id, flow_id, lambda: {
+                "artifact": artifact, "requested_source": source, "selected_sources": selected_sources,
+                "offset": offset, "page_size": size,
+            })
+            totals = []
+            for source_index, source_name in enumerate(selected_sources):
+                flow_read_guard(client_id, flow_id)
+                source_total = _backend_call(
                     "get_flow_results",
                     lambda source_name=source_name: self._backend.get_flow_result_count(
-                        client_id,
-                        flow_id,
-                        artifact,
-                        source=source_name,
+                        client_id, flow_id, artifact, source=source_name,
                     ),
                 )
-                for source_name in selected_sources
-            ]
+                emit_flow_read_fact("flow.results.count", client_id, flow_id, lambda: {
+                    "artifact": artifact, "source_index": source_index, "source": source_name, "total": source_total,
+                })
+                totals.append(source_total)
             total = sum(totals)
             if offset > total:
                 raise InvalidArgumentError(
@@ -764,10 +780,12 @@ class FixedToolService:
             rows: list[dict[str, Any]] = []
             remaining_offset = offset
             remaining_count = size + 1
-            for source_name, source_total in zip(selected_sources, totals):
+            for source_index, (source_name, source_total) in enumerate(zip(selected_sources, totals)):
                 if remaining_offset >= source_total:
                     remaining_offset -= source_total
                     continue
+                flow_read_guard(client_id, flow_id)
+                start_row, requested_count = remaining_offset, remaining_count
                 window = _backend_call(
                     "get_flow_results",
                     lambda source_name=source_name, start=remaining_offset, count=remaining_count: self._backend.get_flow_results_window(
@@ -779,6 +797,11 @@ class FixedToolService:
                         count=count,
                     ),
                 )
+                emit_flow_read_fact("flow.results.window", client_id, flow_id, lambda: {
+                    "artifact": artifact, "source_index": source_index, "source": source_name,
+                    "start_row": start_row, "requested_count": requested_count, "returned": len(window),
+                    "rows_sha256": flow_rows_sha256(window),
+                })
                 rows.extend(window)
                 remaining_count -= len(window)
                 remaining_offset = 0
@@ -790,12 +813,18 @@ class FixedToolService:
                 cursor=cursor,
                 page_size=size,
             )
-            return FixedDataResult.model_validate(generic.model_dump(mode="json"))
+            result = FixedDataResult.model_validate(generic.model_dump(mode="json"))
+            emit_flow_read_fact("flow.results.page", client_id, flow_id, lambda: {
+                "returned": len(result.data), "data_sha256": flow_rows_sha256(result.data),
+                "pagination": result.pagination.model_dump(mode="json", exclude_none=False),
+            })
+            return result
 
         return self._target.run_with_client(operation)
 
     def _file_records(self, client_id: str, flow_id: str) -> _FileInventory:
         self._flow(client_id, flow_id)
+        flow_read_guard(client_id, flow_id)
         rows = _backend_call(
             "list_flow_files",
             lambda: self._backend.list_flow_uploads(client_id, flow_id),
@@ -804,7 +833,20 @@ class FixedToolService:
             raise BackendError(
                 details={"operation": "list_flow_files", "reason": "invalid_uploads"}
             )
-        return _deduplicated_uploads(rows, client_id=client_id, flow_id=flow_id)
+        emit_flow_read_fact("flow.files.raw", client_id, flow_id, lambda: {
+            "row_count": len(rows), "rows_sha256": flow_rows_sha256(rows, uploads=True),
+        })
+        inventory = _deduplicated_uploads(rows, client_id=client_id, flow_id=flow_id)
+        emit_flow_read_fact("flow.files.inventory", client_id, flow_id, lambda: {
+            "record_count": len(inventory.records), "sparse_count": inventory.sparse_count,
+            "size_mismatch_count": inventory.size_mismatch_count,
+            "identities_sha256": flow_rows_sha256([
+                {"file_id": record.file_id, "identity": record.identity, "components": list(record.components),
+                 "index_selector": list(record.index_selector) if record.index_selector is not None else None}
+                for record in inventory.records
+            ]),
+        })
+        return inventory
 
     def list_flow_files(self, flow_id: str) -> FlowFileListResult:
         def operation(client_id: str):
@@ -824,7 +866,7 @@ class FixedToolService:
                     for record in inventory.records[:RESULT_ROW_LIMIT]
                     if record.index_selector is None and record.file_size != record.uploaded_size
                 )
-            return limit_unpaged_result(
+            result = limit_unpaged_result(
                 {
                     "operation": "list_flow_files",
                     "status": "success",
@@ -832,6 +874,10 @@ class FixedToolService:
                 },
                 [record.public_row() for record in inventory.records],
             )
+            emit_flow_read_fact("flow.files.result", client_id, flow_id, lambda: {
+                "returned": len(result.data), "data_sha256": flow_rows_sha256(result.data), "truncated": result.truncated,
+            })
+            return result
 
         generic = self._target.run_with_client(operation)
         return FlowFileListResult.model_validate(generic.model_dump(mode="json"))

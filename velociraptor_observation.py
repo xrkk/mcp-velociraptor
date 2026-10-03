@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextvars
 from contextlib import contextmanager
+from collections.abc import Mapping
 import uuid
 import hashlib
 import json
@@ -260,6 +261,115 @@ def flow_metadata_return(holder, client, flow, state):
     except BaseException:
         if scope is not None:
             _fail(scope)
+        raise
+
+
+_READ_FIELDS = {
+    "flow.read.metadata": {"state", "artifacts", "sources"},
+    "flow.results.plan": {"artifact", "requested_source", "selected_sources", "offset", "page_size"},
+    "flow.results.count": {"artifact", "source_index", "source", "total"},
+    "flow.results.window": {"artifact", "source_index", "source", "start_row", "requested_count", "returned", "rows_sha256"},
+    "flow.results.page": {"returned", "data_sha256", "pagination"},
+    "flow.files.raw": {"row_count", "rows_sha256"},
+    "flow.files.inventory": {"record_count", "identities_sha256", "sparse_count", "size_mismatch_count"},
+    "flow.files.result": {"returned", "data_sha256", "truncated"},
+}
+_READ_BASE = {"operation_id", "attempt", "client_id", "flow_id"}
+
+
+def _read_base(scope, client, flow):
+    operation = _operation(scope, client)
+    if type(flow) is not str or not flow:
+        raise ObservationError("invalid read flow identity")
+    with scope._lock:
+        if scope._failed or scope._sealed:
+            raise ObservationError("read observation unavailable")
+    return {**operation, "flow_id": flow}
+
+
+def flow_read_guard(client, flow):
+    """Check actual operation association before an existing read query."""
+    scope = _current.get()
+    if scope is None:
+        return
+    try:
+        _read_base(scope, client, flow)
+    except BaseException:
+        _fail(scope)
+        raise
+
+
+def _uploads_json(value, active=None):
+    """Only uploads Mapping/list containers become ordinary JSON containers."""
+    if not isinstance(value, Mapping) and type(value) is not list:
+        return _json_copy(value)
+    active = set() if active is None else active
+    identity = id(value)
+    if identity in active:
+        raise ObservationError("cyclic uploads JSON")
+    active.add(identity)
+    try:
+        if isinstance(value, Mapping):
+            if any(type(k) is not str for k in value):
+                raise ObservationError("invalid uploads JSON keys")
+            return {k: _uploads_json(v, active) for k, v in value.items()}
+        return [_uploads_json(v, active) for v in value]
+    finally:
+        active.remove(identity)
+
+
+def flow_rows_sha256(rows, *, uploads=False):
+    """Called only by an active fact factory, never for an absent scope."""
+    valid_array = isinstance(rows, list) if uploads else type(rows) is list
+    if not valid_array:
+        raise ObservationError("invalid observed row array")
+    value = _uploads_json(rows) if uploads else _json_copy(rows)
+    return hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def _validate_read_facts(kind, facts):
+    if type(facts) is not dict or kind not in _READ_FIELDS or set(facts) != _READ_FIELDS[kind]:
+        raise ObservationError("invalid read fact fields")
+    for field, value in facts.items():
+        if field.endswith("sha256"):
+            valid = type(value) is str and re.fullmatch(r"[0-9a-f]{64}", value)
+        elif field in {"offset", "page_size", "source_index", "total", "start_row", "requested_count", "returned",
+                       "row_count", "record_count", "sparse_count", "size_mismatch_count"}:
+            valid = type(value) is int and value >= 0
+        elif field in {"artifacts", "sources", "selected_sources"}:
+            valid = type(value) is list and all(type(v) is str or (field == "selected_sources" and v is None) for v in value)
+        elif field in {"source", "requested_source"}:
+            valid = value is None or type(value) is str
+        elif field == "state":
+            valid = value is None or (type(value) is str and bool(value))
+        elif field == "artifact":
+            valid = type(value) is str
+        elif field == "truncated":
+            valid = type(value) is bool
+        elif field == "pagination":
+            valid = (type(value) is dict and set(value) == {"cursor", "next_cursor", "page_size", "returned", "truncated"}
+                     and type(value["cursor"]) is str and (value["next_cursor"] is None or type(value["next_cursor"]) is str)
+                     and type(value["page_size"]) is int and value["page_size"] >= 1
+                     and type(value["returned"]) is int and value["returned"] == facts["returned"]
+                     and type(value["truncated"]) is bool)
+        else:
+            valid = False
+        if not valid:
+            raise ObservationError("invalid read fact value")
+
+
+def emit_flow_read_fact(kind, client, flow, factory):
+    """Internal exact whitelist; lazy fields preserve no-scope business behavior."""
+    scope = _current.get()
+    if scope is None:
+        return
+    try:
+        base = _read_base(scope, client, flow)
+        facts = factory()
+        _validate_read_facts(kind, facts)
+        scope.emit(kind, {**base, **facts})
+    except BaseException:
+        _fail(scope)
         raise
 
 

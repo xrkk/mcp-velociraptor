@@ -11,8 +11,8 @@ already raised business exceptions and cancellation retain their identity.
 The cache gains no global concurrency guarantee. The middleware remains
 uninstalled in production. The new core import is listed in the code catalog;
 changed source fingerprints require a new real freeze and qualification, not
-repairs to historical approvals or evidence. Results/files hooks and
-controlled archival remain separate work. Fake-backend and loopback checks
+repairs to historical approvals or evidence. Controlled archival
+remains separate work. Fake-backend and loopback checks
 observe MODEL clients and do not prove a Windows endpoint selection.
 
 Flow creation also emits an exact internal whitelist within that operation:
@@ -28,6 +28,20 @@ API return objects and existing validation/recovery remain unchanged. Facts omit
 parameter bodies, VQL, unrelated response fields and exception text. These are
 in-memory diagnostics with MODEL query-boundary and loopback SDK verification;
 real Velociraptor/Windows, production enablement and archival remain separate.
+
+Result and file reads emit eight exact internal fact kinds under the actual
+operation/client/flow association. Metadata preserves nullable state and the
+existing artifact/source rules; result plans, per-source counts and actual
+prefetch windows precede the final page hash and complete pagination fields,
+including a null next cursor. Uploads record the original ordered JSON hash,
+then the existing deduplicated inventory identity hash and bounded file result.
+Facts omit row and path bodies. No query, page walk, public output or schema is
+added. Lazy adapters do no hashing or extra validation without a request scope;
+observation faults preserve the successful prefix and prevent target recovery
+or repeated queries. Equal counts do not establish a transaction snapshot, and
+one page or enumeration does not establish completeness. MODEL backend and
+loopback SDK checks remain separate from real Velociraptor/Windows, controlled
+archival, production enablement and a new qualified freeze.
 
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service
