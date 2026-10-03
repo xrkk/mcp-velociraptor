@@ -786,3 +786,109 @@ their Windows identities and business observations remain modeled. They do not
 prove formal service ACLs/191 acceptance, actual client/Flow or pagination
 completion, environment comparability or cost success. Both P07 cost entrypoints
 retain their refusal of the undefined current collector.
+
+
+`tests/p05_service_qualification.py` is a separate one-shot SCM foundation
+diagnostic for the existing `mcp-velociraptor` virtual-account service. It is
+not imported by the bridge or historical agent, adds no MCP tool, and offers no
+console/root/SID/config/Win32 override. Import is inert; the no-argument entry
+only connects to `StartServiceCtrlDispatcherW`. Deployment, service switching,
+account rights, disk/ACL changes and actual Windows execution require separate
+controller authorization. It never reads business env/config, opens HTTP,
+contacts the backend, installs services or schedules rollback.
+
+Its code-owned sibling input is `tests/p05-service-qualification.json`, generated
+only during an approved future deployment. It is canonical UTF-8 JSON with
+sorted keys, compact separators, no BOM and exactly one trailing LF, at most
+1 MiB and container depth 16. Duplicate/unknown fields, non-finite numbers,
+bool-as-int, aliases, escapes and oversized inputs refuse without repair.
+The exact eight fields are `schema_version` (integer 1), `kind`
+(`pc026-foundation-qualification-input-v1`), `run_id` (canonical UUID4),
+`principal_sid`, `namespace_root` (canonical native local Windows absolute path,
+disjoint from the code-owned tree), `root_identity` (11 exact-six Windows
+platform/volume_serial/file_id/owner_sid/principal_sid/acl_sha256), `source_refs`
+and `budgets`. Refs have exactly path/size/SHA256; each path must appear once
+in the tool's independent `REQUIRED_SOURCES` catalog (currently 16 files,
+including all local imports and package initializers). Input itself is excluded
+from that catalog. Each source is safely read with a 1 MiB ceiling and compared
+by size/hash; all retained identities/bytes/full SDs are rechecked before writes
+and after the probe/report. Missing closure members, case variants and unknown
+directories fail. The independent catalog must change with local dependencies.
+
+`budgets` has exactly these five positive integer limits, with inclusive ranges:
+
+| Field | Minimum | Maximum |
+|---|---:|---:|
+| max_directories | 2 | 8 |
+| max_record_bytes | 1024 | 65536 |
+| max_records | 3 | 8 |
+| max_total_bytes | 3072 | 524288 |
+| max_json_depth | 3 | 16 |
+
+`max_total_bytes` must also be at least three times `max_record_bytes` to reserve
+seal and fit this fixed probe. No ceiling is silently clipped. Actual TokenUser
+must equal both the input SID and `LookupAccountNameW` for
+`NT SERVICE\mcp-velociraptor`; thread impersonation and missing assigned
+SeSecurityPrivilege refuse. Full owner/group/DACL/SACL and LIST checks use the
+current default WindowsSession, with no extra trust or automatic privilege grant.
+Config/source leases stay through report readback and final closure. Self-check
+hashes do not independently establish trusted interpreter/runtime/package
+provenance: that external deployment authority must be verified separately.
+
+After all gates, the default 11 allocator exclusively creates one `run_id`
+child and one `request` child; existing names refuse without adoption or retry.
+The real 09 publisher and 10 journal write exactly three 08 originals: accept,
+`target.resolve`, and seal. Their fixed parent uses
+`instance_id="qualification:<run_id>"`, `session_id="MODEL-foundation"`, typed
+integer request 1, acceptance sequence 1, tool `qualification.foundation.MODEL`
+and client `MODEL-qualification-client`. These are diagnostics, not client/Flow
+observations. Original bytes are safely reread, compared to the exact emitted
+bytes and verified by 08; allocator leases survive publisher close and recheck.
+
+Only a safely acquired run can receive exclusive `qualification-report.json`.
+Its versioned exact top-level schema is: `schema_version`=1, `kind`=
+`pc026-foundation-qualification-report-v1`, `outcome`, `code`, `input_ref`,
+`source_refs`, `process_before`, `process_after`, `run_identity`,
+`request_identity`, `records`, `verify`, `resources`, `boundary`.
+Outcomes are only FOUNDATION_PASS/FAILED/CANCELLED. `code` is a fixed category:
+FOUNDATION_PASS=0, CONFIG_FAILED=10, IDENTITY_FAILED=11, SOURCE_FAILED=12,
+PROBE_FAILED=13, REPORT_FAILED=14, CLOSE_FAILED=15, SCM_FAILED=16, CANCELLED=17,
+DEADLINE=18. Process snapshots contain exact principal_sid/account_sid/pid/
+started_filetime/privileges (name+attributes)/handle_count_including_query/
+thread_impersonation fields. Directory identities use the exact six fields;
+request_identity may be null before acquisition. Records contain Ref+identity;
+verify is the 08 chain summary or null before verification. Resources contain
+closed_before_report (only successful prior closures), background_workers=0,
+service_main=ACTIVE_UNTIL_FINAL_CLOSE and
+allocator_config_final_close=EXTERNAL_SCM_CONFIRMATION_REQUIRED. Boundary is
+DIAGNOSTIC_ONLY_EXTERNAL_RUNTIME_AUTHORITY_REQUIRED. The report carries no
+exception messages/stacks, credentials, READY status or approval. It is bounded
+at 1 MiB, exclusively written/flushed/closed and privately reread; it has no 09
+atomic publication or power-loss guarantee. Failed/uncertain originals remain;
+there is no overwrite, deletion or repair. Report write/read/close errors cannot
+produce a successful SCM exit. A provisional disk FOUNDATION_PASS cannot
+qualify a later failed final lease close or SCM status update; external final
+SCM exit and handle/token observations are mandatory. After all owned closes,
+the host also rechecks the actual process identity and original privilege
+attributes; drift gives a nonzero exit without rewriting the provisional report.
+
+The synchronous service reports START_PENDING, RUNNING (probe executing only),
+then STOP_PENDING and one STOPPED after cleanup. The callback only signals STOP;
+there is no concurrent evidence writer, thread kill or automatic rerun. STOP and
+an explicit 120-second monotonic deadline prevent new probe stages at cooperative
+boundaries; an already-started native transaction reaches its safe boundary.
+Blocking Win32 I/O cannot be interrupted by this deadline: a stale RUNNING or
+pending external observation means completion is unknown, not zero workers or
+successful stop. No STOPPED report is emitted until synchronous work returns.
+A safe existing run may receive a CANCELLED/FAILED final diagnostic after STOP.
+All resource closes are attempted once; primary failures survive close/note
+failures. Before a safe run exists, only a fixed nonzero SCM classification is
+available, with no fallback output to cwd or old Logs.
+
+Host lifecycle tests exercise real 08/09/10/11 classes and this SCM control flow
+with explicitly MODEL native I/O/token APIs. They cover refusal, drift, budgets,
+exclusive names, stage STOP, unknown I/O, report and cleanup/status failures;
+new isolated source loading checks closure without issuing a freeze. Actual
+Windows dispatcher/token/service stopping, root/SACL qualification and deployment
+remain unverified. This is not T036 observer config/catalog/cut, production
+archival, >4 GiB transfer, N1–N5, a 191 snapshot or P05/P06 acceptance.

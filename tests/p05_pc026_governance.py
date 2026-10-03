@@ -192,6 +192,11 @@ LOCAL_MODULES = LOCAL_MODULES | frozenset({'velociraptor_observation_namespace.p
 LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/pc026_raw_fixture.py'}) | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
 
 
+# Diagnostic SCM entry and its explicit MODEL lifecycle verification; no approval.
+LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/p05_service_qualification.py',
+    'tests/test_p05_service_qualification.py', 'tests/test_observation_namespace.py',
+    'tests/test_observation_windows.py', 'tests/test_observation_archive.py'})
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 
