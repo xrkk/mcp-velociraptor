@@ -20,6 +20,8 @@ from typing import Any
 
 import anyio
 
+from velociraptor_observation_journal import RequestJournal, _note
+
 
 class ObservationError(ValueError):
     """Observation admission, validation, capacity or lifecycle refusal."""
@@ -388,12 +390,18 @@ class ObservationScope:
         self._failed = False
         self._max_events = max_events
         self._max_bytes = max_bytes
+        self._journal = None
+        self._journal_required = False
+        self._journal_ready = False
+        self._journal_owner = object()
 
     def emit(self, kind: str, facts: dict[str, Any]) -> None:
         with self._lock:
             if self._sealed:
                 raise ObservationError("observation is sealed")
             try:
+                if self._journal_required and not self._journal_ready:
+                    raise ObservationError('journal acceptance unconfirmed')
                 if type(kind) is not str or not _KIND.fullmatch(kind):
                     raise ObservationError("invalid event kind")
                 if type(facts) is not dict:
@@ -406,9 +414,16 @@ class ObservationScope:
                     raise ObservationError("event byte budget exceeded")
                 if self._failed:
                     raise ObservationError("observation already failed")
+                if self._journal is not None:
+                    self._journal.append(event)
                 self._events.append(event)
-            except (ObservationError, RecursionError):
+            except BaseException as primary:
                 self._failed = True
+                if self._journal is not None:
+                    try:
+                        self._journal.fail()
+                    except BaseException:
+                        _note(primary, 'Journal failure diagnostic failed.')
                 raise
 
     def snapshot(self, *, allow_unsealed: bool = False) -> dict[str, Any]:
@@ -423,6 +438,25 @@ class ObservationScope:
     def _finish(self, outcome: str) -> bool:
         with self._lock:
             self._outcome = "raised" if outcome == "returned" and self._failed else outcome
+            if self._journal_required:
+                if not self._journal_ready:
+                    self._failed = True
+                    raise ObservationError('journal acceptance unconfirmed')
+                primary = None
+                try:
+                    self._journal.seal(outcome, failed=self._failed)
+                except BaseException as exc:
+                    self._failed = True
+                    primary = exc
+                    raise
+                finally:
+                    try:
+                        self._journal.close()
+                    except BaseException:
+                        self._failed = True
+                        if primary is None:
+                            raise
+                        _note(primary, 'Journal finalization close failed.')
             self._sealed = True
             return self._failed
 
@@ -436,7 +470,8 @@ class RequestObserver:
     """
 
     def __init__(self, instance_id: str, *, max_requests: int,
-                 max_events_per_request: int, max_event_bytes: int) -> None:
+                 max_events_per_request: int, max_event_bytes: int,
+                 journal_factory=None) -> None:
         if type(instance_id) is not str or not instance_id:
             raise ObservationError("missing instance identity")
         for limit in (max_requests, max_events_per_request, max_event_bytes):
@@ -448,6 +483,9 @@ class RequestObserver:
         self._max_bytes = max_event_bytes
         self._lock = threading.Lock()
         self._scopes: dict[tuple[Any, ...], ObservationScope] = {}
+        if journal_factory is not None and not callable(journal_factory):
+            raise ObservationError('invalid journal factory')
+        self._journal_factory = journal_factory
 
     async def middleware(self, ctx: Any, call_next: Any) -> Any:
         if ctx.method != "tools/call":
@@ -491,8 +529,27 @@ class RequestObserver:
         primary: BaseException | None = None
         failed = False
         try:
+            if self._journal_factory is not None:
+                scope._journal_required = True
+                journal = self._journal_factory(_json_copy(key), tool, arguments_sha256)
+                if not isinstance(journal, RequestJournal):
+                    raise ObservationError('factory must return a RequestJournal')
+                try:
+                    journal.claim(scope._journal_owner, key, tool, arguments_sha256)
+                except BaseException as exc:
+                    try:
+                        journal.close_claim(scope._journal_owner)
+                    except BaseException:
+                        _note(exc, 'Rejected journal close failed.')
+                    raise
+                scope._journal = journal
+                scope._journal_ready = True
+                if scope._failed:
+                    raise ObservationError('journal factory observation failed')
             result = await call_next(ctx)
         except BaseException as exc:
+            if scope._journal_required and not scope._journal_ready:
+                scope._failed = True
             primary = exc
             outcome = "cancelled" if isinstance(exc, anyio.get_cancelled_exc_class()) else "raised"
             raise
@@ -502,7 +559,7 @@ class RequestObserver:
             except BaseException:
                 if primary is None:
                     raise
-                primary.add_note("Observation finalization failed; scope remains diagnostic.")
+                _note(primary, "Observation finalization failed; scope remains diagnostic.")
             finally:
                 _current.reset(token)
         if failed:
@@ -513,3 +570,15 @@ class RequestObserver:
         with self._lock:
             scopes = list(self._scopes.values())
         return [scope.snapshot(allow_unsealed=allow_unsealed) for scope in scopes]
+
+    def journal_diagnostics(self):
+        """Internal diagnostics, separate from the unchanged exact-six snapshot."""
+        with self._lock:
+            scopes = list(self._scopes.values())
+        result = []
+        for scope in scopes:
+            with scope._lock:
+                result.append(dict(key=_json_copy(scope._key),
+                    acceptance_confirmed=scope._journal_ready,
+                    journal=None if scope._journal is None else scope._journal.diagnostics()))
+        return result

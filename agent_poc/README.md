@@ -11,7 +11,7 @@ already raised business exceptions and cancellation retain their identity.
 The cache gains no global concurrency guarantee. The middleware remains
 uninstalled in production. The new core import is listed in the code catalog;
 changed source fingerprints require a new real freeze and qualification, not
-repairs to historical approvals or evidence. Controlled archival
+repairs to historical approvals or evidence. Controlled native archival
 remains separate work. Fake-backend and loopback checks
 observe MODEL clients and do not prove a Windows endpoint selection.
 
@@ -27,7 +27,7 @@ operation/client association is refused before its creation RPC. With no scope,
 API return objects and existing validation/recovery remain unchanged. Facts omit
 parameter bodies, VQL, unrelated response fields and exception text. These are
 in-memory diagnostics with MODEL query-boundary and loopback SDK verification;
-real Velociraptor/Windows, production enablement and archival remain separate.
+real Velociraptor/Windows, production enablement and native archival remain separate.
 
 Result and file reads emit eight exact internal fact kinds under the actual
 operation/client/flow association. Metadata preserves nullable state and the
@@ -40,7 +40,7 @@ added. Lazy adapters do no hashing or extra validation without a request scope;
 observation faults preserve the successful prefix and prevent target recovery
 or repeated queries. Equal counts do not establish a transaction snapshot, and
 one page or enumeration does not establish completeness. MODEL backend and
-loopback SDK checks remain separate from real Velociraptor/Windows, controlled
+loopback SDK checks remain separate from real Velociraptor/Windows, native
 archival, production enablement and a new qualified freeze.
 
 `velociraptor_observation_archive.py` provides the independent PC026 08
@@ -93,12 +93,43 @@ must include those dependencies. Host state-machine and ctypes adapter models
 are development evidence, not native Windows publication or service-SID/root
 qualification. API success/content flush/atomic visibility do not prove directory
 power-loss durability. No CLI/env override, alternate SID/API parameter, parent
-tree creation, observer/bridge integration, trusted namespace or new freeze is
+tree creation, production observer/bridge integration, trusted namespace or new freeze is
 provided; formal native validation and production authorization remain separate.
 The rename buffer includes an owned UTF-16 terminator outside FileNameLength
 but inside the passed buffer size, preventing Win32 path normalization from
 reading beyond the destination name. Isolated control-principal Windows tests
 do not qualify the business service identity or directory power-loss durability.
+
+`velociraptor_observation_journal.py` adds the PC026 10 explicit per-request
+archive seam. `RequestJournal(publisher, codec, accept_payload,
+owns_publisher=False)` publishes and verifies accept before business starts.
+Each append validates the 08 whitelist and budgets, reserves one record and
+`max_record_bytes` for seal, checks the exact returned path/size/SHA, then advances
+the confirmed head. It retains counters and parent metadata, not record bytes.
+A known validation refusal can seal FAILED; any publication exception or Ref
+mismatch permanently poisons the journal, prohibiting retries and further seals.
+Seal records the actual outcome; COMPLETE does not mean business success.
+
+An internal `RequestObserver(..., journal_factory=factory)` passes a copied
+key, tool and arguments SHA to trusted factory code. The factory supplies a new
+matching journal and acceptance sequence; keys stay reserved after failures,
+and cross-scope reuse is refused. Under the scope lock, archive acknowledgment
+precedes memory append; sealing and one close attempt precede memory sealing,
+after the default awaited SDK worker exits. Every archive fault is sticky and
+prevents target recovery/replay. Primary business errors/cancellation survive
+finalization and diagnostic faults; normal returns with archive faults fail.
+Exact-six snapshots stay unchanged; `journal_diagnostics()` separately exposes
+confirmed acceptance/head and failure state without granting source authority.
+
+The factory owns resources it never returns. The observer retires each returned
+journal; only `owns_publisher=True` transfers publisher closure to it. External
+shared publishers remain caller-owned. Constructor failures close owned resources,
+and uncertain close is never retried; close failure leaves the scope unsealed.
+The default `journal_factory=None` retains generic in-memory events and no I/O.
+The catalog includes the journal and codec dependency. Real loopback official
+SDK worker/raw-order checks use MODEL backend/publisher only; Windows journal
+integration, service-principal/root qualification, trusted namespace/catalog/cut,
+host association and new actual freeze/approval remain unverified.
 
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service
@@ -113,10 +144,10 @@ Cancellation may leave a synchronous worker running: sealing follows its actual
 awaited exit, and tail facts retain the original parent. Detached/custom worker
 chains are unsupported. Returned `isError` is still a returned protocol result.
 
-The bridge and historical agent do not enable this module. It adds no tools,
-parameters, headers, CLI/environment switches, RPCs or persistent archive and is
-not part of a newly approved production freeze. Further business fact hooks, controlled
-archival and host association require separate contracts and integration.
+The bridge and historical agent do not enable this module. Its default adds no
+tools, parameters, headers, CLI/environment switches, RPCs or persistent archive.
+Production archival and host association require separate qualification and a
+new approved freeze.
 Loopback SDK/model tests do not qualify Windows, real client/Flow identity,
 pagination completeness, Admission or P07 costs.
 
