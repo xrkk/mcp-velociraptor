@@ -1,4 +1,5 @@
 """11 real allocator/reader/publisher/journal control flow with MODEL native I/O."""
+import asyncio
 import ctypes
 from dataclasses import FrozenInstanceError
 import inspect
@@ -276,6 +277,185 @@ class AdapterModels(unittest.TestCase):
         with patch.object(n.reader.acl,'_native_apis',return_value=(advapi,kernel)):api=n._DirectoryAPI()
         self.assertEqual(len(api.convert.argtypes),4);self.assertEqual(api.create.argtypes,[ctypes.c_wchar_p,ctypes.POINTER(n._SecurityAttributes)])
         self.assertEqual(api.free.argtypes,[ctypes.c_void_p]);self.assertEqual(api.free.restype,ctypes.c_void_p)
+
+
+PRIMARY_TRACES = []  # Exported by this round's runner; MODEL inputs/actions only.
+
+
+class BrokenPrimary(RuntimeError):
+    def __init__(self, diagnostic):
+        super().__init__('MODEL original');self.diagnostic=diagnostic;self.note_calls=[]
+    def add_note(self, text):
+        self.note_calls.append(text);raise self.diagnostic
+
+
+class BrokenCancellation(asyncio.CancelledError):
+    def __init__(self, diagnostic):
+        super().__init__('MODEL cancellation');self.diagnostic=diagnostic;self.note_calls=[]
+    def add_note(self, text):
+        self.note_calls.append(text);raise self.diagnostic
+
+
+class PrimaryPreservationModels(unittest.TestCase):
+    def allocator(self):
+        fs=DirectoryFS()
+        for factory in (patch.object(n,'_session',side_effect=lambda:session(fs)),
+                        patch.object(n,'_directory_api',return_value=fs)):
+            factory.start();self.addCleanup(factory.stop)
+        a=n.WindowsDirectoryAllocator(ROOT,max_directories=2);self.addCleanup(a.close)
+        return a,fs
+
+    def failures(self):
+        # Diagnostic failure includes BaseException; primary includes cancellation.
+        for cls in (BrokenPrimary,BrokenCancellation):
+            for diagnostic in (RuntimeError('note failed'),asyncio.CancelledError('note cancelled')):
+                yield cls(diagnostic)
+
+    def observe(self, branch, primary, caught, fs=None, notes=None, actions=None):
+        PRIMARY_TRACES.append(dict(case=self.id(),branch=branch,
+            primary_type=type(primary).__name__ if primary else None,
+            diagnostic_type=type(primary.diagnostic).__name__ if hasattr(primary,'diagnostic') else None,
+            original_preserved=caught is primary,cause_preserved=caught.__cause__ is primary,
+            caught_type=type(caught).__name__,code=getattr(caught,'code',None),phase=getattr(caught,'phase',None),
+            note_attempts=primary.note_calls if hasattr(primary,'note_calls') else notes,
+            native_actions=list(fs.events) if fs else list(actions or []),close_calls=list(fs.closed) if fs else None,
+            remaining_handles=list(fs.handles) if fs else None,
+            directory_names=list(fs.nodes) if fs else None))
+
+    def test_context_close_bad_note_preserves_exact_primary_and_cancellation(self):
+        for primary in self.failures():
+            with self.subTest(primary=type(primary).__name__,diagnostic=type(primary.diagnostic).__name__):
+                a,fs=self.allocator()
+                def close_error(action,h):
+                    if action=='close':del fs.handles[h];raise OSError('MODEL close')
+                fs.hook=close_error
+                with self.assertRaises(BaseException) as caught:
+                    with a:raise primary
+                self.observe('allocator context',primary,caught.exception,fs)
+                self.assertIs(caught.exception,primary)
+                self.assertEqual(primary.note_calls,['allocator_close_failed'])
+                count=len(fs.closed);a.close();self.assertEqual(len(fs.closed),count)
+                self.assertTrue(a.failed);self.assertTrue(a.closed);self.assertFalse(fs.handles)
+                self.assertEqual(len(fs.closed),len(set(fs.closed)))
+
+    def test_native_sd_release_bad_note_preserves_error_phase_or_cancel_cause(self):
+        for cancel in (False,True):
+            for diagnostic in (RuntimeError('note failed'),asyncio.CancelledError('note cancelled')):
+                api=n._DirectoryAPI.__new__(n._DirectoryAPI);buffer=ctypes.create_string_buffer(protected());actions=[];notes=[]
+                primary=asyncio.CancelledError('MODEL native cancelled') if cancel else None
+                def convert(sddl,revision,pointer,size):
+                    actions.append(('convert',sddl,revision))
+                    ctypes.cast(pointer,ctypes.POINTER(ctypes.c_void_p))[0]=ctypes.addressof(buffer)
+                    ctypes.cast(size,ctypes.POINTER(ctypes.c_uint32))[0]=len(protected());return 1
+                def create(path,attributes):
+                    actions.append(('create',str(path)))
+                    if cancel:raise primary
+                    return 0
+                def free(pointer):actions.append(('free',pointer.value));raise OSError('MODEL release')
+                def bad_note(error,text):notes.append((error,text));raise diagnostic
+                api.convert=convert;api.create=create;api.free=free
+                with patch.object(n.AllocationError,'add_note',bad_note),patch.object(ctypes,'get_last_error',return_value=183,create=True),self.assertRaises(BaseException) as caught:
+                    api.create_private(ROOT/'child',SID)
+                original=primary if cancel else notes[0][0]
+                self.observe('SD release',original,caught.exception,notes=[text for _,text in notes],actions=actions)
+                if cancel:self.assertIs(caught.exception.__cause__,primary)
+                else:self.assertIs(caught.exception,original);self.assertEqual(caught.exception.winerror,183)
+                self.assertEqual(caught.exception.phase,'UNKNOWN' if cancel else 'CREATE_FAILED')
+                self.assertEqual([a[0] for a in actions],['convert','create','free'])
+                self.assertEqual(notes[0][1],'security_descriptor_release_failed')
+
+    def test_principal_probe_bad_note_preserves_original_generated_error(self):
+        for diagnostic in (RuntimeError('note failed'),asyncio.CancelledError('note cancelled')):
+            a,fs=self.allocator();probe=session(fs);probe.sid='S-1-5-18';notes=[]
+            def bad_note(error,text):notes.append((error,text));raise diagnostic
+            with patch.object(n,'_session',return_value=probe),patch.object(probe,'close',side_effect=OSError('MODEL probe close')) as close,patch.object(n.AllocationError,'add_note',bad_note),self.assertRaises(n.AllocationError) as caught:
+                a.allocate(a.root,'child')
+            self.observe('principal probe',notes[0][0],caught.exception,fs,notes=[text for _,text in notes])
+            self.assertIs(caught.exception.__cause__,notes[0][0])
+            self.assertEqual(caught.exception.__cause__.code,'directory_principal_changed')
+            self.assertEqual(notes[0][1],'principal_probe_close_failed');self.assertEqual(close.call_count,1)
+            self.assertEqual(caught.exception.phase,'NOT_ATTEMPTED');self.assertTrue(a.failed);self.assertEqual(fs.created,[])
+            a.close();self.assertFalse(fs.handles)
+
+    def test_reader_initial_and_probe_bad_note_preserve_primary_and_cancel(self):
+        for probe in (False,True):
+            for primary in self.failures():
+                fs=DirectoryFS();child=ROOT/'child';fs.node(child,True)['sd']=protected();s=session(fs);count=0
+                def hook(action,h):
+                    nonlocal count
+                    if action=='identity':
+                        count+=1
+                        if count==(3 if probe else 1):raise primary
+                    if action=='close':del fs.handles[h];raise OSError('MODEL close')
+                fs.hook=hook
+                with self.assertRaises(BaseException) as caught:s._bind(child,True,'state')
+                self.observe('reader probe' if probe else 'reader initial bind',primary,caught.exception,fs)
+                fs.hook=lambda *args:None;s.close()
+                self.assertIs(caught.exception,primary)
+                self.assertEqual(primary.note_calls,['native_probe_close_failed' if probe else 'native_binding_close_failed'])
+                self.assertEqual(len(fs.closed),len(set(fs.closed)));self.assertFalse(fs.handles)
+                self.assertIn(str(child),fs.nodes)
+
+    def test_constructor_acquisition_bad_note_preserves_original_cause(self):
+        for primary in self.failures():
+            fs=DirectoryFS();s=session(fs);primary_started=False
+            def hook(action,h):
+                nonlocal primary_started
+                if action=='identity' and fs.handles[h]['node']['name']==str(ROOT):
+                    primary_started=True;raise primary
+                if action=='close' and primary_started:
+                    del fs.handles[h];raise OSError('MODEL acquisition close')
+            fs.hook=hook
+            with patch.object(n,'_session',return_value=s),patch.object(n,'_directory_api',return_value=fs),self.assertRaises(BaseException) as caught:
+                n.WindowsDirectoryAllocator(ROOT,max_directories=1)
+            self.observe('constructor acquisition',primary,caught.exception,fs)
+            self.assertIsInstance(caught.exception,n.AllocationError)
+            self.assertEqual(caught.exception.code,'directory_root_binding_failed')
+            self.assertIs(caught.exception.__cause__,primary)
+            self.assertEqual(primary.note_calls,['native_binding_close_failed','allocator_acquisition_close_failed'])
+            self.assertFalse(fs.handles);self.assertTrue(s.closed)
+            count=len(fs.closed);s.close();self.assertEqual(len(fs.closed),count)
+            self.assertEqual(len(fs.closed),len(set(fs.closed)));self.assertEqual(fs.created,[])
+
+    def test_without_primary_close_failure_is_not_swallowed_or_retried(self):
+        a,fs=self.allocator();primary=asyncio.CancelledError('MODEL close cancellation')
+        native_close=a._session.close
+        def close_then_cancel():
+            native_close();raise primary
+        with patch.object(a._session,'close',side_effect=close_then_cancel) as close,self.assertRaises(n.AllocationError) as caught:
+            with a:pass
+        self.assertEqual(close.call_count,1)
+        self.observe('no-primary allocator close',primary,caught.exception,fs)
+        self.assertIs(caught.exception.__cause__,primary);self.assertTrue(a.closed);self.assertTrue(a.failed)
+        count=len(fs.closed);a.close();self.assertEqual(len(fs.closed),count)
+        self.assertFalse(fs.handles);self.assertEqual(len(fs.closed),len(set(fs.closed)))
+        a,fs=self.allocator();probe=session(fs)
+        with patch.object(n,'_session',return_value=probe),patch.object(probe,'close',side_effect=OSError('MODEL probe close')) as close,self.assertRaises(n.AllocationError) as caught:
+            a.allocate(a.root,'child')
+        self.observe('no-primary principal probe close',caught.exception.__cause__,caught.exception,fs)
+        self.assertIsInstance(caught.exception.__cause__,OSError);self.assertEqual(close.call_count,1)
+        self.assertTrue(a.failed);self.assertEqual(fs.created,[])
+        a.close();self.assertFalse(fs.handles)
+
+    def test_without_primary_native_release_and_reader_probe_close_still_fail(self):
+        api=n._DirectoryAPI.__new__(n._DirectoryAPI);buffer=ctypes.create_string_buffer(protected());actions=[]
+        def convert(sddl,revision,pointer,size):
+            ctypes.cast(pointer,ctypes.POINTER(ctypes.c_void_p))[0]=ctypes.addressof(buffer)
+            ctypes.cast(size,ctypes.POINTER(ctypes.c_uint32))[0]=len(protected());return 1
+        api.convert=convert;api.create=lambda *args:1
+        def free(pointer):actions.append('free');raise asyncio.CancelledError('MODEL release cancelled')
+        api.free=free
+        with self.assertRaises(n.AllocationError) as caught:api.create_private(ROOT/'child',SID)
+        self.observe('no-primary SD release',caught.exception.__cause__,caught.exception,actions=actions)
+        self.assertEqual(caught.exception.phase,'CREATED_UNBOUND');self.assertIsInstance(caught.exception.__cause__,asyncio.CancelledError);self.assertEqual(actions,['free'])
+        fs=DirectoryFS();s=session(fs);primary=OSError('MODEL probe close')
+        def hook(action,h):
+            if action=='close':del fs.handles[h];raise primary
+        fs.hook=hook
+        with self.assertRaises(OSError) as caught:s._bind(ROOT,True,'state')
+        self.observe('no-primary reader probe close',primary,caught.exception,fs)
+        self.assertIs(caught.exception,primary);fs.hook=lambda *args:None;s.close()
+        count=len(fs.closed);s.close();self.assertEqual(len(fs.closed),count);self.assertFalse(fs.handles)
 
 
 if __name__=='__main__':unittest.main()

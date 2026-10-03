@@ -94,7 +94,7 @@ class _DirectoryAPI:
                 except BaseException as close_error:
                     if primary is None:
                         raise AllocationError('security_descriptor_release_failed', phase=phase) from close_error
-                    primary.add_note('security_descriptor_release_failed')
+                    reader._note(primary, 'security_descriptor_release_failed')
 
 
 def _session():
@@ -152,7 +152,7 @@ class WindowsDirectoryAllocator:
             try:
                 self.close()
             except BaseException:
-                primary.add_note('allocator_acquisition_close_failed')
+                reader._note(primary, 'allocator_acquisition_close_failed')
             raise AllocationError('directory_root_binding_failed') from primary
 
     def _lease(self, path, observation):
@@ -189,7 +189,7 @@ class WindowsDirectoryAllocator:
             except BaseException:
                 if primary is None:
                     raise
-                primary.add_note('principal_probe_close_failed')
+                reader._note(primary, 'principal_probe_close_failed')
 
     def _recheck(self):
         self._principal()
@@ -285,4 +285,4 @@ class WindowsDirectoryAllocator:
         except BaseException:
             if primary is None:
                 raise
-            primary.add_note('allocator_close_failed')
+            reader._note(primary, 'allocator_close_failed')

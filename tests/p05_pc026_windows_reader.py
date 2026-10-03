@@ -25,6 +25,14 @@ class NativeReadError(RuntimeError):
     pass
 
 
+def _note(primary, text):
+    """Best-effort cleanup diagnostics must never replace a primary error."""
+    try:
+        primary.add_note(text)
+    except BaseException:
+        pass
+
+
 def check_path(value):
     raw = str(value)
     path = PureWindowsPath(raw)
@@ -226,7 +234,7 @@ class WindowsSession:
                 try:
                     self.api.close(handle)
                 except BaseException:
-                    primary.add_note('native_binding_close_failed')
+                    _note(primary, 'native_binding_close_failed')
                 raise
             self.objects[key] = (handle, directory, observed)
         handle, actual_directory, observed = self.objects[key]
@@ -249,7 +257,7 @@ class WindowsSession:
             except BaseException:
                 if primary is None:
                     raise
-                primary.add_note('native_probe_close_failed')
+                _note(primary, 'native_probe_close_failed')
         return handle, observed
 
     def read(self, path, *, private=False):
