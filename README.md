@@ -43,6 +43,28 @@ one page or enumeration does not establish completeness. MODEL backend and
 loopback SDK checks remain separate from real Velociraptor/Windows, controlled
 archival, production enablement and a new qualified freeze.
 
+`velociraptor_observation_archive.py` provides the independent PC026 08
+record-format codec. Construct `ArchiveCodec` with explicit `max_records`,
+`max_record_bytes`, `max_total_bytes` and `max_json_depth`; `encode(record)`
+and `parse(bytes)` validate one exact canonical UTF-8 JSON record with one
+trailing LF, while `verify(Iterable[bytes])` consumes an accept/event/seal chain
+once without collecting all events. Previous Refs hash the preceding original
+bytes, including LF. Only the adopted target/create/read fact whitelist is
+accepted. Depth counts JSON containers with the outer record at depth one.
+Malformed originals and exceeded budgets raise `ArchiveError`; valid unsealed
+prefixes return `INCOMPLETE`, and seals distinguish `COMPLETE` from `FAILED`.
+A complete archive may retain a raised or cancelled business outcome.
+`request_key_sha256` hashes the typed parent key using 04 canonical bytes
+without LF; it does not authenticate that parent.
+
+This pure format module performs no I/O, scope activation or emission and is
+not installed in production. Format validation grants no trusted source,
+persistence, storage EOF, instance-wide acceptance coverage or business success.
+New encoding of saved loopback SDK facts is a model demonstration, not proof
+that those historical runs had durable archives. Safe native writing, trusted
+configuration/namespace, session cuts, host consumption and a new actual freeze
+remain separate work; Windows directory durability is unverified.
+
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service
 instance and positive request/event/byte budgets and install its middleware.
