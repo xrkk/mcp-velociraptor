@@ -95,6 +95,10 @@ qualification. API success/content flush/atomic visibility do not prove director
 power-loss durability. No CLI/env override, alternate SID/API parameter, parent
 tree creation, observer/bridge integration, trusted namespace or new freeze is
 provided; formal native validation and production authorization remain separate.
+The rename buffer includes an owned UTF-16 terminator outside FileNameLength
+but inside the passed buffer size, preventing Win32 path normalization from
+reading beyond the destination name. Isolated control-principal Windows tests
+do not qualify the business service identity or directory power-loss durability.
 
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service

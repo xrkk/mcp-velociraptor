@@ -296,10 +296,12 @@ class NativeAdapterModels(unittest.TestCase):
         api.flush_file=lambda h:(observed.append(('flush',h)) or 1);api.flush(9)
         def rename(h,kind,b,n):
             header=w._RenameInfo.from_buffer(b);name=ctypes.string_at(ctypes.addressof(b)+w._RenameInfo.name.offset,header.length).decode('utf-16-le')
+            self.assertEqual(n,w._RenameInfo.name.offset+header.length+2)
+            self.assertEqual(bytes(b)[n-2:n],b'\0\0')
             observed.append(('rename',h,kind,header.replace,header.root,name,n));return 1
         api.set_info=rename;api.rename(9,ROOT/'00000000.json')
         self.assertEqual(observed[-1][1:6],(9,3,0,None,str(ROOT/'00000000.json')))
-        self.assertEqual(observed[-1][-1],w._RenameInfo.name.offset+len(str(ROOT/'00000000.json').encode('utf-16-le')))
+        self.assertEqual(observed[-1][-1],w._RenameInfo.name.offset+len(str(ROOT/'00000000.json').encode('utf-16-le'))+2)
         self.assertEqual(w._RenameInfo.root.offset,8 if ctypes.sizeof(ctypes.c_void_p)==8 else 4)
         api.write_file=lambda *args:0
         with self.assertRaisesRegex(w._NativeFailure,'write_failed'):api.write(9,b'abc')

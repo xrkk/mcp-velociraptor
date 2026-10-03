@@ -51,11 +51,15 @@ class _RenameInfo(ctypes.Structure):
 def _rename_buffer(destination):
     name = str(destination).encode("utf-16-le")
     offset = _RenameInfo.name.offset
-    storage = ctypes.create_string_buffer(max(ctypes.sizeof(_RenameInfo), offset + len(name)))
+    # Win32 normalizes FileName as a terminated WCHAR string before issuing the
+    # native rename. Keep the terminator inside the owned/passed buffer, while
+    # FileNameLength counts only the actual UTF-16 name bytes.
+    size = offset + len(name) + 2
+    storage = ctypes.create_string_buffer(max(ctypes.sizeof(_RenameInfo), size))
     header = _RenameInfo.from_buffer(storage)
     header.replace, header.root, header.length = 0, None, len(name)
     ctypes.memmove(ctypes.addressof(storage) + offset, name, len(name))
-    return storage, offset + len(name)
+    return storage, size
 
 
 class _PublisherIO(reader.NativeIO):
