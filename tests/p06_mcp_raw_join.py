@@ -299,12 +299,12 @@ def report_shape(report):
     # Source/service/session approval belongs to later production integration.
 
 
-def join(run_dir):
-    index = capture.verify(run_dir)
+def join(run_dir, *, _reader=None):
+    index = capture.verify(run_dir, _reader=_reader)
     require(index['status'] == 'RECORDED', 'capture FAILED cannot join')
     require(all(row['request_end'] != 'error' and row['response_end'] != 'error'
                 for row in index['exchanges']), 'capture has error termination')
-    reader = _Reader(run_dir)
+    reader = _reader or _Reader(run_dir)
     try:
         report_raw = reader.read('report.json'); report = strict_json(report_raw)
         clock_raw = reader.read('call-clock.json')
@@ -369,10 +369,10 @@ def join(run_dir):
                 request_location=entry['location'],response_location=response['location'],tool=row['tool'],
                 arguments_sha256=entry['arguments_sha256'],result_sha256=response['result_sha256']))
         reader.recheck()
-        require(capture.verify(run_dir) == index, 'capture final drift')
+        require(capture.verify(run_dir, _reader=_reader) == index, 'capture final drift')
         def ref(name, raw): return {'path':name,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
         return dict(schema_version=1,kind=KIND,run_id=report['run_id'],report_ref=ref('report.json',report_raw),
                     capture_ref=ref('raw-mcp/capture.json',capture_raw),clock_ref=ref('call-clock.json',clock_raw),
                     calls=output_calls)
     finally:
-        reader.close()
+        if _reader is None: reader.close()

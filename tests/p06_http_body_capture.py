@@ -1,4 +1,4 @@
-"""Unintegrated PC026 transport-body originals; never a business success gate."""
+"""PC026 transport-body originals; capture alone is never a business success gate."""
 from __future__ import annotations
 
 import hashlib
@@ -12,6 +12,7 @@ import anyio
 import httpx2
 
 KIND = 'pc026-http-body-capture-v1'
+SEQUENCE_EXTENSION = 'pc026_capture_sequence'
 ENDS = {'not_started', 'eof', 'closed', 'error'}
 EXCHANGE_KEYS = {'sequence', 'method', 'request_ref', 'request_end', 'response_status',
                  'response_content_type', 'response_content_encoding', 'response_ref', 'response_end', 'error'}
@@ -248,7 +249,7 @@ class _Tee(httpx2.AsyncByteStream):
 class CaptureTransport(httpx2.AsyncBaseTransport):
     """Own inner transport and streams; caller supplies an admitted new run.
 
-    This independent module is not called by the current formal P06 runner.
+    The current runner constructs this only after fixed admission.
     """
     def __init__(self, inner, run_dir, run_id):
         require(_uuid(run_id), 'capture run_id must be a canonical UUID')
@@ -321,6 +322,12 @@ class CaptureTransport(httpx2.AsyncBaseTransport):
             with anyio.CancelScope() as scope:
                 pending = (scope, done); self.requests.append(pending)
                 response = await self.inner.handle_async_request(request)
+                if SEQUENCE_EXTENSION in response.extensions:
+                    error=CaptureError('capture sequence extension collision')
+                    self.fail(row,error,'capture sequence extension collision')
+                    await self.close_original(response.stream)
+                    raise error
+                response.extensions[SEQUENCE_EXTENSION] = sequence
                 row.update(response_status=response.status_code,
                            response_content_type=response.headers.get('content-type', ''),
                            response_content_encoding=response.headers.get('content-encoding', ''))
@@ -422,11 +429,12 @@ def _json(raw):
     return value
 
 
-def verify(run_dir, run_id=None):
+def verify(run_dir, run_id=None, *, _reader=None):
     """Read-only structural/original validation, without a business verdict."""
     directory = _Directory(_directory(run_dir) / 'raw-mcp')
     files = {'capture.json'}
     def read(name):
+        if _reader is not None: return _reader.read(name, raw=True)
         fd = directory.open(name, os.O_RDONLY)
         try:
             before = os.fstat(fd); chunks = []
@@ -475,16 +483,19 @@ def verify(run_dir, run_id=None):
                         and isinstance(ref['sha256'], str), 'capture Ref/path differs')
                 files.add(name)
                 # Bounded-memory body verification; no parsing or rewriting.
-                fd = directory.open(name, os.O_RDONLY)
-                try:
-                    before = os.fstat(fd); digest = hashlib.sha256(); size = 0
-                    while chunk := os.read(fd, 65536): digest.update(chunk); size += len(chunk)
-                    after = os.fstat(fd)
-                    require((before.st_size, before.st_mtime_ns, before.st_ctime_ns) ==
-                            (after.st_size, after.st_mtime_ns, after.st_ctime_ns), 'capture body drift')
-                    require(size == ref['size'] and digest.hexdigest() == ref['sha256'], 'capture Ref size/hash differs')
-                finally:
-                    os.close(fd)
+                if _reader is not None:
+                    for _ in _reader.chunks(name, ref, raw=True): pass
+                else:
+                    fd = directory.open(name, os.O_RDONLY)
+                    try:
+                        before = os.fstat(fd); digest = hashlib.sha256(); size = 0
+                        while chunk := os.read(fd, 65536): digest.update(chunk); size += len(chunk)
+                        after = os.fstat(fd)
+                        require((before.st_size, before.st_mtime_ns, before.st_ctime_ns) ==
+                                (after.st_size, after.st_mtime_ns, after.st_ctime_ns), 'capture body drift')
+                        require(size == ref['size'] and digest.hexdigest() == ref['sha256'], 'capture Ref size/hash differs')
+                    finally:
+                        os.close(fd)
         directory.check()
         require({p.name for p in directory.path.iterdir()} == files, 'capture files missing or unindexed')
         return value

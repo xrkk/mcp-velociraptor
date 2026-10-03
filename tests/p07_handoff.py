@@ -58,8 +58,12 @@ def _git_ref(repository, oid, reference):
 def _ref(admission, path):
     relative = path.relative_to(admission.group.repository).as_posix()
     gov.relative(relative)
-    data = admission.read(path)
-    return {'path': relative, 'size': len(data), 'sha256': ev._sha(data)}
+    # Preserve small parsed originals in consumed; stream body/large archives.
+    if path.suffix == '.bin' or path.suffix == '.zip':
+        size,sha = admission.content_identity(path)
+    else:
+        data=admission.read(path);size,sha=len(data),ev._sha(data)
+    return {'path':relative,'size':size,'sha256':sha}
 
 
 def _completion(admission, selection_ref):
@@ -145,7 +149,7 @@ def _derive(admission):
             admission.read(report_path)
             admission.read(plain_file(root, row['manifest_relative_path']))
             for source in package.member_sources(report_path.parent, root).values():
-                admission.read(source)
+                admission.content_identity(source)
     result = aggregate._aggregate_current(admission)
     gov.require(admission.read(root / 'aggregate.json') == aggregate.canonical_bytes(result),
                 'aggregate original bytes differ from current recomputation')

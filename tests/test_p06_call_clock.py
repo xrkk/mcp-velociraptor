@@ -228,7 +228,7 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
         from tests import p06_pc026_binding, p06_resource_gate
         import mcp.client.streamable_http as transport
         import httpx2
-        for mode in ('exception','cancel','clock','headers'):
+        for mode in ('exception','cancel','cancel-preserve','exception-preserve','clock','headers'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory(dir=os.environ.get('PC020_TEST_TEMP_ROOT')) as tmp:
                 root=Path(tmp); run_id=str(uuid.uuid4()); sid='p06-compromise-scope'
                 source=root/'scenario.json';source.write_text('{}')
@@ -246,7 +246,7 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     'process_start_time_utc':'2026-10-03T00:00:00Z','instance_id':'local-model',
                     'executable_sha256':'a'*64}
                 class Header:
-                    def __init__(self,*args):
+                    def __init__(self,*args,**kwargs):
                         self.responses=[{'method':'POST','mcp_session_id':'model-session',
                                          'server_instance_id':'local-model'}]
                 class SDK(Session):
@@ -257,22 +257,25 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
                         tools=[SimpleNamespace(name=n,input_schema={},output_schema=None)
                                for n in ['ok','cleanup',*[f'local{i}' for i in range(135)]]]
                         return SimpleNamespace(tools=tools,model_dump=lambda **k:{'tools':[]})
-                sdk=SDK(ValueError('synthetic SDK failure') if mode=='exception' else
-                        asyncio.CancelledError('synthetic cancellation') if mode=='cancel' else None)
+                sdk=SDK(ValueError('synthetic SDK failure') if mode in {'exception','exception-preserve'} else
+                        asyncio.CancelledError('synthetic cancellation') if mode in {'cancel','cancel-preserve'} else None)
                 @asynccontextmanager
                 async def streams(*args,**kwargs):yield None,None
                 async def guarded(gate,id,fn):return await fn(),None
                 original_finalize=runner._finalize_report
-                def finalize(r,run,e,c,**kwargs):original_finalize(r,run,e,c,seal=False)
-                original_write=Path.write_bytes
-                def write(path,data):
-                    if mode=='headers' and path.name=='http-headers.json':raise OSError('header write failure')
-                    return original_write(path,data)
+                def finalize(r,run,e,c,**kwargs):
+                    original_finalize(r,run,e,c,seal=False)
+                    if mode.endswith('-preserve'):raise OSError('secondary preservation failure')
+                original_open=Path.open
+                def open_file(path,mode_='r',*args,**kwargs):
+                    mode_=kwargs.pop('mode',mode_)
+                    if mode=='headers' and path.name=='http-headers.json' and mode_=='xb':raise OSError('header write failure')
+                    return original_open(path,mode_,*args,**kwargs)
                 with ExitStack() as stack:
                     for obj,name,value in [(runner,'P06_REPORT_ROOT',root),(runner,'load_indexed_scenario',lambda _: (scenario,index,h(source),source)),
                         (runner,'load_fixture',lambda *a:( {},h(fixture_path))),
                         (runner,'load_current_restore',lambda *a,**k:{'run_id':run_id}),
-                        (runner,'verify_server_observation',lambda *a:observed),
+                        (runner,'verify_server_observation',lambda *a,**kw:observed),
                         (runner,'HttpHeaderCapture',Header),(runner,'ClientSession',lambda *a:sdk),
                         (runner,'_p06_coverage',lambda *a:[{}]*129),
                         (runner,'_verify_terminal_flow_classification',lambda *a:None),
@@ -284,10 +287,12 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
                         (p06_resource_gate,'GuestResourceSampler',lambda *a:None),
                         (p06_resource_gate,'guarded_step',guarded)]:stack.enter_context(patch.object(obj,name,value))
                     stack.enter_context(patch.dict(os.environ,{'LOCAL_CLOCK_MODEL_TOKEN':'nonsecret-model'}))
-                    stack.enter_context(patch.object(Path,'write_bytes',write))
+                    stack.enter_context(patch.object(Path,'open',open_file))
+                    stack.enter_context(patch('tests.p06_http_body_capture.CaptureTransport',return_value=SimpleNamespace()))
+                    stack.enter_context(patch('tests.p06_http_binding.initialized_header',side_effect=lambda body,headers:headers[0]))
                     if mode=='clock':stack.enter_context(patch.object(clocks.time,'monotonic_ns',side_effect=[10,RuntimeError('end clock failed')]))
-                    if mode=='cancel':
-                        with self.assertRaises(asyncio.CancelledError):
+                    if mode in {'cancel','cancel-preserve','exception-preserve'}:
+                        with self.assertRaises(ValueError if mode=='exception-preserve' else asyncio.CancelledError):
                             await runner.run_scenario(sid,transport='streamable-http',endpoint='http://127.0.0.1:28790/mcp',token_env='LOCAL_CLOCK_MODEL_TOKEN',evidence_root=root,server_observation=observation,run_id=run_id)
                     else:
                         result,_=await runner.run_scenario(sid,transport='streamable-http',endpoint='http://127.0.0.1:28790/mcp',token_env='LOCAL_CLOCK_MODEL_TOKEN',evidence_root=root,server_observation=observation,run_id=run_id)

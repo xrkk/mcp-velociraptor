@@ -681,7 +681,8 @@ class SnapshotEvidenceError(RuntimeError):
 class HttpHeaderCapture:
     """Wrap an httpx2 transport so response headers survive for evidence."""
 
-    def __init__(self, inner: Any) -> None:
+    def __init__(self, inner: Any, *, _current_raw=False) -> None:
+        self.current_raw = _current_raw
         self.inner = inner
         self.responses: list[dict[str, Any]] = []
         self.expected_identity: tuple[str, str] | None = None
@@ -698,8 +699,7 @@ class HttpHeaderCapture:
 
     async def handle_async_request(self, request: Any) -> Any:
         response = await self.inner.handle_async_request(request)
-        self.responses.append(
-            {
+        record = {
                 "method": request.method,
                 "path": request.url.path,
                 "status_code": response.status_code,
@@ -707,7 +707,14 @@ class HttpHeaderCapture:
                 "server_instance_id": response.headers.get("x-mcp-server-instance"),
                 "request_session_id": request.headers.get("mcp-session-id"),
             }
-        )
+        if self.current_raw:
+            sequence = response.extensions.get('pc026_capture_sequence')
+            if type(sequence) is not int or sequence <= 0 or any(
+                    r['exchange_sequence'] == sequence for r in self.responses):
+                await response.aclose()
+                raise ScenarioFailure('capture/header sequence missing or ambiguous')
+            record['exchange_sequence'] = sequence
+        self.responses.append(record)
         if self.expected_identity is not None and 200 <= response.status_code < 300:
             session_id, instance_id = self.expected_identity
             observed_session = response.headers.get('mcp-session-id')
@@ -881,11 +888,15 @@ SERVER_OBSERVATION_KEYS = {
 }
 
 
-def verify_server_observation(observation_path: Path, instance_id: str) -> dict[str, Any]:
+def verify_server_observation(observation_path: Path, instance_id: str, *, _admission=None) -> dict[str, Any]:
     """Join the guest-side read-only service observation with the HTTP header id."""
     if not observation_path.is_file() or _is_reparse(observation_path):
         raise SnapshotEvidenceError("server observation is missing or not a plain file")
-    observation = json.loads(observation_path.read_text(encoding="utf-8"))
+    if _admission is None:
+        observation=json.loads(observation_path.read_text(encoding='utf-8'))
+    else:
+        from tests.p05_pc020_evidence import _json_bytes
+        observation=_json_bytes(_admission.read(observation_path),'current server observation',canonical=False)
     if set(observation) != SERVER_OBSERVATION_KEYS:
         raise SnapshotEvidenceError("server observation keys are invalid")
     if observation["instance_id"] != instance_id:
@@ -1104,9 +1115,11 @@ async def run_scenario(
     stderr_file = tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False)
     stderr_path = Path(stderr_file.name)
     capture: HttpHeaderCapture | None = None
+    body_capture = None
     resource_gate = None
     run_clock = None
     pending_base_error = None
+    pending_primary_error = None
     children_before = direct_child_pids(os.getpid())
     try:
         if admission is not None:
@@ -1131,7 +1144,12 @@ async def run_scenario(
                 raise ScenarioInputError(f"{token_env} is required for the formal HTTP transport")
             if not endpoint or not re.fullmatch(r"http://[0-9.]+:28790/mcp", endpoint):
                 raise ScenarioInputError("endpoint must be a sanitized http://<ip>:28790/mcp URL")
-            capture = HttpHeaderCapture(httpx2.AsyncHTTPTransport())
+            inner = httpx2.AsyncHTTPTransport()
+            if admission is not None:
+                from tests.p06_http_body_capture import CaptureTransport
+                body_capture = CaptureTransport(inner, run_dir, run_id)
+                inner = body_capture
+            capture = HttpHeaderCapture(inner, _current_raw=admission is not None)
             http_client = httpx2.AsyncClient(
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=60.0,
@@ -1151,14 +1169,12 @@ async def run_scenario(
                         raise ScenarioInputError("could not identify the single bridge child process")
                     report["server_identity"] = _local_process_identity(next(iter(spawned)))
                 else:
-                    initialized_response = next(
-                        (
-                            row
-                            for row in (capture.responses if capture else [])
-                            if row["method"] == "POST" and row["mcp_session_id"]
-                        ),
-                        None,
-                    )
+                    if body_capture is not None:
+                        from tests.p06_http_binding import initialized_header
+                        initialized_response = initialized_header(body_capture, capture.responses)
+                    else:
+                        initialized_response = next((row for row in capture.responses
+                            if row['method']=='POST' and row['mcp_session_id']),None)
                     if initialized_response is None:
                         raise ScenarioFailure("no Mcp-Session-Id response header captured")
                     report["mcp_session"]["id"] = initialized_response["mcp_session_id"]
@@ -1170,7 +1186,7 @@ async def run_scenario(
                         Path(server_observation) if server_observation else Path(
                             REPO_ROOT / "Logs" / "server-observation.json"
                         ),
-                        instance_id,
+                        instance_id, _admission=admission,
                     )
                     report["server_identity"] = {
                         key: observation[key]
@@ -1183,11 +1199,10 @@ async def run_scenario(
                             "executable_sha256",
                         )
                     }
-                    report["server_observation_sha256"] = sha256_file(Path(server_observation) if server_observation else Path(
-                        REPO_ROOT / "Logs" / "server-observation.json"
-                    ))
                     observation_path = Path(server_observation) if server_observation else REPO_ROOT / 'Logs' / 'server-observation.json'
-                    (run_dir / 'server-observation.json').write_bytes(observation_path.read_bytes())
+                    observed_raw = admission.read(observation_path) if admission is not None else observation_path.read_bytes()
+                    report['server_observation_sha256']=hashlib.sha256(observed_raw).hexdigest()
+                    (run_dir/'server-observation.json').write_bytes(observed_raw)
                     import socket
                     if socket.gethostname().casefold()==observation['computer_name'].casefold():
                         raise ScenarioFailure('formal P06 client must execute outside the target VM')
@@ -1247,6 +1262,7 @@ async def run_scenario(
                         )
                         report['unexecuted_step_ids'] = [item['id'] for item in scenario['steps'][index+1:]]
                     except Exception as exc:
+                        pending_primary_error = pending_primary_error or exc
                         scenario_failed = True
                         report["failure"] = {
                             "message": str(exc),
@@ -1273,6 +1289,7 @@ async def run_scenario(
                         cleanup_row["assertions"] = assertions
                         cleanup_row["passed"] = True
                     except Exception as exc:
+                        pending_primary_error = pending_primary_error or exc
                         cleanup_row["error"] = {"message": str(exc), "type": type(exc).__name__}
                         scenario_failed = True
                         if report["failure"] is None:
@@ -1282,13 +1299,15 @@ async def run_scenario(
                                 "type": type(exc).__name__,
                             }
                     report["cleanup"].append(cleanup_row)
-                report["mcp_session"]["closed_at"] = utc_now()
+                if body_capture is None:
+                    report["mcp_session"]["closed_at"] = utc_now()
                 if not scenario_failed:
                     # Raises ScenarioFailure on any object-identity mismatch;
                     # the check outcome is reflected in the report status only.
                     validate_cross_step_invariants(scenario, completed, report["calls"])
         report["status"] = "failed" if scenario_failed else "success"
     except BaseException as exc:
+        pending_primary_error = pending_primary_error or exc
         if not isinstance(exc, Exception):
             pending_base_error = exc
         scenario_failed = True
@@ -1301,7 +1320,25 @@ async def run_scenario(
                 "chain": _exception_chain(exc),
             }
     finally:
-        if capture is not None:
+        if capture is not None and body_capture is not None:
+            import anyio
+            try:
+                # SDK DELETE/GET cancellation and capture index must settle first.
+                with anyio.CancelScope(shield=True):
+                    await http_client.aclose()
+            except BaseException as exc:
+                _mark_report_failed(report, exc)
+                if not isinstance(exc, Exception) and pending_base_error is None:
+                    pending_base_error = exc
+            if body_capture is not None and report['mcp_session']['id']:
+                report['mcp_session']['closed_at']=utc_now()
+            try:
+                with (run_dir/'http-headers.json').open('xb') as stream:
+                    stream.write(canonical_bytes(capture.responses))
+            except Exception as exc:
+                _mark_report_failed(report, exc)
+        elif capture is not None:
+            # Existing non-current observation contract retains its lifecycle.
             try:
                 (run_dir/'http-headers.json').write_bytes(canonical_bytes(capture.responses))
             except Exception as exc:
@@ -1309,10 +1346,8 @@ async def run_scenario(
             try:
                 await http_client.aclose()
             except Exception as exc:
-                report['status'] = 'failed'
-                report['coverage'] = []
-                report['failure'] = report['failure'] or {
-                    'type':type(exc).__name__,'message':str(exc),'step_id':None}
+                report['status']='failed';report['coverage']=[]
+                report['failure']=report['failure'] or {'type':type(exc).__name__,'message':str(exc),'step_id':None}
         try:
             stderr_file.close()
             stderr_path.unlink(missing_ok=True)
@@ -1365,8 +1400,15 @@ async def run_scenario(
                 _mark_report_failed(report, exc)
         if admission is not None:
             admission.finish_report(report)
-        _finalize_report(report, run_dir, evidence_root, run_clock,
-                         seal=scenario_id.startswith('p06-') and transport == 'streamable-http')
+        try:
+            _finalize_report(report, run_dir, evidence_root, run_clock,
+                seal=scenario_id.startswith('p06-') and transport == 'streamable-http', _admission=admission)
+        except BaseException as preservation_error:
+            primary = (pending_base_error or pending_primary_error) if admission is not None else None
+            if primary is not None:
+                primary.add_note('report preservation also failed: ' + type(preservation_error).__name__)
+                raise primary from preservation_error
+            raise
     if pending_base_error is not None:
         raise pending_base_error
     return report, report_path
@@ -1377,7 +1419,7 @@ def _mark_report_failed(report, exc):
         'type': type(exc).__name__, 'message': str(exc), 'previous_failure': report.get('failure')})
 
 
-def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal):
+def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal, _admission=None):
     """Save a finalized new attempt; never repair a closed/historical clock."""
     report_path = run_dir / 'report.json'
     try:
@@ -1392,6 +1434,9 @@ def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal):
             except Exception as exc:
                 _mark_report_failed(report, exc)
                 report_path.write_bytes(canonical_bytes(report))
+        if _admission is not None and report['status']=='success':
+            from tests.p06_http_binding import publish
+            publish(_admission,run_dir)
         if seal:
             from tests.p06_package import member_inventory, verify_manifest
             (run_dir/'package-manifest.json').write_bytes(canonical_bytes(member_inventory(run_dir,evidence_root)))

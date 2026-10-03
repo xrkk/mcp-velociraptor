@@ -33,6 +33,13 @@ class Admission:
         governance.require(shared == (data, identity), 'consumer input drift')
         return data
 
+    def content_identity(self, path):
+        import hashlib
+        digest=hashlib.sha256();size=0
+        for chunk in self.group.stream_path(path):
+            digest.update(chunk);size+=len(chunk)
+        return size,digest.hexdigest()
+
     def recheck(self):
         self.group.recheck()
         for path, expected in self.consumed.items():
@@ -97,6 +104,8 @@ class Admission:
             clock_id = clock['clock']['clock_id']
             owner = self.clock_runs.setdefault(clock_id, report['run_id'])
             governance.require(owner == report['run_id'], 'call-clock domain reused across runs')
+            from tests.p06_http_binding import validate
+            validate(self,run_dir)
             index_ref = self.group.freeze_refs['tests/data/p06_scenario_index.json']
             index = json.loads(self.group.read(index_ref))
             rows = [row for row in index['scenarios'] if row['scenario_id'] == report['scenario']]
@@ -121,8 +130,8 @@ class Admission:
         governance.require(set(sources) == {row['path'] for row in inventory['members']},
                            'package source set differs')
         for member in inventory['members']:
-            data = self.read(sources[member['path']])
-            governance.require(len(data) == member['size'] and evidence._sha(data) == member['sha256'],
+            size, sha = self.content_identity(sources[member['path']])
+            governance.require(size == member['size'] and sha == member['sha256'],
                                'current package member drift')
         self.recheck()
         return snapshot['restore']

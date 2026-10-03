@@ -487,8 +487,8 @@ success. These additions require a new actual source freeze and approved
 run; local SDK tests do not constitute Windows acceptance.
 
 
-`tests/p06_http_body_capture.py` provides independent, currently unintegrated
-test infrastructure for PC026 HTTP body originals. `CaptureTransport` wraps
+`tests/p06_http_body_capture.py` provides transport-body capture
+infrastructure for PC026 HTTP body originals. `CaptureTransport` wraps
 the installed httpx2 transport used by the official MCP SDK, preserving each
 request/response chunk before JSON/SSE parsing and before response
 Content-Encoding decoding. It records transport-level body bytes, not TCP/TLS
@@ -505,11 +505,10 @@ authentication headers and environment values are not collected.
 `RECORDED` means the observer closed normally, including incomplete or failed
 HTTP exchanges. The read-only verifier checks original files and exact
 structure, without granting business success. Failed index staging remains
-unpublished. This module is not connected to the formal P06 runner, current
-consumer or freeze catalog. Production integration of request-ID/result joining, admission
-and evidence closure remains future work; both P07 cost entry
-points continue to refuse the unimplemented collector. Local loopback SDK
-and stream-model tests do not establish Windows acceptance.
+unpublished. The current admitted five-scenario HTTP runner now uses this
+capture inside its header observer. Qualification, individual acceptance and
+historical capture rules retain their boundaries. Local loopback SDK and
+stream-model tests do not establish Windows acceptance.
 
 
 `tests/p06_mcp_raw_join.py` now provides an independent read-only
@@ -530,11 +529,34 @@ trailer when compressed. Reconnection with ID reuse or identical response replay
 is not supported. A 128 MiB per-message/line bound refuses explicitly rather
 than truncating or buffering an entire SSE stream.
 
-This helper remains outside the formal P06 runner, consumer and freeze. Its
-schema/lifecycle gate is structural and does not grant service identity or
-admission approval. Local model gates and a new official-SDK loopback run bind
-real capture bytes, tool results and monotonic intervals; the loopback report
-uses a synthetic host identity. They do not prove Windows/191 approval,
-production session/header binding, client/Flow or pagination completion,
-environment comparability or cost success. Both P07 cost entrypoints retain
-their refusal of the undefined current collector.
+The current production code path now recomputes this association through the
+same Admission security reader. Its POSIX or retained native Windows handle,
+owner and complete ACL checks also lock raw-body content; parsing and content
+hashing stay incremental. This does not issue admission approval. The governed
+catalog includes capture, join and binding code/tests plus the adopted 01/02/03
+resources alongside 04/05/06/07. A new real freeze, deployment and approval are
+still required before Windows execution.
+
+`tests/p06_http_binding.py` checks one raw initialize and one actual tools/list,
+the complete SDK listing, and every captured HTTP response against its original
+header observation. The local response extension `pc026_capture_sequence`
+identifies the exchange even when GET/POST finish out of order; it is never an
+HTTP header. Sequence collisions refuse. Initialization supplies the real
+session and service instance, and later request/response identities must match.
+No authentication headers are saved.
+
+After the SDK and HTTP client close and capture settles, the runner saves all
+headers, final report and clock, then exclusively publishes canonical
+`mcp-raw-join.json` and exact-eight-key `mcp-http-binding.json` before sealing
+the package. Current successful Admission/receiver/aggregate/handoff consumption
+requires and recomputes all these originals, their full raw directory and actual
+listing, retaining them for final drift checks. Failures preserve already
+observed calls and residual files with empty coverage; they do not repair clock,
+join or binding originals or replay an uncertain receipt append.
+
+Real loopback SDK tests use an actual SDK session and a server-generated instance
+header. Complete synthetic 191 graphs exercise current consumer/package gates;
+their Windows identities and business observations remain modeled. They do not
+prove formal service ACLs/191 acceptance, actual client/Flow or pagination
+completion, environment comparability or cost success. Both P07 cost entrypoints
+retain their refusal of the undefined current collector.

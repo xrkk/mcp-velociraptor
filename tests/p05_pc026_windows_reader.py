@@ -245,6 +245,20 @@ class WindowsSession:
             return self._read_bound(path, private=private)
 
     def _read_bound(self, path, *, private):
+        stream = self._stream_bound(path, private=private)
+        chunks = []
+        while True:
+            try: chunks.append(next(stream))
+            except StopIteration as end:
+                return b''.join(chunks), *end.value
+
+    def stream(self, path):
+        # Keep the same retained handles, principal and full SD gate while
+        # parsing bounded chunks; no complete SSE body is accumulated here.
+        with self.lock:
+            return (yield from self._stream_bound(path, private=False))
+
+    def _stream_bound(self, path, *, private):
         check_path(path)
         chain = list(reversed(path.parents)) + [path]
         if len(chain) > 64:
@@ -258,13 +272,12 @@ class WindowsSession:
         if len({row[0][0] for row in observations}) != 1:
             raise NativeReadError('native volume differs across ancestor chain')
         self.api.rewind(handle)
-        chunks, count = [], 0
+        count = 0
         while chunk := self.api.read(handle):
             count += len(chunk)
             if count > observations[-1][2][0]:
                 raise NativeReadError('native content extra read')
-            chunks.append(chunk)
-        data = b''.join(chunks)
+            yield chunk
         if count != observations[-1][2][0]:
             raise NativeReadError('native content short read')
         for item in chain:
@@ -273,7 +286,7 @@ class WindowsSession:
         identity = {'platform':'windows', 'volume_serial':f'{leaf[0][0]:016x}',
             'file_id':leaf[0][1].hex(), 'owner_sid':descriptor_snapshot(leaf[1]).owner_sid,
             'principal_sid':self.sid, 'acl_sha256':hashlib.sha256(leaf[1]).hexdigest()}
-        return data, tuple(observations), identity
+        return tuple(observations), identity
 
     def close(self):
         with self.lock:

@@ -77,6 +77,15 @@ class NativeReaderModels(unittest.TestCase):
         reader.api.raw=sd(foreign='S-1-5-11')
         with self.assertRaisesRegex(native.NativeReadError,'drift'):reader.read(path,private=True)
         reader.close();self.assertFalse(reader.api.pending);self.assertEqual(len(reader.api.closed),len(set(reader.api.closed)))
+    def test_stream_keeps_native_security_identity_and_locks_hash(self):
+        reader=self.reader();path=PureWindowsPath(r'C:\controlled\body.bin')
+        group=gov.GovernedGroup(PureWindowsPath(r'C:\controlled'),{}, {},{}, {},{}, {},True,reader=reader)
+        self.assertEqual(b''.join(group.stream_path(path)),b'original')
+        self.assertEqual(len(reader.objects),3)
+        self.assertIn(path,group.consumer_streams);group.recheck()
+        reader.api.data=b'changed'
+        with self.assertRaisesRegex(native.NativeReadError,'drift'):group.recheck()
+
     def test_close_waits_for_retained_read_transaction(self):
         reader=self.reader();entered=threading.Event();release=threading.Event();closed=threading.Event()
         original=reader.api.read

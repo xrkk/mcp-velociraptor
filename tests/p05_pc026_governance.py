@@ -39,6 +39,15 @@ HANDOFF_CONTRACT = BASE + "2026.10.02-06-PC026-P07固定交接读取契约.md"
 HANDOFF_CONTRACT_SHA = "dc3b548d8e2741c5773df669962fdab51af41ca7db204655a3a2302bcf12676c"
 CALL_CLOCK_CONTRACT = BASE + "2026.10.02-07-PC026-P06调用单调钟原件补充.md"
 CALL_CLOCK_CONTRACT_SHA = "b55e5faee6b5b01f7a0d556a131dc77f73fe911c3df0d5042f57bc9a3ccb1f76"
+BODY_CONTRACT = 'PLAN/2026.10.03-01-PC026-原始HTTP消息体捕获接口.md'
+BODY_CONTRACT_SHA = '69349f4a18530ee1bbd32dabcb0a051287442c56fee26968134ba3258fa1790b'
+JOIN_CONTRACT = 'PLAN/2026.10.03-02-PC026-原始MCP调用关联接口.md'
+JOIN_CONTRACT_SHA = 'b3a8dd1a6e69b838d164a07807e9747e8996bccbe882db55ac7c893af42f0a0a'
+HTTP_BINDING_CONTRACT = 'PLAN/2026.10.03-03-PC026-P06原始消息正式消费接口.md'
+HTTP_BINDING_CONTRACT_SHA = '15f7ebaf2c2fa552ad91f4baabc69c00d54da308183a09d7d7086cb2c4315cc0'
+RAW_CONTRACTS = ((BODY_CONTRACT,6354,BODY_CONTRACT_SHA),
+                 (JOIN_CONTRACT,7359,JOIN_CONTRACT_SHA),
+                 (HTTP_BINDING_CONTRACT,7999,HTTP_BINDING_CONTRACT_SHA))
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
 MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
@@ -67,7 +76,10 @@ ENTRIES = ENTRIES | frozenset({"tests/scenario_runner.py", "tests/p06_evidence.p
     "tests/p05_pc026_windows_reader.py", "tests/test_p05_pc026_windows_reader.py",
     "tests/p07_handoff.py", "tests/test_p07_handoff.py",
     "tests/p06_call_clock.py", "tests/test_p06_call_clock.py"})
-RESOURCES = frozenset({NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT, "requirements.txt", "requirements.lock",
+ENTRIES = ENTRIES | frozenset({'tests/p06_http_body_capture.py','tests/p06_mcp_raw_join.py',
+    'tests/p06_http_binding.py','tests/test_p06_http_body_capture.py','tests/test_p06_mcp_raw_join.py',
+    'tests/test_p06_http_binding.py'})
+RESOURCES = frozenset({BODY_CONTRACT,JOIN_CONTRACT,HTTP_BINDING_CONTRACT,NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT, "requirements.txt", "requirements.lock",
     "velo_transfer/transfer_tools_schema.json",
     "tests/data/p05_scenario_index.json", "tests/data/p05_fixture_spec.json",
     "tests/data/p05_dependency_manifest.json", "tests/p05_prepare_fixtures.ps1",
@@ -83,7 +95,7 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
         'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
         'p06-data-exfiltration', 'p06-remediation-validation'))})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
-    if path in {NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(("tests/data/", "tests/scenarios/")))
+    if path in {BODY_CONTRACT, JOIN_CONTRACT, HTTP_BINDING_CONTRACT, NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(("tests/data/", "tests/scenarios/")))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
 # third-party imports when this reader itself runs in an incomplete tree.
@@ -169,7 +181,7 @@ LOCAL_MODULES = frozenset({
     'velociraptor_mcp_core.py',
     'velociraptor_transport.py',
 })
-LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
+LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/pc026_raw_fixture.py'}) | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
 
 
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
@@ -326,6 +338,15 @@ def _read(path, *, reader=None):
 
 
 def _read_posix(path):
+    stream = _stream_posix(path)
+    chunks = []
+    while True:
+        try: chunks.append(next(stream))
+        except StopIteration as end:
+            return b''.join(chunks), *end.value
+
+
+def _stream_posix(path):
     """Retain no-follow ancestor handles through bytes, owner and full ACL read."""
     require(os.name == "posix", "production governance reader requires a POSIX host")
     handles = []
@@ -336,10 +357,10 @@ def _read_posix(path):
             info = os.fstat(fd)
             security.append((info.st_uid, info.st_gid, _acl(fd, info)))
         leaf = os.fstat(bound[-1][0])
-        chunks = []
+        count = 0
         while chunk := os.read(bound[-1][0], 65536):
-            chunks.append(chunk)
-        data = b"".join(chunks)
+            count += len(chunk)
+            yield chunk
         fresh = readonly._walk(path, handles)
         for original, current, sec in zip(bound, fresh, security):
             info = os.fstat(original[0])
@@ -347,12 +368,12 @@ def _read_posix(path):
                 and (original[1] or original[3] == current[3] == readonly._metadata(info))
                 and sec == (info.st_uid, info.st_gid, _acl(original[0], info)),
                 "governance path identity/content/ACL drift")
-        require(len(data) == leaf.st_size, "governance read length differs")
+        require(count == leaf.st_size, "governance read length differs")
         identity = {"platform": "posix", "device": str(leaf.st_dev), "inode": str(leaf.st_ino),
             "owner_uid": str(leaf.st_uid), "owner_gid": str(leaf.st_gid),
             "principal_uid": str(os.geteuid()), "mode": f"{stat.S_IMODE(leaf.st_mode):04o}",
             "acl_sha256": evidence._sha(security[-1][2])}
-        return data, (tuple(row[2] for row in bound), tuple(security), bound[-1][3]), identity
+        return (tuple(row[2] for row in bound), tuple(security), bound[-1][3]), identity
     except (OSError, readonly.ContentReadError) as exc:
         raise GovernanceError("safe governance read failed: " + str(exc)) from exc
     finally:
@@ -373,6 +394,7 @@ class GovernedGroup:
     validators: dict = field(default_factory=dict)
     reader: object | None = None
     consumer_inputs: dict = field(default_factory=dict)
+    consumer_streams: dict = field(default_factory=dict)
 
     @property
     def endpoint(self):
@@ -380,6 +402,29 @@ class GovernedGroup:
 
     def read_path(self, path):
         return _read(path, reader=self.reader)
+
+    def stream_path(self, path):
+        """Same security reader, bounded bytes and locked content/identity."""
+        import hashlib
+        stream = self.reader.stream(path) if self.reader is not None else _stream_posix(path)
+        digest = hashlib.sha256(); size = 0
+        try:
+            while True:
+                try: chunk = next(stream)
+                except StopIteration as end:
+                    identity, _ = end.value
+                    value = (size, digest.hexdigest(), identity)
+                    prior = self.consumer_streams.setdefault(path, value)
+                    require(prior == value, 'consumer streamed input drift: ' + str(path))
+                    if path in self.consumer_inputs:
+                        raw, old_identity = self.consumer_inputs[path]
+                        require((len(raw), evidence._sha(raw), old_identity) == value,
+                                'consumer input/stream drift')
+                    return
+                digest.update(chunk); size += len(chunk)
+                yield chunk
+        finally:
+            stream.close()
 
     def close(self):
         if self.reader is not None:
@@ -402,6 +447,8 @@ class GovernedGroup:
         return evidence._json_bytes(self.read(reference), "governance document", canonical=canonical)
 
     def recheck(self):
+        for path in list(self.consumer_streams):
+            for _ in self.stream_path(path): pass
         for path, (data, identity) in self.locked.items():
             current, current_identity, _ = self.read_path(self.repository / path)
             require((current, current_identity) == (data, identity), "governance consumption drift: " + path)
@@ -671,6 +718,9 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
             "sha256":HANDOFF_CONTRACT_SHA}, "handoff contract allowlist anchor missing")
     require(allowed.get(CALL_CLOCK_CONTRACT) == {'path': CALL_CLOCK_CONTRACT, 'size': 6933,
             'sha256': CALL_CLOCK_CONTRACT_SHA}, 'call-clock contract allowlist anchor missing')
+    for path,size,sha in RAW_CONTRACTS:
+        require(allowed.get(path)=={'path':path,'size':size,'sha256':sha},
+                'raw HTTP contract allowlist anchor missing: ' + path)
     require(DEPLOYMENT in allowed, "fixed deployment Ref absent")
     deployment = group.document(allowed[DEPLOYMENT])
     _validate_deployment(group, deployment)

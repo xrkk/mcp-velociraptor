@@ -151,6 +151,7 @@ class CurrentConsumerTests(unittest.TestCase):
                 'scenario_runner.py','p06_resource_gate.py','p06_formal_session.py',
                 'p06_resource_qualification.py','p06_package.py','p06_evidence.py','p06_resource_policy.py',
                 'p06_receive.py','p06_aggregate_reports.py','p06_pc026_binding.py','p06_call_clock.py',
+                'p06_http_body_capture.py','p06_mcp_raw_join.py','p06_http_binding.py',
                 'data/p06_scenario_index.json','data/p06_resource_policy.json','data/p03_invocations.json')}}] + rows
         report['calls'] = []; report['coverage'] = []
         def add(label, tool, arguments, structured):
@@ -233,6 +234,8 @@ class CurrentConsumerTests(unittest.TestCase):
         from tests.p06_call_clock import RunClock
         report = json.loads((run/'report.json').read_bytes())
         if report['scenario'] not in {'resource-qualification', 'individual-acceptance'} and report['status']=='success':
+            from tests.pc026_raw_fixture import prepare,construct
+            prepare(run,report)
             clock_path = run/'call-clock.json'
             metadata = (json.loads(clock_path.read_bytes())['clock'] if clock_path.exists()
                         else RunClock().clock)
@@ -246,6 +249,7 @@ class CurrentConsumerTests(unittest.TestCase):
                      'report_ref': {'path': 'report.json', 'size': len(raw), 'sha256': ev._sha(raw)},
                      'clock': metadata, 'status': 'RECORDED'}
             clock_path.write_bytes(ev.canonical_json(value))
+            construct(run)
         (run / 'package-manifest.json').write_bytes(p06_package.canonical_bytes(
             p06_package.member_inventory(run, self.received)))
 
@@ -301,6 +305,7 @@ class CurrentConsumerTests(unittest.TestCase):
         value['report_ref'].update(size=len(raw),sha256=ev._sha(raw))
         (run2/'call-clock.json').write_bytes(ev.canonical_json(value))
         (run2/'package-manifest.json').write_bytes(p06_package.canonical_bytes(p06_package.member_inventory(run2,self.received)))
+        self.seal(run2)
         admission=binding._from_group(self.load())
         admission.report(json.loads((run1/'report.json').read_bytes()),run1,self.received)
         with self.assertRaisesRegex(ev.Pc020EvidenceError,'domain reused'):
@@ -379,6 +384,7 @@ def audit(event,args):
 sys.addaudithook(audit)
 from tests import p06_pc026_binding as binding
 from tests import scenario_runner, p06_receive, p06_aggregate_reports, p06_call_clock
+from tests import p06_http_binding, p06_http_body_capture, p06_mcp_raw_join
 from tests import p07_cost_measurement, p07_cost_measurement_r232, p06_resource_qualification
 admission = binding.load()
 modules = {}
@@ -404,13 +410,15 @@ print(json.dumps({'qualified':True,'modules':modules}))
         with tempfile.TemporaryDirectory(dir=os.environ['PC020_TEST_TEMP_ROOT']) as directory:
             root = Path(directory)
             fixture = ApprovalFixture(root,Path(os.environ['PC026_BOOTSTRAP_FIXTURE_ROOT']))
-            for name in ('tests/p06_call_clock.py',gov.CALL_CLOCK_CONTRACT,'tests/p06_pc026_binding.py','tests/p06_resource_qualification.py',
+            for name in ('tests/p06_http_body_capture.py','tests/p06_mcp_raw_join.py','tests/p06_http_binding.py',
+                         gov.BODY_CONTRACT,gov.JOIN_CONTRACT,gov.HTTP_BINDING_CONTRACT,
+                         'tests/p06_call_clock.py',gov.CALL_CLOCK_CONTRACT,'tests/p06_pc026_binding.py','tests/p06_resource_qualification.py',
                          'tests/data/p03_invocations.json','tests/scenarios/full/p06-data-exfiltration.json'):
                 original = (root/name).read_bytes()
                 ref = fixture.freeze.pop(name); fixture.refs.pop(name); (root/name).unlink()
                 try:
                     fixture.refresh(); before = inventory(root)
-                    with self.assertRaisesRegex(ev.Pc020EvidenceError,'required resource|entry/import'):
+                    with self.assertRaisesRegex(ev.Pc020EvidenceError,'required resource|entry/import|anchor missing'):
                         gov._load_at(root,synthetic_fixture=True)
                     self.assertEqual(inventory(root),before)
                 finally:
