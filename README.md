@@ -61,9 +61,40 @@ This pure format module performs no I/O, scope activation or emission and is
 not installed in production. Format validation grants no trusted source,
 persistence, storage EOF, instance-wide acceptance coverage or business success.
 New encoding of saved loopback SDK facts is a model demonstration, not proof
-that those historical runs had durable archives. Safe native writing, trusted
+that those historical runs had durable archives. Native execution, trusted
 configuration/namespace, session cuts, host consumption and a new actual freeze
 remain separate work; Windows directory durability is unverified.
+
+`velociraptor_observation_windows.py` implements the independent PC026 09
+single-record Windows publication primitive. `WindowsRecordPublisher` takes an
+already existing absolute local directory and four explicit codec budgets;
+`publish(bytes)` validates one 08 original before creating a random UUID
+`.pending`, writes through its exclusive native handle with short-write handling,
+flushes and reads back the same bytes, then uses handle-based no-replace
+`FileRenameInfo` to publish `<sequence:08d>.json` (maximum 99999999). Existing
+final files are rejected even when their bytes match. It returns a relative
+content Ref and the actual Windows reader identity, without granting approval
+or proving an entire chain. Use its context manager or explicit `close()`.
+
+Directory/ancestor leases retain the original PC026 same-handle identity and
+complete SD gates, default actual-principal trust and no-delete sharing. The
+principal/impersonation gate is rechecked per publication. The exclusive writer
+is closed before private final readback to respect bilateral Windows sharing;
+final file handles end with that transaction. A `PublishError` reports a fixed
+code, `NOT_CREATED`/`PENDING`/`UNKNOWN` phase and generated candidate basenames.
+An uncertain rename or failed post-rename verification/close remains UNKNOWN;
+objects are retained, with no deletion, overwrite, automatic retry or ACL repair.
+Close diagnostics preserve a primary publication error. Do not replay UNKNOWN
+through a new publisher to conceal residuals.
+
+The module depends on `tests.p05_pc026_windows_reader`, its ContentIO/readback
+helpers and `velo_transfer.windows_platform`; future approved source closure
+must include those dependencies. Host state-machine and ctypes adapter models
+are development evidence, not native Windows publication or service-SID/root
+qualification. API success/content flush/atomic visibility do not prove directory
+power-loss durability. No CLI/env override, alternate SID/API parameter, parent
+tree creation, observer/bridge integration, trusted namespace or new freeze is
+provided; formal native validation and production authorization remain separate.
 
 `velociraptor_observation.py` is an independent, opt-in in-memory request
 observer. Controlled tests explicitly construct `RequestObserver` with a service
