@@ -506,7 +506,35 @@ authentication headers and environment values are not collected.
 HTTP exchanges. The read-only verifier checks original files and exact
 structure, without granting business success. Failed index staging remains
 unpublished. This module is not connected to the formal P06 runner, current
-consumer or freeze catalog. Request-ID/result joining, production admission
-and evidence closure remain future integration work; both P07 cost entry
+consumer or freeze catalog. Production integration of request-ID/result joining, admission
+and evidence closure remains future work; both P07 cost entry
 points continue to refuse the unimplemented collector. Local loopback SDK
 and stream-model tests do not establish Windows acceptance.
+
+
+`tests/p06_mcp_raw_join.py` now provides an independent read-only
+`join(run_dir)` helper for a successful current schema-2 report, its original
+capture and validated call clock. It returns an in-memory association with
+exact original content Refs and frame locations; it never publishes or repairs
+run files. Requests are indexed by globally unique, type-sensitive JSON-RPC IDs
+and matched to the report in request order. Complete SDK CallToolResult values
+are compared after legitimate defaults and known null omission; ignored
+extensions, duplicate/replayed IDs, hidden calls and missing responses refuse.
+
+Decoding supports strict UTF-8 JSON and incrementally read SSE, including BOM,
+CR/LF/CRLF, comments and multiple data lines. Identity and one complete gzip
+member are supported; truncated trailers, additional members, unknown encodings,
+invalid UTF-8, incomplete frames and server-initiated requests refuse. A closed
+SSE stream is usable only with complete dispatched frames and a complete gzip
+trailer when compressed. Reconnection with ID reuse or identical response replay
+is not supported. A 128 MiB per-message/line bound refuses explicitly rather
+than truncating or buffering an entire SSE stream.
+
+This helper remains outside the formal P06 runner, consumer and freeze. Its
+schema/lifecycle gate is structural and does not grant service identity or
+admission approval. Local model gates and a new official-SDK loopback run bind
+real capture bytes, tool results and monotonic intervals; the loopback report
+uses a synthetic host identity. They do not prove Windows/191 approval,
+production session/header binding, client/Flow or pagination completion,
+environment comparability or cost success. Both P07 cost entrypoints retain
+their refusal of the undefined current collector.
