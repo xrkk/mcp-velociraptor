@@ -1,5 +1,26 @@
 # Velociraptor Agent POC
 
+`velociraptor_observation.py` is an independent, opt-in in-memory request
+observer. Controlled tests explicitly construct `RequestObserver` with a service
+instance and positive request/event/byte budgets and install its middleware.
+It observes only HTTP `tools/call`, preserves session and typed request IDs,
+hashes canonical arguments, and shares one locked scope with the default SDK
+synchronous worker. `emit` requires a current parent and strict JSON facts;
+invalid input, duplicate parents and exhausted budgets refuse without replacing
+an existing event prefix. Snapshots are independent copies; incomplete scopes
+require explicit diagnostic reads and cannot be exported as complete records.
+Cancellation may leave a synchronous worker running: sealing follows its actual
+awaited exit, and tail facts retain the original parent. Detached/custom worker
+chains are unsupported. Returned `isError` is still a returned protocol result.
+
+The bridge and historical agent do not enable this module. It adds no tools,
+parameters, headers, CLI/environment switches, RPCs or persistent archive and is
+not yet part of the production freeze/catalog. Business fact hooks, controlled
+archival and host association require separate contracts and integration.
+Loopback SDK/model tests do not qualify Windows, real client/Flow identity,
+pagination completeness, Admission or P07 costs.
+
+
 The read-only recovery selector now consumes the fixed PC026 runtime record
 and exact READY approval under `PLAN/2026.10.02/`, from its code-owned repository
 root. It checks the adopted interface hash, independent exact Ref allowlist,
