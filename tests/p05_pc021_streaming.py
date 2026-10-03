@@ -58,8 +58,9 @@ class _WindowsIO(rb._WindowsIO):
         return (standard.size, basic.created, basic.written, basic.changed, basic.attributes)
 
     def open_parent(self, path):
-        # Permit PC022 GENERIC_WRITE refreshes, but pin directory names.
-        return self._open(path, 0x80, 3, 3)
+        # LIST makes deny-delete sharing effective while share WRITE permits
+        # the required PC022 GENERIC_WRITE directory refreshes.
+        return self._open(path, 0x81, 3, 3)
 
     def open_published(self, path):
         # Deny content writes while permitting deletion of the owned part link.

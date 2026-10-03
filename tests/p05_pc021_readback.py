@@ -50,8 +50,9 @@ class _WindowsIO:
         self.close_handle.restype = ctypes.c_int
 
     def open(self, path, directory):
-        # OPEN_EXISTING; read-only sharing pins objects against write/delete.
-        handle = self.create(str(path), 0x80 if directory else 0x80000000,
+        # LIST access makes directory sharing enforce write/delete exclusion.
+        # Metadata-only access does not participate in that sharing check.
+        handle = self.create(str(path), 0x81 if directory else 0x80000000,
                              1, None, 3, 0x02000000 | 0x00200000, None)
         if handle is None or handle == ctypes.c_void_p(-1).value:
             raise ReadbackError(f'CreateFileW failed: {ctypes.get_last_error()}')

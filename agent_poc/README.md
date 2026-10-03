@@ -120,6 +120,10 @@ publisher. Publisher and allocator each retain and close their own handles once.
 Native directory leases request FILE_LIST_DIRECTORY as well as attributes: this
 read access makes Windows enforce the sharing check that denies DELETE opens;
 metadata-only access cannot provide that protection.
+PC021 issuer readback and bounded preservation use the same LIST requirement.
+Readback retains share READ only; preservation parents also share WRITE for
+PC022 native refreshes, while both reject DELETE acquisition. Insufficient LIST
+access fails closed. This does not qualify formal issuance or the service identity.
 The allocator adds no production namespace, observer activation or public SID/API
 bypass. Import performs no Windows I/O. The explicit source catalog includes its
 native reader and model test dependencies; no production freeze is issued.

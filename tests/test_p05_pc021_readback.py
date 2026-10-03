@@ -165,7 +165,7 @@ class RootGateTests(CapabilityFixture):
         self.assertEqual(outcome.events[1]['at'],json.loads(outcome.root_path.read_bytes())['issued_at'])
         self.assertFalse(outcome.capability.spent)
         self.assertEqual(set(inspect.signature(graph.verify_snapshot189_activation).parameters),
-                         {'activation_path', 'policy', 'root_policy', 'epoch7_canonical'})
+                         {'activation_path', 'policy', 'root_policy', 'epoch7_canonical', 'generation'})
 
     def test_recursive_drift_after_durable_r_never_records_event6_or_creates_s(self):
         for member in ('source', 'initial', 'cycle1', 'cycle2', 'C7-preparation-binding'):
@@ -309,5 +309,85 @@ class WindowsReadbackTests(unittest.TestCase):
             self.assertEqual(rb._read_no_follow(path),path.read_bytes())
             with self.assertRaises(rb.ReadbackError):rb._read_no_follow(path.parent)
 
+
+
+class DirectorySharingModels(unittest.TestCase):
+    """Real PC021 numeric open paths with an explicit Win32 sharing MODEL."""
+    def model(self, streaming=False):
+        from tests import p05_pc021_streaming as io
+        from tests.test_observation_windows import ModelFS
+        fs=ModelFS();root=Path('/MODEL/pc021');file=root/'original.bin'
+        for item in reversed(file.parents):fs.node(item,True)
+        fs.node(file).update(data=b'original',meta=(8,1,2,3,0x20))
+        api=(io._WindowsIO if streaming else rb._WindowsIO).__new__(io._WindowsIO if streaming else rb._WindowsIO)
+        def create(path,access,share,security,disposition,flags,template):
+            self.assertEqual((security,disposition,flags,template),(None,3,0x02200000,None))
+            node=fs.nodes[str(path)]
+            if node['directory'] and access & 1 and node.get('deny_list'):
+                raise rb.ReadbackError('MODEL access denied 5: LIST')
+            return fs.acquire(path,node['directory'],access,share,False)
+        api.create=create
+        for name in ('identity','read','rewind','metadata','close'):setattr(api,name,getattr(fs,name))
+        return api,fs,root,file
+
+    def test_readback_actual_directory_access_blocks_write_and_delete(self):
+        api,fs,root,file=self.model();h=api.open(root,True)
+        try:
+            self.assertEqual((fs.handles[h]['access'],fs.handles[h]['share']),(0x81,1))
+            for access in (0x10000,0x40000000):
+                with self.subTest(access=access),self.assertRaisesRegex(Exception,'sharing'):
+                    fs.acquire(root,True,access,7,False)
+        finally:api.close(h)
+        self.assertFalse(fs.handles)
+
+    def test_streaming_actual_parent_allows_refresh_write_but_denies_delete(self):
+        api,fs,root,file=self.model(True);h=api.open_parent(root)
+        try:
+            self.assertEqual((fs.handles[h]['access'],fs.handles[h]['share']),(0x81,3))
+            writer=fs.acquire(root,True,0x40000000,7,False);fs.close(writer)
+            with self.assertRaisesRegex(Exception,'sharing'):fs.acquire(root,True,0x10000,7,False)
+        finally:api.close(h)
+        self.assertFalse(fs.handles)
+
+    def test_old_metadata_only_negative_control_does_not_pin_directory(self):
+        api,fs,root,file=self.model()
+        for share in (1,3):
+            h=fs.acquire(root,True,0x80,share,False)
+            deleting=fs.acquire(root,True,0x10000,7,False)
+            fs.close(deleting);fs.close(h)
+        self.assertFalse(fs.handles)
+
+    def test_list_denial_readback_closes_and_has_no_content_effect(self):
+        api,fs,root,file=self.model();fs.nodes[str(root)]['deny_list']=True
+        before={k:dict(v) for k,v in fs.nodes.items()}
+        with patch.object(rb,'_native',return_value=api),self.assertRaisesRegex(rb.ReadbackError,'denied 5'):
+            rb._read_no_follow(file)
+        self.assertFalse(fs.handles);self.assertEqual(before,fs.nodes)
+        self.assertFalse(any(m=='read' for m,h in fs.events))
+        self.assertEqual(len(fs.closed),len(set(fs.closed)))
+
+    def test_real_readback_algorithm_holds_parent_until_read_and_closes_once(self):
+        api,fs,root,file=self.model();checked=[]
+        def hook(method,handle):
+            if method=='read':
+                with self.assertRaisesRegex(Exception,'sharing'):fs.acquire(root,True,0x10000,7,False)
+                checked.append(True)
+        fs.hook=hook
+        with patch.object(rb,'_native',return_value=api):self.assertEqual(rb._read_no_follow(file),b'original')
+        self.assertTrue(checked);self.assertFalse(fs.handles)
+        self.assertEqual(len(fs.closed),len(set(fs.closed)))
+
+    def test_real_bound_parent_lifetime_and_list_denial_cleanup(self):
+        from tests import p05_pc021_streaming as io
+        api,fs,root,file=self.model(True)
+        with io.BoundPath(api,root,directory=True,writable_parent=True) as parent:
+            parent.verify()
+            writer=fs.acquire(root,True,0x40000000,7,False);fs.close(writer)
+            with self.assertRaisesRegex(Exception,'sharing'):fs.acquire(root,True,0x10000,7,False)
+        self.assertFalse(fs.handles)
+        fs.nodes[str(root)]['deny_list']=True
+        with self.assertRaisesRegex(rb.ReadbackError,'denied 5'):
+            with io.BoundPath(api,root,directory=True,writable_parent=True):self.fail('unexpected admission')
+        self.assertFalse(fs.handles);self.assertEqual(len(fs.closed),len(set(fs.closed)))
 
 if __name__=='__main__':unittest.main(verbosity=2)
