@@ -222,8 +222,11 @@ class WindowsSession:
                 if self.api.name(handle) != key:
                     raise NativeReadError('native path alias differs from final handle name')
                 acl._evaluate(descriptor_snapshot(observed[1]), kind, self.trusted)
-            except BaseException:
-                self.api.close(handle)
+            except BaseException as primary:
+                try:
+                    self.api.close(handle)
+                except BaseException:
+                    primary.add_note('native_binding_close_failed')
                 raise
             self.objects[key] = (handle, directory, observed)
         handle, actual_directory, observed = self.objects[key]
@@ -233,11 +236,20 @@ class WindowsSession:
         if self._observe(handle, directory) != observed:
             raise NativeReadError('native retained identity/ACL/metadata drift')
         probe = self.api.open(path, directory)
+        primary = None
         try:
             if self.api.name(probe) != key or self._observe(probe, directory) != observed:
                 raise NativeReadError('native path identity/ACL/metadata drift')
+        except BaseException as exc:
+            primary = exc
+            raise
         finally:
-            self.api.close(probe)
+            try:
+                self.api.close(probe)
+            except BaseException:
+                if primary is None:
+                    raise
+                primary.add_note('native_probe_close_failed')
         return handle, observed
 
     def read(self, path, *, private=False):

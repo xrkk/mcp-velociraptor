@@ -184,6 +184,11 @@ LOCAL_MODULES = frozenset({
     'velociraptor_observation_archive.py',
     'velociraptor_transport.py',
 })
+LOCAL_MODULES = LOCAL_MODULES | frozenset({'velociraptor_observation_namespace.py',
+    'velociraptor_observation_windows.py', 'tests/test_observation_namespace.py',
+    'tests/test_observation_windows.py', 'tests/test_observation_archive.py',
+    'tests/test_p05_pc026_windows_reader.py'})
+
 LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/pc026_raw_fixture.py'}) | ENTRIES | frozenset({"tests/test_p06_evidence_schema5.py", "tests/p06_individual_acceptance.py"})
 
 

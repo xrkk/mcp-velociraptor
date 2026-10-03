@@ -100,6 +100,30 @@ but inside the passed buffer size, preventing Win32 path normalization from
 reading beyond the destination name. Isolated control-principal Windows tests
 do not qualify the business service identity or directory power-loss durability.
 
+`velociraptor_observation_namespace.py` implements the PC026 11 independent
+`WindowsDirectoryAllocator(directory, max_directories=...)`. It binds an existing
+private root and all ancestors with the original native reader gates. `root`
+and successful `allocate(parent, name)` results are immutable leases owned by
+that allocator; matching paths, foreign leases and external Refs grant no rights.
+Names use the contract's strict ASCII grammar and exclude Windows device names.
+Input/capacity refusals happen before creation and leave the allocator usable.
+Actual TokenUser, default trust and full same-handle SD/identity checks are mandatory.
+
+Creation uses exclusive `CreateDirectoryW` with an explicit protected private
+DACL at creation, followed by immediate no-follow binding and parent/path rechecks.
+Security drift or native creation failures terminate allocation without deleting,
+adopting or retrying residuals. Diagnostics distinguish `NOT_ATTEMPTED`,
+`CREATE_FAILED`, `CREATED_UNBOUND`, `BOUND` and `UNKNOWN`; they grant no approval.
+Keep the allocator alive through publisher construction, publication and closure;
+call `allocator.recheck(lease)` before and after handing `lease.path` to the 09
+publisher. Publisher and allocator each retain and close their own handles once.
+The allocator adds no production namespace, observer activation or public SID/API
+bypass. Import performs no Windows I/O. The explicit source catalog includes its
+native reader and model test dependencies; no production freeze is issued.
+Host adapter/reader/publisher/journal models and isolated file loading verify local
+control flow only. Windows ABI, inheritance, directory sharing/replacement and
+native handoff, service SID/SACL/root and production governance remain separate.
+
 `velociraptor_observation_journal.py` adds the PC026 10 explicit per-request
 archive seam. `RequestJournal(publisher, codec, accept_payload,
 owns_publisher=False)` publishes and verifies accept before business starts.
