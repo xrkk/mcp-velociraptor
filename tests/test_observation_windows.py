@@ -33,7 +33,7 @@ class ModelFS:
         return self.nodes[name]
     def invoke(self,method,handle=None):
         self.events.append((method,handle));self.hook(method,handle)
-    def open(self,path,directory):return self.acquire(path,directory,0x01020080 if directory else 0x81020000,3 if directory else 1,False)
+    def open(self,path,directory):return self.acquire(path,directory,0x01020081 if directory else 0x81020000,3 if directory else 1,False)
     def acquire(self,path,directory,access,share,create):
         self.invoke('create' if create else 'open')
         name=str(path)
@@ -44,9 +44,9 @@ class ModelFS:
         node=self.nodes[name]
         # Bilateral sharing check: each open's requested read/write/delete must
         # be allowed by every other handle's share flags, including DELETE.
-        def rights(a):return (1 if a&0x80000000 or a&0x80 else 0)|(2 if a&0x40000000 else 0)|(4 if a&0x10000 else 0)
+        def rights(a):return (1 if a&0x80000000 or a&1 else 0)|(2 if a&0x40000000 or a&6 else 0)|(4 if a&0x10000 else 0)
         for old in self.handles.values():
-            if old['node'] is node and (rights(access)&~old['share'] or rights(old['access'])&~share):
+            if old['node'] is node and rights(access) and rights(old['access']) and (rights(access)&~old['share'] or rights(old['access'])&~share):
                 raise r.NativeReadError('sharing violation')
         self.next_handle+=1;h=self.next_handle
         self.handles[h]=dict(node=node,access=access,share=share,pos=0)

@@ -458,4 +458,26 @@ class PrimaryPreservationModels(unittest.TestCase):
         count=len(fs.closed);s.close();self.assertEqual(len(fs.closed),count);self.assertFalse(fs.handles)
 
 
+class NativeSharingModels(unittest.TestCase):
+    def test_real_reader_open_requests_share_checked_directory_access(self):
+        fs=DirectoryFS();api=n.reader.NativeIO.__new__(n.reader.NativeIO)
+        api.advapi=api.kernel=None
+        api._open=lambda path,access,share,disposition:fs.acquire(path,True,access,share,False)
+        with patch.object(n.reader,'_security_privilege') as privilege:
+            lease=api.open(ROOT,True)
+        try:
+            self.assertEqual(privilege.call_count,1)
+            self.assertTrue(fs.handles[lease]['access'] & 1)  # FILE_LIST_DIRECTORY
+            self.assertEqual(fs.handles[lease]['share'],3)  # excludes DELETE sharing
+            with self.assertRaises(n.reader.NativeReadError):fs.acquire(ROOT,True,0x10000,7,False)
+        finally:
+            for handle in tuple(fs.handles):fs.close(handle)
+
+    def test_metadata_only_handle_does_not_supply_delete_sharing_protection(self):
+        fs=DirectoryFS();lease=fs.acquire(ROOT,True,0x01020080,3,False)
+        deleting=fs.acquire(ROOT,True,0x10000,7,False)
+        fs.close(deleting);fs.close(lease)
+        self.assertFalse(fs.handles)
+
+
 if __name__=='__main__':unittest.main()

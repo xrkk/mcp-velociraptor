@@ -117,6 +117,9 @@ adopting or retrying residuals. Diagnostics distinguish `NOT_ATTEMPTED`,
 Keep the allocator alive through publisher construction, publication and closure;
 call `allocator.recheck(lease)` before and after handing `lease.path` to the 09
 publisher. Publisher and allocator each retain and close their own handles once.
+Native directory leases request FILE_LIST_DIRECTORY as well as attributes: this
+read access makes Windows enforce the sharing check that denies DELETE opens;
+metadata-only access cannot provide that protection.
 The allocator adds no production namespace, observer activation or public SID/API
 bypass. Import performs no Windows I/O. The explicit source catalog includes its
 native reader and model test dependencies; no production freeze is issued.

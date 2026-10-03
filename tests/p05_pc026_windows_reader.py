@@ -107,9 +107,11 @@ class NativeIO(ContentIO):
         self.final_name.restype = ctypes.c_uint32
 
     def open(self, path, directory):
-        # READ_CONTROL + ACCESS_SYSTEM_SECURITY; open only with assigned privilege.
+        # FILE_LIST_DIRECTORY participates in the native sharing check; metadata-
+        # only directory access does not make deny-delete sharing effective.
+        # READ_CONTROL + ACCESS_SYSTEM_SECURITY; only assigned privilege is used.
         with _security_privilege(self.advapi, self.kernel):
-            return self._open(path, (0x80 if directory else 0x80000000) | 0x01020000,
+            return self._open(path, (0x81 if directory else 0x80000000) | 0x01020000,
                               3 if directory else 1, 3)
 
     def descriptor(self, handle):
