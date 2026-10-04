@@ -1044,3 +1044,13 @@ This is domain accounting, not a complete allocator/native/RSS bound. Full
 capacity/peak and maintenance qualification, all concurrent failure permutations,
 Windows native export/SCM and production approval remain unfinished. Formal
 production startup still refuses before writer, backend or listener.
+
+
+Queued typed-alias HTTP requests now observe actual socket disconnect after full
+body EOF, join their receive waiter before SDK handoff, and finish the real
+journal as cancelled without calling business code. Cancellation after a possible
+handoff preserves the journal and poisons the controller rather than stealing
+SDK ownership. Close I/O waits on actual thread exit without scheduling into a
+possibly closed event loop; start/join faults retain their records and first
+exception. These are host socket/thread tests with MODEL archive storage. They
+do not complete retained peak, maintenance or native Windows qualification.

@@ -300,22 +300,24 @@ class SessionController:
         # The controller owns both the real non-daemon native-I/O thread and its
         # waiter before start. HTTP cancellation/timeout cannot abandon either.
         row=_CloseIO(session)
-        loop=asyncio.get_running_loop();done=loop.create_future()
-        def notify():
-            if not done.done():done.set_result(None)
         def execute():
             try:row.result=function()
             except BaseException as error:row.error=error
-            finally:
-                row.wrapper_exited=True
-                loop.call_soon_threadsafe(notify)
+            finally:row.wrapper_exited=True
         async def join():
-            await done
-            row.thread.join()
-            if row.thread.is_alive() or not row.wrapper_exited:
-                raise ControllerError('close_io_join_unknown')
-            row.joined=True
-            # Keep errors in the permanent row, rather than an unobserved Task.
+            # Poll the real thread rather than notifying a possibly closed loop
+            # from native code. Loop loss keeps the permanent record unjoined.
+            try:
+                while row.thread.is_alive():await asyncio.sleep(.001)
+                row.thread.join()
+                if row.thread.is_alive() or not row.wrapper_exited:
+                    raise ControllerError('close_io_join_unknown')
+                row.joined=True
+            except BaseException as error:
+                if row.error is None:row.error=error
+                else:row.error.add_note('close_io_join_unknown')
+                self._unknown(session)
+                # Preserve errors in the owned row, including Task cancellation.
         row.thread=threading.Thread(target=execute,daemon=False,name='pc026-close-io')
         key=session if phase is None else (session,phase)
         with self._lock:
@@ -587,20 +589,45 @@ class SessionController:
         return ('id' in a and 'method' in a and 'id' in b and 'method' in b
                 and (str(a['id'])==str(b['id']) or coerce_request_id(a['id'])==coerce_request_id(b['id'])))
 
-    async def _slot(self, row):
-        while True:
-            with self._lock:
-                if row.cancelled: return False
-                previous=[p for p in self._work.values() if p.session==row.session
-                    and p.sequence<row.sequence and self._conflicts(row,p)
-                    and not (p.http_exited and p.handler_exited and all(s.closed for s in p.streams))]
-                if not previous:
-                    row.enqueued=True
-                    return True
-                if self._pending_count()>self._limits['max_pending_work']:
-                    row.cancelled=True
-                    return False
-            await anyio.sleep(.001)
+    async def _slot(self, row, receive=None):
+        disconnect=None
+        ready=False
+        try:
+            while True:
+                with self._lock:
+                    if row.cancelled:return False
+                    previous=[p for p in self._work.values() if p.session==row.session
+                        and p.sequence<row.sequence and self._conflicts(row,p)
+                        and not (p.http_exited and p.handler_exited and all(s.closed for s in p.streams))]
+                    if disconnect is not None and disconnect.done():
+                        part=disconnect.result()
+                        if part['type']!='http.disconnect':raise ControllerError('queued_receive_unknown')
+                        row.cancelled=True
+                        return False
+                    if not previous:
+                        ready=True
+                        break
+                    if self._pending_count()>self._limits['max_pending_work']:
+                        row.cancelled=True
+                        return False
+                # Full request-body EOF was already observed. Only the queued
+                # owner reads disconnect, and it joins before SDK takes receive.
+                if receive is not None and disconnect is None:
+                    disconnect=asyncio.create_task(receive())
+                await anyio.sleep(.001)
+        finally:
+            if disconnect is not None:
+                with anyio.CancelScope(shield=True):
+                    if not disconnect.done():disconnect.cancel()
+                    try:part=await disconnect
+                    except asyncio.CancelledError:pass
+                    else:
+                        if part['type']=='http.disconnect':row.cancelled=True
+                        else:raise ControllerError('queued_receive_unknown')
+        with self._lock:
+            if not ready or row.cancelled:return False
+            row.enqueued=True
+            return True
 
     def _cancel(self, session, rid):
         with self._lock:
@@ -898,7 +925,7 @@ class _HTTPIngress:
             if message.get('method')=='notifications/cancelled' and not c._cancel(session,message.get('params',{}).get('requestId')):
                 row.outcome='not_dispatched';row.handler_exited=True
                 return await JSONResponse(None,status_code=202)(scope,receive,send)
-            if not await c._slot(row):
+            if not await c._slot(row,receive):
                 c._claim(row);c._finish(row,'cancelled')
                 return await JSONResponse({'jsonrpc':'2.0','id':message.get('id'),
                     'error':{'code':-32800,'message':'Request cancelled'}})(scope,receive,send)
@@ -932,7 +959,11 @@ class _HTTPIngress:
                 c._unknown(row.session)
             if response_started:raise
             return await JSONResponse({'error':{'code':'invalid_or_unknown'}},status_code=503 if row is not None or scope.get('method')=='DELETE' else 400)(scope,receive,send)
-        except BaseException:
+        except BaseException as error:
+            if row is not None and row.enqueued and not row.handler_exited:
+                # SDK ownership may already exist. Never claim its journal or
+                # report quiescence merely because the HTTP caller vanished.
+                row.error=row.error or error;c._unknown(row.session)
             if row is not None and row.attempt is not None and row.journal is not None and not row.enqueued:
                 with anyio.CancelScope(shield=True):
                     try:c._claim(row);c._finish(row,'cancelled')
