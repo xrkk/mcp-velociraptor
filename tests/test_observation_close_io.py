@@ -107,3 +107,18 @@ class UnclaimedHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(row.error,primary);self.assertTrue(row.handler_exited and row.http_exited)
         self.assertEqual(self.controller._state,'UNKNOWN')
 
+
+class RetainedAccountingTests(PendingTests):
+    def test_permanent_owned_message_growth_is_measured_and_denies_before_next_admission(self):
+        c=self.controller
+        _,row=c._admit(None,b'a'*32,dict(method='initialize',params={}))
+        before=c._measure_retained()
+        row.message['params']['retained-tail']='z'*65536
+        row.handler_exited=True
+        after=c._measure_retained()
+        self.assertGreater(after-before,65536)
+        c._limits['max_retained_state_bytes']=after-1
+        with self.assertRaises(ControllerError):c._retained_gate()
+        self.assertEqual(c._state,'DRAINING')
+        self.assertEqual(len(c._work),1)
+        self.assertGreaterEqual(c._retained_measured_peak,after)

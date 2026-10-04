@@ -1,8 +1,8 @@
 """Private PC026 ingress/ledger/SDK chain, with conservative close refusal.
 
 No public MODEL factory or production fallback. The fixed approved constructor
-still refuses while the native exporter is unavailable. This partial controller
-cannot publish cuts or certify CLOSED; DELETE never passes through SDK's 200.
+still refuses while the native exporter is unavailable. Tests alone install a
+real MODEL publisher; successful close requires its external final I/O witness.
 """
 from __future__ import annotations
 
@@ -206,7 +206,10 @@ class SessionController:
         self._outgoing_records = []
         self._prefixes = {}
         self._close_errors = {}
+        self._retained_measured_peak = 0
         self._close_io = {}
+        self._exporter = None
+        self._closed_cuts = {}
 
     def _unknown(self, session=None):
         with self._lock:
@@ -223,14 +226,57 @@ class SessionController:
             self._sequence_records[self._sequence] = (session, kind)
             return self._sequence
 
+    def _measure_retained(self):
+        # Domain-owned Python graph, not allocator arenas, backend memory, native
+        # kernel objects or total RSS. Shared objects/cycles are charged once.
+        from collections import deque
+        from dataclasses import fields, is_dataclass
+        seen={id(self),id(self._ledger),id(self._ledger._config)}
+        if hasattr(self,'_manager'):seen.add(id(self._manager))
+        def size(value,depth=0):
+            if id(value) in seen:return 0
+            seen.add(id(value));total=sys.getsizeof(value)
+            if depth>64:raise ControllerError('retained_depth')
+            if type(value) is dict:
+                return total+sum(size(k,depth+1)+size(v,depth+1) for k,v in list(value.items()))
+            if type(value) in (list,tuple,set,frozenset,deque):
+                return total+sum(size(v,depth+1) for v in tuple(value))
+            module=type(value).__module__
+            if module.startswith(('velociraptor_observation','anyio.streams.','mcp.shared._context_streams')):
+                if hasattr(value,'__dict__'):total+=size(vars(value),depth+1)
+                elif is_dataclass(value):total+=sum(size(getattr(value,f.name),depth+1) for f in fields(value))
+            elif isinstance(value,BaseException):
+                total+=size(value.args,depth+1)+size(vars(value),depth+1)
+                tb=value.__traceback__
+                while tb is not None:
+                    if id(tb) in seen:break
+                    seen.add(id(tb));total+=sys.getsizeof(tb)+sys.getsizeof(tb.tb_frame)
+                    tb=tb.tb_next
+            return total
+        roots=(self._work,self._sessions,self._sequence_records,self._children,self._binary_sequences,
+            self._outgoing,self._outgoing_records,self._prefixes,self._close_errors,self._close_io,
+            self._closed_cuts,self._ledger._attempts,self._ledger._seen)
+        measured=size(roots)
+        self._retained_measured_peak=max(self._retained_measured_peak,measured)
+        return measured
+
+    def _retained_gate(self, extra=0):
+        with self._lock:
+            measured=self._measure_retained()
+            self._retained=max(self._retained,measured)
+            if self._retained+extra>self._limits['max_retained_state_bytes']:
+                if self._state!='UNKNOWN':self._state='DRAINING'
+                raise ControllerError('retained_budget')
+
     def _pending_count(self, response=None):
         # One instance-wide gate. Retired entries remain permanent; completion
         # releases only pending capacity, never sequence/history capacity.
-        incoming=sum(not r.handler_exited and (r.pending_creation or not r.enqueued
-            or r.sequence in self._binary_sequences) for r in self._work.values())
+        incoming=sum((not (r.handler_exited and r.http_exited) if r.sequence in self._binary_sequences
+            else not r.handler_exited and r.response_pending is None and (r.pending_creation or not r.enqueued))
+            for r in self._work.values())
         children=sum(r.pid is None and not r.resources_closed and not r.no_spawn
             for r in self._children.values())
-        outgoing=sum(r is not response and r['reply'] is None
+        outgoing=sum(r is not response
             and r['dispatcher']._pending.get(coerce_request_id(r['message']['id'])) is r['pending']
             for r in self._outgoing_records)
         return incoming+children+outgoing
@@ -250,7 +296,7 @@ class SessionController:
             elif row.attempt is None:
                 row.outcome='not_dispatched';row.handler_exited=True
 
-    async def _owned_close_io(self, session, function, deadline):
+    async def _owned_close_io(self, session, function, deadline, phase=None):
         # The controller owns both the real non-daemon native-I/O thread and its
         # waiter before start. HTTP cancellation/timeout cannot abandon either.
         row=_CloseIO(session)
@@ -271,7 +317,10 @@ class SessionController:
             row.joined=True
             # Keep errors in the permanent row, rather than an unobserved Task.
         row.thread=threading.Thread(target=execute,daemon=False,name='pc026-close-io')
-        with self._lock:self._close_io[session]=row
+        key=session if phase is None else (session,phase)
+        with self._lock:
+            if key in self._close_io:raise ControllerError('close_io_reentered')
+            self._close_io[key]=row
         try:row.thread.start()
         except BaseException as error:
             row.error=error;self._unknown(session);raise
@@ -297,6 +346,7 @@ class SessionController:
                 retained=4096+len(str(root).encode('utf-8'))+len(transfer_id)+len(digest)+len(job)+len(nonce)
                 if self._retained+retained > self._limits['max_retained_state_bytes']:
                     self._state='DRAINING';raise ControllerError('child_retained_budget')
+                self._retained_gate(retained)
                 sequence=self._sequence_for(group._session,'transfer_child')
                 row=_TransferChild(sequence,group._session,owner,transfer_id,digest,
                     job,nonce,root,(info.st_dev,info.st_ino),self)
@@ -333,10 +383,28 @@ class SessionController:
             self._pending -= 1
             row.pending_creation=False
 
+    async def _await_initialized(self, session, owner, message):
+        if session is None or message.get('method')=='notifications/initialized':return
+        deadline=time.monotonic_ns()+self._limits['close_timeout_ns']
+        while True:
+            with self._lock:
+                data=self._sessions.get(session)
+                if data is None or data['owner']!=owner:return
+                if data['initialized'] or data['state']!='OPEN':return
+                pending=any(r.session==session and r.message.get('method')=='notifications/initialized'
+                    and r.enqueued and not r.handler_exited for r in self._work.values())
+                if not pending:return
+            # The pinned SDK sends notification HTTP 202 before its runner has
+            # dispatched it. Wait that real admitted tail, never invent readiness.
+            if time.monotonic_ns()>=deadline:raise ControllerError('session_not_initialized',409)
+            await anyio.sleep(.001)
+
     def _admit(self, session, owner, message, response=None):
         encoded = _canonical(message)
         with self._lock:
-            if self._state != 'ACTIVE': raise ControllerError('draining')
+            tail=response is not None or message.get('method')=='notifications/cancelled'
+            if self._state != 'ACTIVE' and not (self._state=='DRAINING' and session is not None and tail):
+                raise ControllerError('draining')
             if session is None:
                 if (len(self._sessions)+self._pending >= self._limits['max_sessions']
                         or self._pending >= self._limits['max_pending_work']):
@@ -352,6 +420,7 @@ class SessionController:
             retained=_message_size(copied)+sys.getsizeof(_Work)+1024
             if self._retained+retained > self._limits['max_retained_state_bytes']:
                 self._state='DRAINING'; raise ControllerError('retained_budget')
+            self._retained_gate(retained)
             ticket = object.__new__(_Ticket)
             row = _Work(self._sequence_for(session,'http_message'), session, owner, copied,
                 pending_creation=session is None)
@@ -390,6 +459,7 @@ class SessionController:
                 retained=4096+_message_size(message.model_dump(mode='json',by_alias=True))
                 if self._retained+retained>self._limits['max_retained_state_bytes']:
                     self._state='DRAINING';raise ControllerError('outbound_retained_budget')
+                self._retained_gate(retained)
                 sequence=self._sequence_for(group._session,'outbound_request')
                 pending.send=dispatcher._resources.watch(pending.send)
                 pending.receive=dispatcher._resources.watch(pending.receive)
@@ -543,11 +613,12 @@ class SessionController:
             row.cancelled=True
             return False
 
-    async def _close_session(self, session, owner):
+    async def _close_session(self, session, owner, reason='DELETE'):
         with self._lock:
             data=self._sessions.get(session)
             if data is None or data['owner'] != owner: raise ControllerError('session_not_found',404)
-            if data['state']=='UNKNOWN':raise ControllerError('close_unknown')
+            if data['state']=='UNKNOWN' or self._state=='UNKNOWN':raise ControllerError('close_unknown')
+            if data['state']=='CLOSED':return self._closed_cuts[session]
             if data['state']!='OPEN': raise ControllerError('closing',409)
             data['state']='CLOSING'
             for row in self._work.values():
@@ -589,7 +660,80 @@ class SessionController:
         except BaseException as error:
             self._close_errors[session]=error
             self._unknown(session);raise
-        raise ControllerError('cut_unavailable')
+        if self._exporter is None:raise ControllerError('cut_unavailable')
+        try:
+            self._retained_gate()
+            proof=self._lifecycle(session,reason)
+            self._retained_gate(_message_size(proof))
+            descriptor=await self._owned_close_io(session,
+                lambda:self._exporter.publish(prefix,proof),deadline,'export')
+            self._retained_gate()
+            from velociraptor_observation_cut import close_headers
+            close_headers(descriptor)  # Strict path/Ref/header before CLOSED.
+            with self._lock:
+                if self._state=='UNKNOWN' or self._ledger._unknown or not self._exporter.receipt(session,descriptor):
+                    raise ControllerError('export_close_unknown')
+                self._closed_cuts[session]=descriptor
+                data['state']='CLOSED'
+            return descriptor
+        except BaseException as error:
+            self._close_errors[session]=error;self._unknown(session);raise
+
+    def _lifecycle(self, session, reason):
+        from velociraptor_observation_sdk import PIN_REF
+        data=self._sessions[session];resources=data['transport']._owned
+        if not resources.known_closed() or not data['threads']._quiescent():
+            raise ControllerError('lifecycle_cleanup_unknown')
+        with self._lock:
+            messages=[];binary=[];children=[]
+            for row in self._work.values():
+                if row.session!=session:continue
+                if not row.handler_exited or not row.http_exited or any(not s.closed for s in row.streams):
+                    raise ControllerError('lifecycle_http_unknown')
+                if row.sequence in self._binary_sequences:
+                    binary.append(dict(operation_sequence=row.sequence,request_sha256=row.request_sha256,
+                        outcome=row.outcome,thread_exited=True,resources_closed=True))
+                else:
+                    rid=row.message.get('id')
+                    messages.append(dict(operation_sequence=row.sequence,request_id_type=None if rid is None
+                        else 'integer' if type(rid) is int else 'string',request_id=rid,
+                        method=row.message.get('method','JSONRPC_RESPONSE'),handler_outcome=row.outcome,worker_exited=True))
+            for row in self._outgoing_records:
+                if row['session']!=session:continue
+                pending=row['pending']
+                if not pending.send.closed or not pending.receive.closed:raise ControllerError('lifecycle_outgoing_unknown')
+                rid=row['message']['id'];reply=row['reply']
+                messages.append(dict(operation_sequence=row['sequence'],request_id_type='integer' if type(rid) is int else 'string',
+                    request_id=rid,method=row['message']['method'],handler_outcome='returned' if reply is not None
+                        and reply.outcome=='returned' else 'cancelled',worker_exited=True))
+            for row in self._children.values():
+                if row.session!=session:continue
+                if row.no_spawn or not row.resources_closed or row.wait_status is None or row.error is not None:
+                    raise ControllerError('lifecycle_child_unknown')
+                children.append(dict(operation_sequence=row.sequence,transfer_id=row.transfer_id,request_digest=row.digest,
+                    worker_nonce=row.nonce,pid=row.pid,birth=row.birth,job=row.job,process_exited=True,resources_closed=True))
+            return dict(schema_version=1,kind='pc026-observation-session-lifecycle-v1',instance_id=self._ledger._instance,
+                session_id=session,sdk_pin_ref=dict(PIN_REF),close_reason=reason,admission_watermark=self._sequence,
+                sdk_work=dict(messages=sorted(messages,key=lambda r:r['operation_sequence']),transfer_workers=children),
+                binary_work=binary,attempt_sequences=[],cleanup=dict(runner_exited=True,dispatcher_joined=True,
+                    connection_closed=True,transport_closed=True,journals_closed=True,export_io_closed=True),status='CLOSED_KNOWN')
+
+    async def _drain(self):
+        with self._lock:
+            if self._state=='UNKNOWN':raise ControllerError('instance_unknown')
+            if self._state=='CLOSED':return
+            self._state='DRAINING'
+            sessions=list(self._sessions.items())
+        for session,data in sessions:
+            await self._close_session(session,data['owner'],'SERVICE_STOP')
+        if any(not row.joined for row in self._close_io.values()):raise ControllerError('drain_io_unknown')
+        deadline=time.monotonic_ns()+self._limits['close_timeout_ns']
+        try:
+            await self._owned_close_io(None,self._ledger.close,deadline,'ledger_close')
+            if self._ledger._unknown or not self._ledger._closed:raise ControllerError('drain_ledger_unknown')
+            with self._lock:self._state='CLOSED'
+        except BaseException:
+            self._unknown();raise
 
 
 def _message_size(value):
@@ -697,7 +841,9 @@ class _HTTPIngress:
             if any(k.lower()==b'last-event-id' for k,v in headers):raise ControllerError('replay_denied',400)
             method=scope['method']
             if method=='DELETE':
-                await c._close_session(session,owner)
+                descriptor=await c._close_session(session,owner)
+                from velociraptor_observation_cut import close_headers
+                return await JSONResponse({},status_code=200,headers=close_headers(descriptor))(scope,receive,send)
             if method not in ('POST','GET'):raise ControllerError('method',405)
             request=Request(scope,receive)
             has_json,has_sse=check_accept_headers(request)
@@ -736,6 +882,7 @@ class _HTTPIngress:
                     if ('id' not in message or type(params) is not dict or type(params.get('name')) is not str
                         or not params['name'] or type(params.get('arguments',{})) is not dict):
                         raise ControllerError('tool_parent',400)
+            await c._await_initialized(session,owner,message)
             with c._lock:
                 # Recheck and reserve the actual outgoing waiter atomically.
                 if response_pending is not None:response_pending=c._response_pending(session,message)

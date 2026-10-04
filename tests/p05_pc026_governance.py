@@ -219,6 +219,8 @@ LOCAL_MODULES = LOCAL_MODULES | frozenset({
     'velociraptor_observation_controller.py', 'tests/test_observation_controller.py',
     'tests/test_observation_transfer_children.py', 'tests/test_observation_responses.py',
     'tests/test_observation_prefix.py', 'tests/test_observation_close_io.py',
+    'velociraptor_observation_cut.py', 'tests/observation_model_export.py',
+    'tests/test_observation_cut.py', 'tests/test_observation_cut_transfer.py',
     'tests/test_transfer_guest.py',
     'velo_transfer/guest_cli.py',
     'velociraptor_observation_attempts.py', 'velociraptor_observation_catalog.py',

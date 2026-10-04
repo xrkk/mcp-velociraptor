@@ -1065,3 +1065,25 @@ its waiter until actual exit; it cannot certify closure early. Host MODEL tests
 exercise these boundaries. Complete budget qualification, service drain, cut
 publication and successful headers remain separate work; production startup
 continues to refuse before archive writes, backend setup or listening.
+
+
+The private lifecycle now has strict C2/C3 projection, lifecycle, source-manifest,
+cut and export content validation, including the fixed lifecycle configuration
+Ref and INSTANCE_BEGIN binding. A test-only MODEL exporter uses actual exclusive
+POSIX files, flush, full readback and final closure; its Windows identities and
+SD observations remain MODEL fixtures. It is never selected by production CLI,
+environment or HTTP. Real SDK DELETE reaches CLOSED and the two adopted headers
+only after causal workers, source reads and final export I/O exit. Repeated
+DELETE retains the same cut. Per-session receipts preserve separate exports;
+service drain additionally reads back INSTANCE_END and closes ledger groups.
+Published files alone cannot override a failed final close.
+
+Tests cover real benign child/native wait/guard/RootLease, binary thread and
+SDK outgoing/reply/GET records in those MODEL cuts. The admitted initialized
+notification is awaited when its earlier HTTP 202 races later ingress; readiness
+is never inferred from 202. Permanent owned Python objects are measured with
+shared-object deduplication and gated before subsequent reservations/publication.
+This is domain accounting, not a complete allocator/native/RSS bound. Full
+capacity/peak and maintenance qualification, all concurrent failure permutations,
+Windows native export/SCM and production approval remain unfinished. Formal
+production startup still refuses before writer, backend or listener.
