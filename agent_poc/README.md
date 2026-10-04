@@ -1119,3 +1119,24 @@ no late tool BEGIN is created. A timeout at the final MODEL export close keeps
 complete residual files but cannot create a late success receipt. The first
 timeout and actual native join remain recorded. Production/native allocation
 and publication qualification remain separate work.
+
+
+Controlled HTTP JSON and binary bodies now reserve their fixed backing storage
+before construction or parsing. Content-Length can reduce that storage but never
+raise the actual body limit or substitute for ASGI EOF. The CPython 3.13 LP64
+buffer-layout charge covers the bytearray, final bytes, views and their managed
+buffer; equal-sized view assignment avoids geometric growth and intermediate
+data slices. The same private lease transfers to the actual work ticket and
+releases only after both HTTP and handler tails. Possible handoff uncertainty
+retains it. Atomic instance reservations prevent concurrent double spending.
+
+Native close-I/O can also own an explicit private temporary-storage reservation:
+HTTP cancellation, deadline and failed join-task creation do not release a live
+thread's quota. Its real wrapper finally, or a confirmed never-started thread,
+returns that quota. This primitive does not yet derive the complete snapshot or
+export temporary graph. Host socket/thread tests verify storage refusal before
+buffer/parser/SDK/BEGIN and real lifecycle ownership. JSON/Pydantic/canonical
+heap bounds, complete native Reader/export preallocation and Windows allocator
+qualification remain unfinished. These storage charges and observed permanent
+graphs do not certify allocator arenas, extension state or total process RSS.
+Formal production startup continues to refuse before writers/backend/listener.

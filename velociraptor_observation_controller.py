@@ -45,6 +45,92 @@ class _Ticket:
         raise TypeError('tickets are controller-issued')
 
 
+@dataclass(eq=False, slots=True)
+class _Temporary:
+    """One private allocation owner; not a work/admission receipt.
+
+    Charges specified storage only. Parser/extension allocations require their
+    own qualified bounds; a successful storage reservation cannot certify them.
+    """
+    controller: object
+    size: int
+    owner: object
+    released: bool = False
+
+    def release(self):
+        with self.controller._lock:
+            if not self.released:
+                self.controller._temporary_reserved -= self.size
+                self.released = True
+
+
+class _BodyBuffer:
+    """Fixed backing storage, no bytearray geometric growth or slice copies."""
+    __slots__ = ('storage', 'view', 'length')
+    def __init__(self, capacity):
+        self.storage = bytearray(capacity)
+        self.view = memoryview(self.storage)
+        self.length = 0
+
+    def append(self, chunk):
+        end = self.length + len(chunk)
+        if end > len(self.storage):
+            raise ControllerError('body_budget', 413)
+        # Equal-sized assignment does not grow the fixed bytearray.
+        self.view[self.length:end] = chunk
+        self.length = end
+
+    def finish(self):
+        # Two one-dimensional views share one managed buffer; no data slice.
+        with self.view[:self.length] as part:
+            return bytes(part)
+
+    def close(self):
+        self.view.release()
+        self.view = self.storage = None
+
+
+def _body_storage_bound(capacity):
+    """CPython 3.13 LP64 buffer layout, not allocator arenas or total RSS.
+
+    Includes bytearray header + NUL, bytes header (includes NUL), two 1-D
+    memoryview headers/shape-stride-suboffset triples and their shared managed
+    Py_buffer. GC heads contain two uintptr_t. Layout is checked, never inferred
+    from the later measured graph. Backend-owned ASGI chunks are not copied.
+    """
+    if type(capacity) is not int or not 0 <= capacity <= sys.maxsize:
+        raise ControllerError('temporary_size_invalid')
+    import struct
+    pointer = struct.calcsize('P')
+    if (sys.implementation.name != 'cpython' or sys.version_info[:2] != (3, 13)
+            or pointer != 8 or bytes.__basicsize__ != 33
+            or bytearray.__basicsize__ != 56 or memoryview.__basicsize__ != 144):
+        raise ControllerError('buffer_layout_unqualified')
+    gc_head = 2 * pointer
+    # PyObject_HEAD(16), flags(4)+alignment(4), exports(8), Py_buffer(80).
+    managed = 16 + 8 + 8 + 80 + gc_head
+    views = 2 * (memoryview.__basicsize__ + 3 * pointer + gc_head)
+    # Buffer has three pointer slots, reservation four, plus PyObject_HEAD.
+    owners = (16 + 3 * pointer) + (16 + 4 * pointer) + 2 * gc_head
+    result = bytearray.__basicsize__ + capacity + 1 + bytes.__basicsize__ + capacity + managed + views + owners
+    if result > sys.maxsize:raise ControllerError('temporary_size_invalid')
+    return result
+
+
+def _body_capacity(headers, limit):
+    # Content-Length reduces storage, never enlarges the actual byte gate.
+    # No declared length uses the configured maximum. Duplicate/malformed
+    # declarations refuse before allocation. Actual ASGI EOF is still required.
+    values = [v for k, v in headers if k.lower() == b'content-length']
+    if not values:return limit
+    if (len(values) != 1 or not values[0] or len(values[0]) > 20
+            or any(c < 48 or c > 57 for c in values[0])):
+        raise ControllerError('content_length', 400)
+    capacity = int(values[0])
+    if capacity > limit:raise ControllerError('body_budget', 413)
+    return capacity
+
+
 @dataclass
 class _Work:
     sequence: int
@@ -69,6 +155,7 @@ class _Work:
     request_bytes: int = 0
     response_bytes: int = 0
     receive_waiter: object = None
+    input_storage: object = None
 
 
 @dataclass(eq=False)
@@ -80,6 +167,7 @@ class _CloseIO:
     error: BaseException | None = None
     wrapper_exited: bool = False
     joined: bool = False
+    temporary: object = None
 
 
 @dataclass(eq=False)
@@ -218,6 +306,23 @@ class SessionController:
         self._exporter = None
         self._closed_cuts = {}
         self._maintenance = {}
+        self._temporary_reserved = 0
+        self._temporary_peak = 0
+
+    def _reserve_temporary(self, size, owner):
+        if type(size) is not int or not 0 < size <= sys.maxsize:
+            raise ControllerError('temporary_size_invalid')
+        with self._lock:
+            self._retained_gate(size)
+            lease = _Temporary(self, size, owner)
+            self._temporary_reserved += size
+            self._temporary_peak = max(self._temporary_peak, self._temporary_reserved)
+            return lease
+
+    def _release_input_storage(self, row):
+        with self._lock:
+            if row.input_storage is not None and row.http_exited and row.handler_exited:
+                row.input_storage.release()
 
     def _reserve_maintenance(self, original, session, owner, *, calls, bytes, attempts, binary, sdk_work):
         """Private future B2 seam; reserves capacity, never download authority.
@@ -384,7 +489,7 @@ class SessionController:
             except BaseException:
                 self._unknown();raise
             self._retained=max(self._retained,measured)
-            if self._retained+extra>self._limits['max_retained_state_bytes']:
+            if self._retained+self._temporary_reserved+extra>self._limits['max_retained_state_bytes']:
                 if self._state!='UNKNOWN':self._state='DRAINING'
                 raise ControllerError('retained_budget')
 
@@ -416,14 +521,18 @@ class SessionController:
             elif row.attempt is None:
                 row.outcome='not_dispatched';row.handler_exited=True
 
-    async def _owned_close_io(self, session, function, deadline, phase=None):
+    async def _owned_close_io(self, session, function, deadline, phase=None, *, temporary_bytes=None):
         # The controller owns both the real non-daemon native-I/O thread and its
         # waiter before start. HTTP cancellation/timeout cannot abandon either.
         row=_CloseIO(session)
+        if temporary_bytes is not None:
+            row.temporary=self._reserve_temporary(temporary_bytes,row)
         def execute():
             try:row.result=function()
             except BaseException as error:row.error=row.error or error
-            finally:row.wrapper_exited=True
+            finally:
+                row.wrapper_exited=True
+                if row.temporary is not None:row.temporary.release()
         async def join():
             # Poll the real thread rather than notifying a possibly closed loop
             # from native code. Loop loss keeps the permanent record unjoined.
@@ -438,13 +547,22 @@ class SessionController:
                 else:row.error.add_note('close_io_join_unknown')
                 self._unknown(session)
                 # Preserve errors in the owned row, including Task cancellation.
-        row.thread=threading.Thread(target=execute,daemon=False,name='pc026-close-io')
+        try:row.thread=threading.Thread(target=execute,daemon=False,name='pc026-close-io')
+        except BaseException:
+            if row.temporary is not None:row.temporary.release()
+            raise
         key=session if phase is None else (session,phase)
         with self._lock:
-            if key in self._close_io:raise ControllerError('close_io_reentered')
+            if key in self._close_io:
+                if row.temporary is not None:row.temporary.release()
+                raise ControllerError('close_io_reentered')
             self._close_io[key]=row
         try:row.thread.start()
         except BaseException as error:
+            # A raised start is not proof of no start. Some launchers can
+            # start the real worker and then raise; its finally owns release.
+            if row.thread.ident is None and not row.thread.is_alive() and row.temporary is not None:
+                row.temporary.release()
             row.error=error;self._unknown(session);raise
         joining=join()
         try:row.task=asyncio.create_task(joining)
@@ -638,6 +756,7 @@ class SessionController:
             if present:await consume()
             row.outcome='returned' if present else 'not_dispatched'
             row.handler_exited=True
+            self._release_input_storage(row)
         except BaseException as error:
             row.error=error;self._unknown(row.session);raise
 
@@ -675,6 +794,7 @@ class SessionController:
                 # Use the actual seal argument, not the diagnostic snapshot.
                 self._ledger.finish(row.attempt,outcome)
             row.outcome, row.handler_exited = outcome, True
+            self._release_input_storage(row)
         except BaseException as error:
             row.error=row.error or error
             self._unknown(row.session)
@@ -940,7 +1060,7 @@ class _BinaryIngress:
     async def __call__(self, scope, receive, send):
         from velo_transfer import wire
         c=self.controller;row=None;owner_token=observation_token=None;primary=None;started=False
-        maintenance=None;session=None;original_send=send
+        maintenance=None;session=None;original_send=send;input_storage=None;buffer=None
         async def maintenance_send(message):
             if message['type']=='http.response.body':
                 if row is not None:row.response_bytes+=len(message.get('body',b''))
@@ -961,19 +1081,20 @@ class _BinaryIngress:
                 raise ControllerError('content_type',415)
             direction,args=wire.request_headers(headers)
             maintenance=c._maintenance_exchange(session,owner,'HTTP_CHUNKBIN')
-            body=bytearray()
+            capacity=_body_capacity(headers,min(wire.BODY_LIMIT,c._limits['max_request_body_bytes']))
+            input_storage=c._reserve_temporary(_body_storage_bound(capacity),'binary-input')
+            buffer=_BodyBuffer(capacity)
             while True:
                 part=await receive()
                 if part['type']!='http.request':raise ControllerError('body_incomplete',400)
                 raw=part.get('body',b'')
                 c._maintenance_bytes(session,maintenance,len(raw))
-                if len(body)+len(raw)>min(wire.BODY_LIMIT,c._limits['max_request_body_bytes']):
-                    raise ControllerError('body_budget',413)
-                body.extend(raw)
+                buffer.append(raw)
                 if not part.get('more_body',False):break
-            body=bytes(body)
+            body=buffer.finish()
             wire.decode(body,direction+'_request')
             ticket,row=c._admit_binary(session,owner,hashlib.sha256(body).hexdigest())
+            row.input_storage=input_storage;input_storage.owner=row
             row.request_bytes=len(body)
             group=c._sessions[session]['threads']
             row.worker_owner=group._admit()
@@ -1007,6 +1128,8 @@ class _BinaryIngress:
                 c._unknown(row.session)
             raise
         finally:
+            if buffer is not None:buffer.close()
+            if input_storage is not None and row is None:input_storage.release()
             if maintenance is not None:maintenance['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
@@ -1018,6 +1141,7 @@ class _BinaryIngress:
                         if observation_token is not None:_current.reset(observation_token)
                         if owner_token is not None:_CURRENT_OWNER.reset(owner_token)
                         row.http_exited=True
+                        c._release_input_storage(row)
 
 
 class _HTTPIngress:
@@ -1026,7 +1150,7 @@ class _HTTPIngress:
     async def __call__(self, scope, receive, send):
         if scope['type']!='http': return
         c=self.controller;row=None;response_started=False;response_pending=None
-        maintenance=None;session=None;original_send=send
+        maintenance=None;session=None;original_send=send;input_storage=None;buffer=None
         async def maintenance_send(message):
             if message['type']=='http.response.body':
                 if row is not None:row.response_bytes+=len(message.get('body',b''))
@@ -1058,16 +1182,17 @@ class _HTTPIngress:
             else:
                 if not StreamableHTTPServerTransport._check_content_type(None,request):raise ControllerError('content_type',415)
                 # Count actual full ASGI bytes; a disconnect is not EOF.
-                body=bytearray()
+                capacity=_body_capacity(headers,c._limits['max_request_body_bytes'])
+                input_storage=c._reserve_temporary(_body_storage_bound(capacity),'json-input')
+                buffer=_BodyBuffer(capacity)
                 while True:
                     part=await receive()
                     if part['type']!='http.request':raise ControllerError('body_incomplete',400)
                     chunk=part.get('body',b'')
                     c._maintenance_bytes(session,maintenance,len(chunk))
-                    if len(body)+len(chunk)>c._limits['max_request_body_bytes']:raise ControllerError('body_budget',413)
-                    body.extend(chunk)
+                    buffer.append(chunk)
                     if not part.get('more_body',False):break
-                body=bytes(body);message=strict_json(body)
+                body=buffer.finish();message=strict_json(body)
                 _canonical(_json_copy(message));jsonrpc_message_adapter.validate_python(message,by_name=False)
                 if type(message) is not dict:raise ControllerError('envelope',400)
                 if 'id' in message and type(message['id']) not in (str,int):raise ControllerError('typed_id',400)
@@ -1091,6 +1216,8 @@ class _HTTPIngress:
                 # Recheck and reserve the actual outgoing waiter atomically.
                 if response_pending is not None:response_pending=c._response_pending(session,message)
                 ticket,row=c._admit(session,owner,message,response_pending)
+                row.input_storage=input_storage
+                if input_storage is not None:input_storage.owner=row
                 row.request_bytes=len(body)
                 if response_pending is not None:
                     row.response_pending=response_pending;response_pending['reply']=row
@@ -1153,6 +1280,8 @@ class _HTTPIngress:
                     except BaseException:c._unknown(row.session)
             raise
         finally:
+            if buffer is not None:buffer.close()
+            if input_storage is not None and row is None:input_storage.release()
             if maintenance is not None:maintenance['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
@@ -1167,3 +1296,4 @@ class _HTTPIngress:
                         c._pending-=1;row.pending_creation=False
                     row.handler_exited=True
                     c._unknown()
+                c._release_input_storage(row)
