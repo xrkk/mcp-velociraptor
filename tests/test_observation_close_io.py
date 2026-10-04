@@ -219,3 +219,139 @@ class CloseIOFaultTests(CloseIOTests):
         self.assertTrue(row.wrapper_exited);self.assertFalse(row.thread.is_alive() or row.joined)
         self.assertIn('close_io_join_unknown',primary.__notes__)
         self.assertEqual(self.c._state,'UNKNOWN')
+
+class LoopLossTests(unittest.TestCase):
+    def test_actual_loop_shutdown_keeps_unjoined_native_io_and_no_loop_callback(self):
+        fixture=ledger_fixture.LedgerModels();self.addCleanup(fixture.doCleanups)
+        ledger,_,_=fixture.ledger();c=object.__new__(SessionController);c._initialize(ledger,model_budgets())
+        started=threading.Event();release=threading.Event()
+        def native():
+            started.set()
+            if not release.wait(3):raise RuntimeError('loop-loss fixture latch')
+            return b'actual-post-loop-result'
+        loop=asyncio.new_event_loop()
+        waiter=loop.create_task(c._owned_close_io('lost-loop',native,time.monotonic_ns()+3000000000))
+        async def reached():
+            while not started.is_set():await asyncio.sleep(.001)
+        try:
+            loop.run_until_complete(reached())
+            waiter.cancel()
+            with self.assertRaises(asyncio.CancelledError):loop.run_until_complete(waiter)
+            row=c._close_io['lost-loop'];self.assertTrue(row.thread.is_alive())
+            row.task.cancel();loop.run_until_complete(row.task)
+            self.assertEqual(c._state,'UNKNOWN');self.assertFalse(row.joined)
+            loop.close()
+            release.set();row.thread.join(3)
+            self.assertFalse(row.thread.is_alive());self.assertTrue(row.wrapper_exited)
+            self.assertFalse(row.joined);self.assertEqual(row.result,b'actual-post-loop-result')
+        finally:
+            release.set()
+            for row in c._close_io.values():
+                if row.thread.ident is not None:row.thread.join(3)
+            if not loop.is_closed():loop.close()
+
+class RetainedGraphTests(PendingTests):
+    test_shared_pending_gate_counts_across_sessions_before_sequence_or_begin=None
+
+    def test_exception_frame_local_payload_is_permanently_charged(self):
+        c=self.controller;before=c._measure_retained()
+        def fail():
+            retained_payload=bytearray(65536)
+            raise OSError('frame-retained-primary')
+        try:fail()
+        except OSError as error:c._close_errors['actual-error']=error
+        after=c._measure_retained()
+        self.assertGreater(after-before,65536)
+        c._limits['max_retained_state_bytes']=after-1
+        with self.assertRaises(ControllerError):c._retained_gate()
+        self.assertEqual(c._state,'DRAINING')
+        self.assertIn('retained_payload',c._close_errors['actual-error'].__traceback__.tb_next.tb_frame.f_locals)
+
+    def test_context_closure_and_exporter_graph_payloads_are_shared_counted_once(self):
+        import contextvars
+        from types import SimpleNamespace
+        c=self.controller;payload=bytearray(65536);variable=contextvars.ContextVar('actual-domain-payload')
+        context=contextvars.Context();context.run(variable.set,payload)
+        def closure():return payload
+        c._exporter=SimpleNamespace(actual_context=context,actual_closure=closure,shared=payload)
+        before=c._measure_retained();c._exporter.aliases=[payload]*64
+        after=c._measure_retained()
+        self.assertGreater(before,65536);self.assertLess(after-before,4096)
+        payload.extend(b'x'*65536)
+        self.assertGreaterEqual(c._measure_retained()-after,65536)
+
+class LiveContextBudgetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_real_copied_thread_context_denied_before_start_and_side_effect(self):
+        import contextvars
+        from velociraptor_observation_controller import _Threads
+        from velociraptor_observation_workers import _CURRENT_OWNER, _owned_to_thread
+        fixture=ledger_fixture.LedgerModels();self.addCleanup(fixture.doCleanups)
+        ledger,_,_=fixture.ledger();c=object.__new__(SessionController);c._initialize(ledger,model_budgets())
+        group=_Threads(c,'MODEL-context');c._sessions['MODEL-context']=dict(threads=group)
+        owner=group._admit();owner_token=_CURRENT_OWNER.set(owner)
+        variable=contextvars.ContextVar('retained-live-payload');token=variable.set(bytearray(65536))
+        c._limits['max_retained_state_bytes']=32768;calls=[]
+        try:
+            with self.assertRaises(ControllerError):await _owned_to_thread(lambda:calls.append(True))
+        finally:
+            variable.reset(token);_CURRENT_OWNER.reset(owner_token)
+        self.assertEqual(calls,[]);self.assertEqual(c._state,'DRAINING')
+        work=next(iter(group._threads.values()))
+        self.assertIsNone(work.thread.ident);self.assertFalse(work.joined)
+        self.assertIsInstance(work.error,ControllerError)
+        self.assertGreater(c._retained_measured_peak,65536)
+
+class InitializationTailTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=chain.ChainTests.asyncSetUp
+    asyncTearDown=chain.ChainTests.asyncTearDown
+    records=chain.ChainTests.records
+    call=chain.ChainTests.call
+
+    async def test_actual_initialize_200_before_handler_exit_keeps_notify_waiting_until_open(self):
+        entered=threading.Event();release=threading.Event();actual=self.controller._dispatch
+        async def delayed(dctx,method,params,next):
+            async def callback(*args):
+                result=await next(*args)
+                if method=='initialize':
+                    entered.set()
+                    while not release.is_set():await asyncio.sleep(.001)
+                return result
+            return await actual(dctx,method,params,callback)
+        try:
+            with patch.object(self.controller,'_dispatch',delayed):
+                async with self.http.stream('POST',self.url,json=dict(jsonrpc='2.0',id=0,method='initialize',params=
+                    dict(protocolVersion='2025-11-25',capabilities={},clientInfo=dict(name='MODEL',version='1')))) as response:
+                    self.assertEqual(response.status_code,200)
+                    session=response.headers['mcp-session-id']
+                    deadline=time.monotonic()+3
+                    while not entered.is_set() and time.monotonic()<deadline:await asyncio.sleep(.001)
+                    self.assertTrue(entered.is_set())
+                    self.http.headers.update({'mcp-session-id':session,'mcp-protocol-version':'2025-11-25'})
+                    notify=asyncio.create_task(self.http.post(self.url,json=dict(jsonrpc='2.0',method='notifications/initialized')))
+                    await asyncio.sleep(.02);self.assertFalse(notify.done())
+                    self.assertEqual(self.controller._sessions[session]['state'],'PENDING')
+                    self.assertTrue(any(not r.handler_exited for r in self.controller._work.values()))
+                    release.set();await response.aread();self.assertEqual((await notify).status_code,202)
+                deadline=time.monotonic()+3
+                while not self.controller._sessions[session]['initialized'] and time.monotonic()<deadline:await asyncio.sleep(.001)
+                self.assertEqual((await self.call(7,'after-init')).status_code,200)
+                self.assertEqual(self.controller._state,'ACTIVE');self.assertEqual(self.calls,['after-init'])
+        finally:release.set()
+
+class SDKPayloadBudgetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_actual_owned_sdk_stream_gate_counts_payload_before_buffer_side_effect(self):
+        from velociraptor_observation_sdk_adapter import _Resources
+        fixture=ledger_fixture.LedgerModels();self.addCleanup(fixture.doCleanups)
+        ledger,_,_=fixture.ledger();c=object.__new__(SessionController);c._initialize(ledger,model_budgets())
+        resources=_Resources();resources.controller=c
+        send,receive=resources.memory(1)
+        c._limits['max_retained_state_bytes']=32768
+        payload=dict(actual_sdk_payload=bytearray(65536))
+        try:
+            with self.assertRaises(ControllerError):await send.send(payload)
+            self.assertEqual(send._stream.statistics().current_buffer_used,0)
+            self.assertEqual(c._state,'UNKNOWN');self.assertIsInstance(resources.error,ControllerError)
+            self.assertGreater(c._retained_measured_peak,65536)
+        finally:
+            await send.aclose();await receive.aclose()
+        self.assertTrue(send.closed and receive.closed)

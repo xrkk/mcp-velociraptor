@@ -333,3 +333,42 @@ class MaintenanceReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(c._maintenance)
         c._reserve_maintenance(original,session,owner,**plan)
         with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,owner,**plan)
+
+class FullCapacityTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def test_all_attempts_two_sessions_later_catalog_append_preserves_first_export(self):
+        first=await self.initialize()
+        for rid in range(1,5):self.assertEqual((await self.call(rid,f'first-{rid}')).status_code,200)
+        for rid in (501,502):
+            self.assertEqual((await self.http.post(self.url,json=dict(jsonrpc='2.0',id=rid,method='tools/list'))).status_code,200)
+        response=await self.http.delete(self.url);self.assertEqual(response.status_code,200,response.text)
+        first_base=self.exporter.base
+        old={str(p.relative_to(first_base)):p.read_bytes() for p in first_base.rglob('*') if p.is_file()}
+        first_proof=json.loads(old['lifecycle.json']);first_projection=json.loads(old['attempts.json'])
+        first_head=json.loads(old['cut.json'])['catalog_head']
+        self.http.headers.pop('mcp-session-id');self.http.headers.pop('mcp-protocol-version')
+        second=await self.initialize()
+        for rid in range(1,5):self.assertEqual((await self.call(rid,f'second-{rid}')).status_code,200)
+        self.assertEqual(self.ledger._attempt_count,self.ledger._limits['max_attempts'])
+        for rid in (501,502):
+            self.assertEqual((await self.http.post(self.url,json=dict(jsonrpc='2.0',id=rid,method='tools/list'))).status_code,200)
+        response=await self.http.delete(self.url);self.assertEqual(response.status_code,200,response.text)
+        second_proof=json.loads(self.exporter.files['lifecycle.json'])
+        self.assertEqual(self.controller._sequence,self.controller._limits['max_sdk_work'])
+        self.assertEqual(first_projection['attempt_sequences'],[1,2,3,4])
+        self.assertEqual(json.loads(self.exporter.files['attempts.json'])['attempt_sequences'],[5,6,7,8])
+        self.assertGreater(json.loads(self.exporter.files['cut.json'])['catalog_head']['path'],first_head['path'])
+        for name,raw in old.items():self.assertEqual((first_base/name).read_bytes(),raw)
+        for session,proof in ((first,first_proof),(second,second_proof)):
+            expected=sorted(r.sequence for r in self.controller._work.values() if r.session==session)
+            self.assertEqual([r['operation_sequence'] for r in proof['sdk_work']['messages']],expected)
+            self.assertEqual(len(expected),8)
+            self.assertTrue(all(r['worker_exited'] for r in proof['sdk_work']['messages']))
+        self.assertEqual(len(self.controller._sequence_records),32)
+        self.assertEqual(len(self.exporter.completed),2)
+        self.assertTrue(all(r.joined for r in self.controller._close_io.values()))

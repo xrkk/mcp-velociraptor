@@ -69,6 +69,17 @@ class _OwnedStream:
         self._done = anyio.Event()
     def __getattr__(self, name):
         return getattr(self._stream, name)
+    def _before_send(self, item):
+        controller=getattr(self._resources,'controller',None)
+        if controller is not None:
+            try:controller._retained_gate(temporary=(item,__import__('contextvars').copy_context()))
+            except BaseException as error:self._resources.fault(error);raise
+    async def send(self, item):
+        self._before_send(item)
+        return await self._stream.send(item)
+    def send_nowait(self, item):
+        self._before_send(item)
+        return self._stream.send_nowait(item)
     def clone(self):
         return self._resources.watch(self._stream.clone())
     def __aiter__(self):
@@ -148,6 +159,9 @@ async def _serve_loop(server, read_stream, write_stream, *, lifespan_state,
     resources.dispatcher=dispatcher
     connection = Connection.for_loop(dispatcher, session_id=session_id)
     runner = ServerRunner(server, connection, lifespan_state, init_options=init_options)
+    # Permanent actual driver references include active task frames and the
+    # strict exit stack; deindexing upstream state must not hide retained data.
+    resources.driver = dict(connection=connection,runner=runner,task=__import__('asyncio').current_task())
     primary = None
     try:
         controller = getattr(resources, 'controller', None)

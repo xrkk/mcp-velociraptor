@@ -1111,3 +1111,18 @@ read-only export source, derive a complete download/retry plan, capture all
 exchanges and close the nonrecursive maintenance session; physical maintenance
 acquisition and native publication remain unqualified. No public selector was
 added, and production startup continues to refuse.
+
+
+Domain accounting now includes actual SDK driver/connection/task frames, AnyIO
+ownership objects, copied thread contexts and closures, exception frame locals
+(including Python 3.13 frame proxies), memoryview owners and exporter state.
+Shared references stay alive during traversal so temporary object-ID reuse cannot
+undercount them. Live thread context is checked before start and results before
+wrapper exit; owned SDK sends check payload/context before buffer insertion.
+The MODEL publisher checks its constructed and read-back temporary graphs.
+Tests fill both sessions, all eight attempts and all 32 permanent work sequences,
+then verify complete proof sequences and immutable earlier exports after a legal
+catalog append. These observed graph peaks do not establish allocator/native/RSS
+limits or every allocation between observation points. Full preallocation and
+Windows qualification remain required. Actual initialize handler/HTTP tails are
+also awaited before OPEN and before a racing initialized notification proceeds.

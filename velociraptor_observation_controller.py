@@ -15,6 +15,7 @@ import os
 import sys
 import threading
 import time
+import types
 
 import anyio
 from mcp.server.streamable_http import (
@@ -171,6 +172,9 @@ class _Threads(_WorkerGroup):
     def __init__(self, controller, session):
         super().__init__(controller._limits['max_sdk_work'])
         self._controller, self._session = controller, session
+    def _observe(self):
+        self._controller._retained_gate()
+
     def _next(self):
         # Group -> short controller lock only; no inverse lock acquisition.
         sequence = self._controller._sequence_for(self._session, 'retained')
@@ -305,43 +309,69 @@ class SessionController:
             self._sequence_records[self._sequence] = (session, kind)
             return self._sequence
 
-    def _measure_retained(self):
+    def _measure_retained(self, temporary=()):
         # Domain-owned Python graph, not allocator arenas, backend memory, native
         # kernel objects or total RSS. Shared objects/cycles are charged once.
         from collections import deque
         from dataclasses import fields, is_dataclass
-        seen={id(self),id(self._ledger),id(self._ledger._config)}
-        if hasattr(self,'_manager'):seen.add(id(self._manager))
+        seen={id(v):v for v in (self,self._ledger,self._ledger._config)}
+        if hasattr(self,'_manager'):
+            seen.update({id(v):v for v in (self._manager,self._manager.app)})
         def size(value,depth=0):
             if id(value) in seen:return 0
-            seen.add(id(value));total=sys.getsizeof(value)
-            if depth>64:raise ControllerError('retained_depth')
+            seen[id(value)]=value;total=sys.getsizeof(value)
+            if depth>256:raise ControllerError('retained_graph_depth_unknown')
             if type(value) is dict:
                 return total+sum(size(k,depth+1)+size(v,depth+1) for k,v in list(value.items()))
             if type(value) in (list,tuple,set,frozenset,deque):
                 return total+sum(size(v,depth+1) for v in tuple(value))
+            if isinstance(value,memoryview):return total+size(value.obj,depth+1)
+            if isinstance(value,contextvars.Context):
+                return total+sum(size(k,depth+1)+size(v,depth+1) for k,v in value.items())
+            if isinstance(value,types.FunctionType):
+                # Code/global modules are shared executable state, not mutable
+                # domain data; closure cells and defaults retain actual payloads.
+                return total+size(value.__defaults__,depth+1)+size(value.__kwdefaults__,depth+1)+sum(
+                    size(cell,depth+1) for cell in value.__closure__ or ())
+            if isinstance(value,types.CellType):
+                try:content=value.cell_contents
+                except ValueError:return total
+                return total+size(content,depth+1)
+            if isinstance(value,(type,types.ModuleType)):return total
+            if isinstance(value,types.MethodType):return total+size(value.__self__,depth+1)
+            if isinstance(value,types.FrameType):
+                # Python 3.13 uses FrameLocalsProxy, not a dict. Read its actual
+                # locals without traversing shared executable globals.
+                return total+sys.getsizeof(value.f_locals)+sum(
+                    size(k,depth+1)+size(v,depth+1) for k,v in list(value.f_locals.items()))
+            if isinstance(value,types.TracebackType):
+                return total+size(value.tb_frame,depth+1)+size(value.tb_next,depth+1)
+            if isinstance(value,types.CoroutineType):
+                return total+size(value.cr_frame,depth+1)+size(value.cr_await,depth+1)
+            if isinstance(value,types.GeneratorType):
+                return total+size(value.gi_frame,depth+1)+size(value.gi_yieldfrom,depth+1)
+            if isinstance(value,asyncio.Task):
+                return total+size(value.get_coro(),depth+1)+size(value.get_stack(),depth+1)
+            if isinstance(value,BaseException):
+                return total+size(value.args,depth+1)+size(vars(value),depth+1)+size(value.__traceback__,depth+1)
             module=type(value).__module__
-            if module.startswith(('velociraptor_observation','anyio.streams.','mcp.shared._context_streams')):
+            if module.startswith(('velociraptor_observation','anyio.streams.','mcp.shared.',
+                    'mcp.server.connection','mcp.server.runner','mcp.types','threading','contextlib',
+                    'anyio._backends._asyncio')):
                 if hasattr(value,'__dict__'):total+=size(vars(value),depth+1)
-                elif is_dataclass(value):total+=sum(size(getattr(value,f.name),depth+1) for f in fields(value))
-            elif isinstance(value,BaseException):
-                total+=size(value.args,depth+1)+size(vars(value),depth+1)
-                tb=value.__traceback__
-                while tb is not None:
-                    if id(tb) in seen:break
-                    seen.add(id(tb));total+=sys.getsizeof(tb)+sys.getsizeof(tb.tb_frame)
-                    tb=tb.tb_next
+                if is_dataclass(value):total+=sum(size(getattr(value,f.name),depth+1) for f in fields(value) if hasattr(value,f.name))
             return total
         roots=(self._work,self._sessions,self._sequence_records,self._children,self._binary_sequences,
             self._outgoing,self._outgoing_records,self._prefixes,self._close_errors,self._close_io,
-            self._closed_cuts,self._maintenance,self._ledger._attempts,self._ledger._seen)
-        measured=size(roots)
+            self._closed_cuts,self._maintenance,self._close_tasks,
+            None if self._exporter is None else vars(self._exporter),self._ledger._attempts,self._ledger._seen)
+        measured=size((roots,temporary))
         self._retained_measured_peak=max(self._retained_measured_peak,measured)
         return measured
 
-    def _retained_gate(self, extra=0):
+    def _retained_gate(self, extra=0, *, temporary=()):
         with self._lock:
-            measured=self._measure_retained()
+            measured=self._measure_retained(temporary)
             self._retained=max(self._retained,measured)
             if self._retained+extra>self._limits['max_retained_state_bytes']:
                 if self._state!='UNKNOWN':self._state='DRAINING'
@@ -465,16 +495,22 @@ class SessionController:
             row.pending_creation=False
 
     async def _await_initialized(self, session, owner, message):
-        if session is None or message.get('method')=='notifications/initialized':return
+        if session is None:return
         deadline=time.monotonic_ns()+self._limits['close_timeout_ns']
         while True:
             with self._lock:
                 data=self._sessions.get(session)
                 if data is None or data['owner']!=owner:return
-                if data['initialized'] or data['state']!='OPEN':return
-                pending=any(r.session==session and r.message.get('method')=='notifications/initialized'
-                    and r.enqueued and not r.handler_exited for r in self._work.values())
-                if not pending:return
+                if message.get('method')=='notifications/initialized':
+                    if data['state']!='PENDING':return
+                    pending=any(r.session==session and r.message.get('method')=='initialize'
+                        and r.enqueued and not r.http_exited for r in self._work.values())
+                    if not pending:return
+                elif data['initialized'] or data['state']!='OPEN':return
+                if message.get('method')!='notifications/initialized':
+                    pending=any(r.session==session and r.message.get('method')=='notifications/initialized'
+                        and r.enqueued and not r.handler_exited for r in self._work.values())
+                    if not pending:return
             # The pinned SDK sends notification HTTP 202 before its runner has
             # dispatched it. Wait that real admitted tail, never invent readiness.
             if time.monotonic_ns()>=deadline:raise ControllerError('session_not_initialized',409)
@@ -779,7 +815,7 @@ class SessionController:
             proof=self._lifecycle(session,reason)
             self._retained_gate(_message_size(proof))
             descriptor=await self._owned_close_io(session,
-                lambda:self._exporter.publish(prefix,proof),deadline,'export')
+                lambda:self._exporter.publish(prefix,proof,retain=lambda graph:self._retained_gate(temporary=graph)),deadline,'export')
             self._retained_gate()
             from velociraptor_observation_cut import close_headers
             close_headers(descriptor)  # Strict path/Ref/header before CLOSED.
@@ -1052,6 +1088,11 @@ class _HTTPIngress:
             finally:_CURRENT_HTTP.reset(token)
             if message.get('method')=='HTTP_GET_SSE':row.handler_exited=True;row.outcome='returned'
             if message.get('method')=='initialize':
+                deadline=time.monotonic_ns()+c._limits['close_timeout_ns']
+                while row.session is not None and not row.handler_exited and status==200:
+                    if time.monotonic_ns()>=deadline:
+                        c._unknown(row.session);raise ControllerError('initialize_tail_unknown')
+                    await anyio.sleep(.001)
                 with c._lock:
                     if row.session is not None and row.handler_exited and row.outcome=='returned' and status==200:
                         c._sessions[row.session]['state']='OPEN'

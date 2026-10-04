@@ -64,10 +64,10 @@ class ModelExporter:
     def receipt(self, session, descriptor):
         return self.completed.get(session)==descriptor
 
-    def publish(self, prefix, lifecycle):
-        with self._lock:return self._publish(prefix,lifecycle)
+    def publish(self, prefix, lifecycle, *, retain=lambda graph:None):
+        with self._lock:return self._publish(prefix,lifecycle,retain)
 
-    def _publish(self, prefix, lifecycle):
+    def _publish(self, prefix, lifecycle, retain):
         self.closed=False
         instance,session=prefix.instance,prefix.session
         relative=f'e{instance}/s'+hashlib.sha256(session.encode('utf-8')).hexdigest()
@@ -107,6 +107,7 @@ class ModelExporter:
             members=sorted([ref(n,raw) for n,raw in files.items()],key=lambda r:r['path']),
             close_reason=lifecycle['close_reason'],worker_count=0,status='CLOSED_KNOWN')
         files['cut.json']=self.codec.encode(cut,'cut')
+        retain((files,manifest,projection,cut,lifecycle,source,catalog,begins))
         # Reserve wrapper maximum as well as a complete pending before any write.
         limits=self.codec.limits
         _require(self._reserved_files+len(files)+1<=limits['max_export_files'],'export_files')
@@ -146,6 +147,7 @@ class ModelExporter:
             _require(not any(p.is_symlink() for p in entries),'model_export_alias')
             actual_directories={'.'}|{str(p.relative_to(self.base)).replace(os.sep,'/') for p in entries if p.is_dir()}
             _require(actual_directories==expected_directories,'model_export_directory_closure')
+            retain((files,manifest,projection,cut,lifecycle,source,catalog,begins,exported,observed))
             self.codec.verify(observed,self.config.catalog_codec,self.config.codec,self.lifecycle_config_raw)
             self.fault('final_close')
             _require(not self.handles,'final_io_closed')

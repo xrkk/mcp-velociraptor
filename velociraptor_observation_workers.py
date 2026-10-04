@@ -53,6 +53,9 @@ class _WorkerGroup:
         self._closing = False
         self._unknown = False
 
+    def _observe(self):
+        """Controller subclasses measure live context/results at this boundary."""
+
     def _next(self):
         if self._sequence >= self._limit:
             self._closing = True
@@ -144,6 +147,11 @@ async def _owned_to_thread(function, /, *args, **kwargs):
         except BaseException as exc:
             work.error = exc
         finally:
+            try:group._observe()
+            except BaseException as error:
+                if work.error is None:work.error=error
+                else:work.error.add_note('retained_worker_measurement_failed')
+                group._mark_unknown()
             work.wrapper_exited = True
             try:
                 loop.call_soon_threadsafe(notify)
@@ -152,8 +160,10 @@ async def _owned_to_thread(function, /, *args, **kwargs):
 
     work.thread = threading.Thread(target=execute, daemon=False, name='pc026-retained-worker')
     try:
+        group._observe()  # Actual copied context/args before native start.
         work.thread.start()
-    except BaseException:
+    except BaseException as error:
+        work.error=work.error or error
         group._mark_unknown()
         raise
     cancellation = None
