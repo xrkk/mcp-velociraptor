@@ -68,7 +68,7 @@
   "implementation": "velociraptor_observation_sdk_adapter.py",
   "implemented_adapter": true,
   "license": "MIT; Copyright (c) 2024 Anthropic, PBC",
-  "qualification": "RESOURCE_ADAPTER_ONLY_NO_CONTROLLER_OR_CUT",
+  "qualification": "SDK_RESOURCE_ADAPTER_WITH_PRIVATE_PARTIAL_CONTROLLER_NO_CUT",
   "total_source_lines": 591,
   "upstream": "mcp 2.1.1",
   "upstream_source_lines_consumed": 592

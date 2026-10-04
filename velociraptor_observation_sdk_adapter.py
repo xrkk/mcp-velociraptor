@@ -29,7 +29,12 @@ class _Resources:
         self.streams.append(wrapped)
         return wrapped
     def memory(self, size=0):
-        return tuple(self.watch(s) for s in anyio.create_memory_object_stream(size))
+        streams = tuple(self.watch(s) for s in anyio.create_memory_object_stream(size))
+        from velociraptor_observation_controller import _CURRENT_HTTP
+        current = _CURRENT_HTTP.get()
+        if current is not None:
+            current[2].streams.extend(streams)
+        return streams
     def context(self, size=0):
         from mcp.shared._context_streams import create_context_streams
         return tuple(self.watch(s) for s in create_context_streams(size))
@@ -106,7 +111,15 @@ async def _serve_loop(server, read_stream, write_stream, *, lifespan_state,
     runner = ServerRunner(server, connection, lifespan_state, init_options=init_options)
     primary = None
     try:
-        await dispatcher.run(runner.on_request, runner.on_notify)
+        controller = getattr(resources, 'controller', None)
+        if controller is None:
+            await dispatcher.run(runner.on_request, runner.on_notify)
+        else:
+            async def request(dctx, method, params):
+                return await controller._dispatch(dctx, method, params, runner.on_request)
+            async def notify(dctx, method, params):
+                return await controller._dispatch(dctx, method, params, runner.on_notify)
+            await dispatcher.run(request, notify)
     except BaseException as error:
         primary = error
         resources.fault(error)
@@ -384,6 +397,7 @@ class _TrackedManager(_BaseManager):
         _verify_installed((Path(__file__).parent / PIN_PATH).read_bytes(), Path.read_bytes)
         super().__init__(*args, **kwargs)
         self._owned_transports = {}
+        self._controller = None
 
     async def _handle_stateful_request(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process request in stateful mode - maintaining session state between requests."""
@@ -409,6 +423,9 @@ class _TrackedManager(_BaseManager):
             async with self._session_creation_lock:
                 new_session_id = uuid4().hex
                 http_transport = _TrackedTransport(mcp_session_id=new_session_id, is_json_response_enabled=self.json_response, event_store=self.event_store, security_settings=self.security_settings, retry_interval=self.retry_interval, resources=_Resources())
+                if self._controller is not None:
+                    http_transport._owned.controller = self._controller
+                    self._controller._creating(new_session_id, scope, http_transport)
                 self._owned_transports[new_session_id] = http_transport
                 assert http_transport.mcp_session_id is not None
                 if requestor is not None:

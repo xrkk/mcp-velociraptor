@@ -979,3 +979,16 @@ exit after transport cleanup. Its source pin is checked before manager creation.
 Actual host SSE/notification/GET loopback and resource fault tests cover this
 component; it does not implement admission, session cuts or DELETE completion.
 Formal HTTP remains disabled until the complete approved native lifecycle exists.
+
+
+The private lifecycle controller now connects the actual HTTP/SDK path to
+ledger BEGIN, durable ACK, request-owned journal, and read-back END. It keeps
+typed IDs distinct and serializes both wire-string and dispatcher-coerced slots;
+queued cancellation cannot cancel an active request with a different typed ID.
+The host MODEL fixture uses real SDK handlers and retained threads. DELETE
+intercepts the SDK's earlier 200, drains known SDK work, and returns 503 while
+the cut exporter is unavailable. This is partial lifecycle implementation:
+transfer-child ownership, binary ingress, complete retained-state budgets,
+response-only envelopes, safe prefix/export/cut publication and formal completion
+headers are pending. The production approved constructor continues to refuse
+before writer/backend/listener; there is no CLI/env/HTTP MODEL activation.
