@@ -65,8 +65,11 @@
       "symbol": "serve_loop"
     }
   ],
-  "implemented_adapter": false,
+  "implementation": "velociraptor_observation_sdk_adapter.py",
+  "implemented_adapter": true,
   "license": "MIT; Copyright (c) 2024 Anthropic, PBC",
+  "qualification": "RESOURCE_ADAPTER_ONLY_NO_CONTROLLER_OR_CUT",
   "total_source_lines": 591,
-  "upstream": "mcp 2.1.1"
+  "upstream": "mcp 2.1.1",
+  "upstream_source_lines_consumed": 592
 }

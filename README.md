@@ -968,3 +968,14 @@ Formal lifecycle startup refusal is classified as `OBSERVATION_STARTUP_REJECTED`
 through the bridge and the fixed SCM failure-message map. The separate
 `SERVICE_OBSERVATION_INVALID` code continues to describe the read-only dispatch
 observer. Neither category includes raw exception text or credentials.
+
+
+The private MCP 2.1.1 resource adapter now covers the eight reviewed SDK
+boundaries (592 upstream source lines including the context-manager decorator).
+It retains deindexed and cloned streams, attempts each underlying async close
+once, records swallowed router/close faults, and drives the actual dispatcher
+with strict connection-stack cleanup. A permanent runner reference observes
+exit after transport cleanup. Its source pin is checked before manager creation.
+Actual host SSE/notification/GET loopback and resource fault tests cover this
+component; it does not implement admission, session cuts or DELETE completion.
+Formal HTTP remains disabled until the complete approved native lifecycle exists.
