@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
 
@@ -61,6 +62,8 @@ class _Work:
     outcome: str | None = None
     error: BaseException | None = None
     streams: list = field(default_factory=list)
+    pending_creation: bool = False
+    request_sha256: str | None = None
 
 
 @dataclass(eq=False)
@@ -186,6 +189,7 @@ class SessionController:
         self._pending = 0
         self._close_tasks = {}
         self._children = {}
+        self._binary_sequences = set()
 
     def _unknown(self, session=None):
         with self._lock:
@@ -252,6 +256,7 @@ class SessionController:
             self._sessions[session] = dict(state='PENDING', owner=row.owner,
                 transport=transport, threads=_Threads(self, session), initialized=False)
             self._pending -= 1
+            row.pending_creation=False
 
     def _admit(self, session, owner, message):
         encoded = _canonical(message)
@@ -261,20 +266,34 @@ class SessionController:
                 if (len(self._sessions)+self._pending >= self._limits['max_sessions']
                         or self._pending >= self._limits['max_pending_work']):
                     self._state='DRAINING'; raise ControllerError('session_budget')
-                self._pending += 1
             else:
                 current = self._sessions.get(session)
                 if current is None or current['owner'] != owner: raise ControllerError('session_not_found',404)
                 if current['state'] != 'OPEN': raise ControllerError('closing',409)
                 if not current['initialized'] and message.get('method') != 'notifications/initialized':
                     raise ControllerError('session_not_initialized',409)
-            if self._retained+len(encoded) > self._limits['max_retained_state_bytes']:
+            copied=_json_copy(message)
+            retained=_message_size(copied)+sys.getsizeof(_Work)+1024
+            if self._retained+retained > self._limits['max_retained_state_bytes']:
                 self._state='DRAINING'; raise ControllerError('retained_budget')
             ticket = object.__new__(_Ticket)
-            row = _Work(self._sequence_for(session,'http_message'), session, owner, _json_copy(message))
+            row = _Work(self._sequence_for(session,'http_message'), session, owner, copied,
+                pending_creation=session is None)
             self._work[ticket] = row
-            self._retained += len(encoded)
+            self._retained += retained
+            if session is None:self._pending += 1
             return ticket, row
+
+    def _admit_binary(self, session, owner, sha):
+        with self._lock:
+            if len(self._binary_sequences)>=self._limits['max_binary_work']:
+                self._state='DRAINING';raise ControllerError('binary_budget')
+            ticket,row=self._admit(session,owner,dict(method='HTTP_CHUNKBIN'))
+            self._sequence_records[row.sequence]=(session,'binary_http')
+            self._binary_sequences.add(row.sequence)
+            row.request_sha256=sha
+            row.enqueued=row.started=True
+            return ticket,row
 
     def _begin(self, row):
         msg = row.message
@@ -421,6 +440,95 @@ class SessionController:
         raise ControllerError('cut_unavailable')
 
 
+def _message_size(value):
+    # Count the retained parsed object, including container/string overhead;
+    # canonical byte length alone substantially undercounts Python objects.
+    total=sys.getsizeof(value)
+    if type(value) is dict:
+        total+=sum(_message_size(k)+_message_size(v) for k,v in value.items())
+    elif type(value) in (list,tuple):total+=sum(_message_size(v) for v in value)
+    return total
+
+
+class _BinaryIngress:
+    """Private controlled route, with an independent owner and no 08 parent."""
+    def __init__(self, controller, service):
+        from velo_transfer.http_wire import chunk_endpoint
+        self.controller=controller
+        self.endpoint=chunk_endpoint(service)
+
+    async def __call__(self, scope, receive, send):
+        from velo_transfer import wire
+        c=self.controller;row=None;owner_token=observation_token=None;primary=None;started=False
+        try:
+            owner=scope.get('velo.bearer_owner')
+            if type(owner) is not bytes or len(owner)!=32:raise ControllerError('unauthorized',401)
+            if scope.get('method')!='POST':raise ControllerError('method',405)
+            headers=scope.get('headers',[])
+            session=one_header(headers,'mcp-session-id')
+            version=one_header(headers,'mcp-protocol-version')
+            if version not in _PROTOCOLS:raise ControllerError('protocol',400)
+            if one_header(headers,'x-mcp-server-instance')!=c._ledger._instance:
+                raise ControllerError('instance',400)
+            if one_header(headers,'content-type')!='application/octet-stream':
+                raise ControllerError('content_type',415)
+            direction,args=wire.request_headers(headers)
+            body=bytearray()
+            while True:
+                part=await receive()
+                if part['type']!='http.request':raise ControllerError('body_incomplete',400)
+                raw=part.get('body',b'')
+                if len(body)+len(raw)>min(wire.BODY_LIMIT,c._limits['max_request_body_bytes']):
+                    raise ControllerError('body_budget',413)
+                body.extend(raw)
+                if not part.get('more_body',False):break
+            body=bytes(body)
+            wire.decode(body,direction+'_request')
+            ticket,row=c._admit_binary(session,owner,hashlib.sha256(body).hexdigest())
+            group=c._sessions[session]['threads']
+            row.worker_owner=group._admit()
+            owner_token=_CURRENT_OWNER.set(row.worker_owner)
+            observation_token=_current.set(None)
+            sent=False
+            async def replay():
+                nonlocal sent
+                if not sent:
+                    sent=True;return dict(type='http.request',body=body,more_body=False)
+                return await receive()
+            response=await self.endpoint(Request(scope,replay))
+            row.handler_exited=True;row.outcome='returned'
+            async def observed(message):
+                nonlocal started
+                if message['type']=='http.response.start':started=True
+                await send(message)
+            await response(scope,receive,observed)
+        except ControllerError as error:
+            primary=error
+            if row is not None:row.error=error;c._unknown(row.session)
+            if started:raise
+            await JSONResponse(dict(error=dict(code=error.code)),status_code=error.status)(scope,receive,send)
+        except wire.WireError:
+            await JSONResponse(dict(error=dict(code='invalid_frame')),status_code=400)(scope,receive,send)
+        except BaseException as error:
+            primary=error
+            if row is not None:
+                row.error=error
+                row.outcome='cancelled' if isinstance(error,anyio.get_cancelled_exc_class()) else 'raised'
+                c._unknown(row.session)
+            raise
+        finally:
+            if row is not None:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        if row.worker_owner is not None:group._finish_owner(row.worker_owner,primary=primary)
+                        row.handler_exited=True
+                    except BaseException:c._unknown(row.session);raise
+                    finally:
+                        if observation_token is not None:_current.reset(observation_token)
+                        if owner_token is not None:_CURRENT_OWNER.reset(owner_token)
+                        row.http_exited=True
+
+
 class _HTTPIngress:
     """Private route behind the actual bearer and HostOrigin gates."""
     def __init__(self, controller): self.controller=controller
@@ -521,4 +629,10 @@ class _HTTPIngress:
                     except BaseException:c._unknown(row.session)
             raise
         finally:
-            if row is not None:row.http_exited=True
+            if row is not None:
+                row.http_exited=True
+                if row.pending_creation:
+                    with c._lock:
+                        c._pending-=1;row.pending_creation=False
+                    row.handler_exited=True
+                    c._unknown()

@@ -27,7 +27,9 @@ class TransferChildren(unittest.IsolatedAsyncioTestCase):
         self.guest.service=GuestTransferService(self.guest.policy,
             _observation=self.guest.observation,_acl_verifier=lambda p,k:True)
         self.addCleanup(self.guest.service.shutdown)
-        self.configure_server=lambda server:register_transfer_tools(server,factory=lambda:self.guest.service)
+        def configure(server):
+            self.binary_service=register_transfer_tools(server,factory=lambda:self.guest.service)
+        self.configure_server=configure
         self.guest.read.joinpath('benign').write_bytes(b'benign local transfer')
         self.request=self.guest.request('pull',[dict(absolute_path=str(self.guest.read/'benign'),relative_path='benign')],self.guest.host/'out')
         self.args=dict(transfer_id=self.request['transfer_id'],request_digest=self.request['request_digest'])
@@ -210,3 +212,89 @@ class TransferChildren(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(child.no_spawn and child.resources_closed and child.native_resources_closed)
         self.assertIsNone(child.pid);self.assertFalse(self.guest.service._owned)
         self.assertEqual(self.controller._sequence_records[child.sequence][1],'transfer_child')
+
+    def binary_headers(self):
+        return {'content-type':'application/octet-stream','x-mcp-server-instance':self.ledger._instance,
+            'x-velo-direction':'pull','x-velo-transfer-id':self.request['transfer_id'],
+            'x-velo-request-digest':self.request['request_digest'],'x-velo-offset':'0',
+            'x-velo-count-per-chunk':'128','x-velo-chunk-count':'1'}
+
+    async def test_actual_binary_ticket_sha_thread_exit_no_fabricated_attempt(self):
+        from velo_transfer import wire
+        session=await self.initialize()
+        await self.tool(1,'transfer_begin',dict(request=self.request));await self.settled()
+        body=wire.encode({},b'','pull_request')
+        before=self.ledger._attempt_count
+        response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),
+            headers=self.binary_headers(),content=body)
+        self.assertEqual(response.status_code,200,response.text)
+        meta,payload=wire.decode(response.content,'pull_response')
+        self.assertEqual(meta['status'],'success');self.assertTrue(payload)
+        self.assertEqual(self.ledger._attempt_count,before)
+        self.assertEqual(len(self.controller._binary_sequences),1)
+        sequence=next(iter(self.controller._binary_sequences))
+        row=next(r for r in self.controller._work.values() if r.sequence==sequence)
+        import hashlib
+        self.assertEqual(row.request_sha256,hashlib.sha256(body).hexdigest())
+        self.assertIsNone(row.scope);self.assertIsNone(row.journal)
+        self.assertTrue(row.handler_exited and row.http_exited)
+        threads=self.controller._sessions[session]['threads']
+        owned=[r for r in threads._threads.values() if r.owner is row.worker_owner]
+        self.assertEqual(len(owned),1)
+        self.assertTrue(owned[0].wrapper_exited and owned[0].joined)
+        self.assertFalse(owned[0].thread.is_alive())
+
+    async def test_actual_binary_latched_native_thread_prevents_delete_completion(self):
+        from velo_transfer import wire
+        session=await self.initialize()
+        await self.tool(1,'transfer_begin',dict(request=self.request));await self.settled()
+        invoke=self.binary_service.invoke
+        def held(name,**args):
+            if name=='transfer_chunks':
+                self.started.set();self.release.wait(5)
+            return invoke(name,**args)
+        self.binary_service.invoke=held
+        task=asyncio.create_task(self.http.post(self.url.replace('/mcp/','/chunkbin/'),
+            headers=self.binary_headers(),content=wire.encode({},b'','pull_request')))
+        try:
+            until=time.monotonic()+3
+            while not self.started.is_set() and time.monotonic()<until:await asyncio.sleep(.005)
+            self.assertTrue(self.started.is_set())
+            self.controller._limits['close_timeout_ns']=30000000
+            response=await self.http.delete(self.url)
+            self.assertEqual(response.status_code,503,response.text)
+            row=next(r for r in self.controller._work.values() if r.request_sha256 is not None)
+            self.assertFalse(row.http_exited or row.handler_exited)
+            threads=self.controller._sessions[session]['threads']
+            self.assertTrue(any(r.owner is row.worker_owner and r.thread.is_alive() and not r.joined for r in threads._threads.values()))
+            self.release.set();self.assertEqual((await task).status_code,200)
+            self.assertTrue(row.http_exited and row.handler_exited)
+            self.assertEqual(self.controller._sessions[session]['state'],'UNKNOWN')
+        finally:
+            self.release.set()
+            if not task.done():await task
+
+    async def test_binary_wrong_instance_incomplete_frame_and_exhaustion_zero_invoke(self):
+        from velo_transfer import wire
+        await self.initialize()
+        headers=self.binary_headers();headers['x-mcp-server-instance']='b'*32
+        with patch.object(self.binary_service,'invoke',side_effect=AssertionError('must not invoke')) as invoke:
+            response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=headers,
+                content=wire.encode({},b'','pull_request'))
+            self.assertEqual(response.status_code,400,response.text)
+            response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=self.binary_headers(),content=b'VBT1')
+            self.assertEqual(response.status_code,400,response.text)
+            self.assertFalse(self.controller._binary_sequences)
+            self.controller._limits['max_binary_work']=1
+            # One real accepted binary worker with a known engine error still
+            # consumes its permanent sequence. No request state is fabricated.
+        response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=self.binary_headers(),
+            content=wire.encode({},b'','pull_request'))
+        self.assertEqual(response.status_code,200,response.text)
+        with patch.object(self.binary_service,'invoke',side_effect=AssertionError('must not invoke')) as invoke:
+            response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=self.binary_headers(),
+                content=wire.encode({},b'','pull_request'))
+            self.assertEqual(response.status_code,503,response.text)
+            self.assertIn('binary_budget',response.text);invoke.assert_not_called()
+        self.assertEqual(len(self.controller._binary_sequences),1)
+        self.assertEqual(self.ledger._attempt_count,0)

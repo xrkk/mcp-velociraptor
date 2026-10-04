@@ -15,7 +15,7 @@ from mcp.server.mcpserver import MCPServer
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
-from velociraptor_observation_controller import SessionController, _HTTPIngress, _Ticket
+from velociraptor_observation_controller import SessionController, _HTTPIngress, _Ticket, _BinaryIngress
 from velociraptor_observation_sdk_adapter import _TrackedManager
 from velociraptor_transport import BearerAuthGate, HostOriginGate
 from tests import test_observation_attempts as ledger_fixture
@@ -52,7 +52,10 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
             async with self.manager.run():yield
         sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen();sock.setblocking(False)
         self.sock=sock;port=sock.getsockname()[1];self.url=f'http://127.0.0.1:{port}/mcp/'
-        app=Starlette(routes=[Mount('/mcp',app=_HTTPIngress(self.controller))],lifespan=lifespan)
+        routes=[Mount('/mcp',app=_HTTPIngress(self.controller))]
+        binary_service=getattr(self,'binary_service',None)
+        if binary_service is not None:routes.append(Mount('/chunkbin',app=_BinaryIngress(self.controller,binary_service)))
+        app=Starlette(routes=routes,lifespan=lifespan)
         app=BearerAuthGate(HostOriginGate(app,(f'127.0.0.1:{port}',),()),'MODEL')
         self.server=uvicorn.Server(uvicorn.Config(app,log_level='critical'))
         self.thread=threading.Thread(target=lambda:self.server.run(sockets=[sock]),daemon=False)
@@ -258,3 +261,22 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_actual_end_publication_unknown_preserves_error_and_refuses_late(self):
         await self.fail_catalog('ATTEMPT_END')
+
+    async def test_creation_reservation_failure_does_not_leak_pending_slot(self):
+        self.controller._limits['max_retained_state_bytes']=1
+        from velociraptor_observation_controller import ControllerError
+        with self.assertRaises(ControllerError) as caught:
+            self.controller._admit(None,b'x'*32,dict(method='initialize',params={}))
+        self.assertEqual(caught.exception.code,'retained_budget')
+        self.assertEqual(self.controller._pending,0)
+        self.assertFalse(self.controller._work)
+
+    async def test_parsed_python_message_object_overhead_is_budgeted(self):
+        from velociraptor_observation_controller import ControllerError, _message_size
+        from velociraptor_observation import _canonical
+        message=dict(method='initialize',params={'keys':['x']*128})
+        self.assertGreater(_message_size(message),len(_canonical(message)))
+        self.controller._limits['max_retained_state_bytes']=len(_canonical(message))+1
+        with self.assertRaises(ControllerError):self.controller._admit(None,b'x'*32,message)
+        self.assertEqual(self.controller._pending,0)
+        self.assertEqual(self.controller._state,'DRAINING')

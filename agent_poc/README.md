@@ -969,3 +969,17 @@ fork/guard/lease and official SDK seven-tool calls, with MODEL Windows/archive
 inputs. Windows Popen/handle qualification remains unverified. Binary lifecycle,
 complete object-retention budgets, safe prefix/export/cut and successful close
 headers are still pending; production startup continues to refuse.
+
+
+The private controlled binary route now reserves an independent global work
+sequence, actual session/owner and full raw-request SHA before invoking the
+existing VBT1 endpoint. Its real retained thread has no 08 parent; HTTP response
+completion and real thread join both remain in the session barrier. Bad frames,
+instance mismatch and exhausted binary quota refuse before invoke. MODEL host
+loopback tests exercise actual binary bytes and a latched native thread through
+DELETE timeout; they do not qualify native Windows or successful cut export.
+Message reservation now charges the parsed Python containers/strings rather
+than only canonical bytes, and failed creation admission does not leak a pending
+slot. Full controller/SDK object-retention accounting, response-only correlation,
+stable prefix/export/cut and successful closure remain unfinished; no public
+production/MODEL activation is added.
