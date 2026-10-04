@@ -68,6 +68,17 @@ class _Work:
 
 
 @dataclass(eq=False)
+class _CloseIO:
+    session: str
+    thread: object = None
+    task: object = None
+    result: object = None
+    error: BaseException | None = None
+    wrapper_exited: bool = False
+    joined: bool = False
+
+
+@dataclass(eq=False)
 class _TransferChild:
     """Permanent causal record; only actual wait and cleanup receipts close it."""
     sequence: int
@@ -195,6 +206,7 @@ class SessionController:
         self._outgoing_records = []
         self._prefixes = {}
         self._close_errors = {}
+        self._close_io = {}
 
     def _unknown(self, session=None):
         with self._lock:
@@ -211,6 +223,66 @@ class SessionController:
             self._sequence_records[self._sequence] = (session, kind)
             return self._sequence
 
+    def _pending_count(self, response=None):
+        # One instance-wide gate. Retired entries remain permanent; completion
+        # releases only pending capacity, never sequence/history capacity.
+        incoming=sum(not r.handler_exited and (r.pending_creation or not r.enqueued
+            or r.sequence in self._binary_sequences) for r in self._work.values())
+        children=sum(r.pid is None and not r.resources_closed and not r.no_spawn
+            for r in self._children.values())
+        outgoing=sum(r is not response and r['reply'] is None
+            and r['dispatcher']._pending.get(coerce_request_id(r['message']['id'])) is r['pending']
+            for r in self._outgoing_records)
+        return incoming+children+outgoing
+
+    def _pending_gate(self, response=None):
+        if self._pending_count(response)>=self._limits['max_pending_work']:
+            self._state='DRAINING'
+            raise ControllerError('pending_budget')
+
+    def _settle_unclaimed(self, row):
+        # Only an unhanded-off ticket is ours to claim. Once enqueued, an HTTP
+        # failure cannot steal the journal from a possibly running SDK worker.
+        if not row.enqueued and not row.started and not row.handler_exited:
+            if row.journal is not None and not self._ledger._unknown:
+                self._claim(row)
+                self._finish(row,'cancelled')
+            elif row.attempt is None:
+                row.outcome='not_dispatched';row.handler_exited=True
+
+    async def _owned_close_io(self, session, function, deadline):
+        # The controller owns both the real non-daemon native-I/O thread and its
+        # waiter before start. HTTP cancellation/timeout cannot abandon either.
+        row=_CloseIO(session)
+        loop=asyncio.get_running_loop();done=loop.create_future()
+        def notify():
+            if not done.done():done.set_result(None)
+        def execute():
+            try:row.result=function()
+            except BaseException as error:row.error=error
+            finally:
+                row.wrapper_exited=True
+                loop.call_soon_threadsafe(notify)
+        async def join():
+            await done
+            row.thread.join()
+            if row.thread.is_alive() or not row.wrapper_exited:
+                raise ControllerError('close_io_join_unknown')
+            row.joined=True
+            # Keep errors in the permanent row, rather than an unobserved Task.
+        row.thread=threading.Thread(target=execute,daemon=False,name='pc026-close-io')
+        with self._lock:self._close_io[session]=row
+        try:row.thread.start()
+        except BaseException as error:
+            row.error=error;self._unknown(session);raise
+        row.task=asyncio.create_task(join())
+        while not row.task.done():
+            if time.monotonic_ns()>=deadline:raise ControllerError('close_io_timeout')
+            await anyio.sleep(.001)
+        row.task.result()
+        if row.error is not None:raise row.error
+        return row.result
+
     def _reserve_transfer(self, owner, transfer_id, digest, job, nonce, root):
         group=owner.group
         # Same lock order as retained threads. Descendants of admitted owners
@@ -221,9 +293,7 @@ class SessionController:
                 raise ControllerError('child_owner_invalid')
             info=root.lstat()
             with self._lock:
-                pending=sum(not r.resources_closed for r in self._children.values())
-                if pending >= self._limits['max_pending_work']:
-                    self._state='DRAINING'; raise ControllerError('child_pending_budget')
+                self._pending_gate()
                 retained=4096+len(str(root).encode('utf-8'))+len(transfer_id)+len(digest)+len(job)+len(nonce)
                 if self._retained+retained > self._limits['max_retained_state_bytes']:
                     self._state='DRAINING';raise ControllerError('child_retained_budget')
@@ -263,7 +333,7 @@ class SessionController:
             self._pending -= 1
             row.pending_creation=False
 
-    def _admit(self, session, owner, message):
+    def _admit(self, session, owner, message, response=None):
         encoded = _canonical(message)
         with self._lock:
             if self._state != 'ACTIVE': raise ControllerError('draining')
@@ -277,6 +347,7 @@ class SessionController:
                 if current['state'] != 'OPEN': raise ControllerError('closing',409)
                 if not current['initialized'] and message.get('method') != 'notifications/initialized':
                     raise ControllerError('session_not_initialized',409)
+            self._pending_gate(response)
             copied=_json_copy(message)
             retained=_message_size(copied)+sys.getsizeof(_Work)+1024
             if self._retained+retained > self._limits['max_retained_state_bytes']:
@@ -315,6 +386,7 @@ class SessionController:
                 previous=self._outgoing.get(key)
                 if previous is not None and dispatcher._pending.get(coerce_request_id(message.id)) is previous['pending']:
                     self._unknown(group._session);raise ControllerError('outbound_reentered')
+                self._pending_gate()
                 retained=4096+_message_size(message.model_dump(mode='json',by_alias=True))
                 if self._retained+retained>self._limits['max_retained_state_bytes']:
                     self._state='DRAINING';raise ControllerError('outbound_retained_budget')
@@ -455,9 +527,7 @@ class SessionController:
                 if not previous:
                     row.enqueued=True
                     return True
-                queued=sum(not p.enqueued and not p.handler_exited and p.session==row.session
-                           for p in self._work.values())
-                if queued>self._limits['max_pending_work']:
+                if self._pending_count()>self._limits['max_pending_work']:
                     row.cancelled=True
                     return False
             await anyio.sleep(.001)
@@ -505,8 +575,9 @@ class SessionController:
         # Export publication is still unavailable: a prefix cannot authorize 200.
         try:
             remaining=self._limits['max_retained_state_bytes']-self._retained
-            prefix=self._ledger._session_prefix(session,max_files=self._limits['max_export_files'],
-                max_bytes=min(self._limits['max_export_bytes'],remaining))
+            prefix=await self._owned_close_io(session,
+                lambda:self._ledger._session_prefix(session,max_files=self._limits['max_export_files'],
+                    max_bytes=min(self._limits['max_export_bytes'],remaining)),deadline)
             if time.monotonic_ns()>=deadline:raise ControllerError('close_unknown')
             retained=_message_size(vars(prefix))+sum(_message_size(vars(r)) for r in prefix.originals)
             with self._lock:
@@ -668,7 +739,7 @@ class _HTTPIngress:
             with c._lock:
                 # Recheck and reserve the actual outgoing waiter atomically.
                 if response_pending is not None:response_pending=c._response_pending(session,message)
-                ticket,row=c._admit(session,owner,message)
+                ticket,row=c._admit(session,owner,message,response_pending)
                 if response_pending is not None:
                     row.response_pending=response_pending;response_pending['reply']=row
             scope={**scope,'pc026.ticket':ticket}
@@ -722,6 +793,12 @@ class _HTTPIngress:
             raise
         finally:
             if row is not None:
+                with anyio.CancelScope(shield=True):
+                    try:c._settle_unclaimed(row)
+                    except BaseException as error:
+                        row.error=row.error or error;c._unknown(row.session)
+                if row.message.get('method')=='HTTP_GET_SSE' and not row.handler_exited:
+                    row.handler_exited=True;row.outcome='raised';c._unknown(row.session)
                 row.http_exited=True
                 if row.pending_creation:
                     with c._lock:

@@ -1053,3 +1053,15 @@ and controller. Host tests exercise actual ledger/reader algorithms with MODEL
 Windows storage. This remains a snapshot, with no published export or cut and
 no successful DELETE headers. Full export codecs, runtime I/O closure, object
 budget qualification, service drain and native Windows validation remain pending.
+
+
+The private lifecycle controller now uses one combined pending gate across
+sessions, queued SDK messages, binary work, unbound children and issued waiters;
+completed records remain permanent. A known pre-handoff HTTP failure uniquely
+claims its journal and produces a cancelled read-back END with no business call.
+Native prefix reads now run on controller-owned non-daemon threads with permanent
+join tasks. HTTP cancellation or deadline refusal keeps the real thread and
+its waiter until actual exit; it cannot certify closure early. Host MODEL tests
+exercise these boundaries. Complete budget qualification, service drain, cut
+publication and successful headers remain separate work; production startup
+continues to refuse before archive writes, backend setup or listening.
