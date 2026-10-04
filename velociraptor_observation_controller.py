@@ -10,6 +10,8 @@ import asyncio
 import contextvars
 from dataclasses import dataclass, field
 import hashlib
+import json
+import os
 import threading
 import time
 
@@ -61,6 +63,93 @@ class _Work:
     streams: list = field(default_factory=list)
 
 
+@dataclass(eq=False)
+class _TransferChild:
+    """Permanent causal record; only actual wait and cleanup receipts close it."""
+    sequence: int
+    session: str
+    owner: object
+    transfer_id: str
+    digest: str
+    job: str
+    nonce: str
+    root: object
+    root_identity: tuple
+    controller: object
+    pid: int | None = None
+    birth: str | None = None
+    process: object = None
+    report: object = None
+    activation_closed: bool = False
+    wait_status: int | None = None
+    resources_closed: bool = False
+    error: BaseException | None = None
+    no_spawn: bool = False
+    native_resources_closed: bool = False
+    lock: object = field(default_factory=threading.RLock)
+
+    def _fault(self, error):
+        self.error = self.error or error
+        self.controller._unknown(self.session)
+
+    def _poll(self):
+        from velo_transfer.guest_worker import RootLease
+        with self.lock:
+            if self.resources_closed: return True
+            if self.no_spawn:
+                self.resources_closed = self.native_resources_closed = True
+                return True
+            if self.pid is None or self.report is None: return False
+            try:
+                if self.wait_status is None:
+                    if os.name == 'posix':
+                        pid, status = os.waitpid(self.pid, os.WNOHANG)
+                        if pid == 0: return False
+                        if pid != self.pid: raise ControllerError('child_wait_identity')
+                        self.wait_status = status
+                    else:
+                        if self.process.poll() is None: return False
+                        self.wait_status = self.process.wait(timeout=0)
+                # Read only after real native wait. The bounded pipe cannot
+                # substitute for exit, and durable owner.stopped is never used.
+                if os.name == 'posix':
+                    raw = os.read(self.report, 4097)
+                    eof = os.read(self.report, 1) == b''
+                    fd, self.report = self.report, None
+                    os.close(fd)
+                else:
+                    stream, self.report = self.report, None
+                    raw = stream.read(4097)
+                    eof = stream.read(1) == b''
+                    stream.close()
+                    # Popen keeps the actual process handle after wait().
+                    self.process._handle.Close()
+                self.native_resources_closed=True
+                expected = dict(transfer_id=self.transfer_id, digest=self.digest,
+                    job=self.job, nonce=self.nonce, pid=self.pid, birth=self.birth,
+                    guard_joined=True, lease_closed=True, body_exited=True)
+                if (not eof or len(raw)>4096 or not raw.endswith(b'\n')
+                        or strict_json(raw) != expected or not self.activation_closed):
+                    raise ControllerError('child_cleanup_unconfirmed')
+                root = self.root.lstat()
+                if (root.st_dev,root.st_ino) != self.root_identity:
+                    raise ControllerError('child_root_changed')
+                probe=RootLease(self.root)
+                probe.acquire()
+                try:
+                    after=self.root.lstat()
+                    if (after.st_dev,after.st_ino) != self.root_identity:
+                        raise ControllerError('child_root_changed')
+                finally: probe.release()
+                self.resources_closed=True
+                return True
+            except BaseException as exc:
+                # ChildProcessError is unknown unless this record itself has
+                # already observed the native wait. Never invent a reap.
+                self._fault(exc)
+                return False
+
+
 class _Threads(_WorkerGroup):
     def __init__(self, controller, session):
         super().__init__(controller._limits['max_sdk_work'])
@@ -96,6 +185,7 @@ class SessionController:
         self._work, self._sessions, self._sequence_records = {}, {}, {}
         self._pending = 0
         self._close_tasks = {}
+        self._children = {}
 
     def _unknown(self, session=None):
         with self._lock:
@@ -112,6 +202,38 @@ class SessionController:
             self._sequence_records[self._sequence] = (session, kind)
             return self._sequence
 
+    def _reserve_transfer(self, owner, transfer_id, digest, job, nonce, root):
+        group=owner.group
+        # Same lock order as retained threads. Descendants of admitted owners
+        # remain admissible after CLOSING, but foreign/ended owners do not.
+        with group._lock:
+            if (type(group) is not _Threads or group._controller is not self
+                    or not group._valid(owner)):
+                raise ControllerError('child_owner_invalid')
+            info=root.lstat()
+            with self._lock:
+                pending=sum(not r.resources_closed for r in self._children.values())
+                if pending >= self._limits['max_pending_work']:
+                    self._state='DRAINING'; raise ControllerError('child_pending_budget')
+                retained=4096+len(str(root).encode('utf-8'))+len(transfer_id)+len(digest)+len(job)+len(nonce)
+                if self._retained+retained > self._limits['max_retained_state_bytes']:
+                    self._state='DRAINING';raise ControllerError('child_retained_budget')
+                sequence=self._sequence_for(group._session,'transfer_child')
+                row=_TransferChild(sequence,group._session,owner,transfer_id,digest,
+                    job,nonce,root,(info.st_dev,info.st_ino),self)
+                self._children[sequence]=row
+                self._retained+=retained
+                return row
+
+    def _children_closed(self, session):
+        # No controller lock around native calls or RootLease acquisition.
+        with self._lock:
+            rows=[r for r in self._children.values() if r.session==session]
+        result=True
+        for row in rows:
+            if not row._poll(): result=False
+        return result
+
     def _attach_manager(self, manager):
         from velociraptor_observation_sdk_adapter import _TrackedManager
         if type(manager) is not _TrackedManager or manager.stateless or manager.session_idle_timeout is not None:
@@ -126,6 +248,7 @@ class SessionController:
             if row is None or row.session is not None or row.message.get('method') != 'initialize':
                 self._unknown(); raise ControllerError('creation_not_owned')
             row.session = session
+            self._sequence_records[row.sequence]=(session,'http_message')
             self._sessions[session] = dict(state='PENDING', owner=row.owner,
                 transport=transport, threads=_Threads(self, session), initialized=False)
             self._pending -= 1
@@ -284,7 +407,9 @@ class SessionController:
                 if task.done():task.result()
                 with self._lock:
                     complete=all(r.handler_exited and r.http_exited for r in self._work.values() if r.session==session)
-                if task.done() and complete and data['transport']._owned.known_closed() and data['threads']._quiescent(): break
+                children_closed=self._children_closed(session)
+                if data['state']=='UNKNOWN':raise ControllerError('child_unknown')
+                if task.done() and complete and children_closed and data['transport']._owned.known_closed() and data['threads']._quiescent(): break
                 if time.monotonic_ns()>=deadline: raise ControllerError('close_unknown')
                 await anyio.sleep(.001)
         except BaseException:

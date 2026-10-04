@@ -42,6 +42,8 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
             if value=='latch':
                 self.started.set();self.assertTrue(self.release.wait(5))
             return value
+        configure=getattr(self,'configure_server',None)
+        if configure is not None: configure(server)
         self.manager=_TrackedManager(server._lowlevel_server)
         self.controller._attach_manager(self.manager)
         @asynccontextmanager

@@ -955,3 +955,17 @@ The SDK pin also locks the full `mcp.shared.dispatcher` source and the actual
 A helper-source drift with otherwise unchanged SDK versions is rejected before
 manager creation. This adds no upstream adapter copy and grants no deployment
 or archive authority.
+
+
+The private lifecycle controller now reserves transfer-child ownership before
+actual fork/Popen and retains the causal session, worker nonce, request digest,
+job and real PID/birth. Child processes clear the inherited SDK observation
+scope. Their cleanup receipt follows actual deadline-guard join and RootLease
+release; parent closure additionally requires native wait, bounded pipe EOF and
+root/lease recheck. Persisted worker.stopped and tool END grant no child-exit
+proof. Session DELETE waits only its causal children, keeps live children on
+timeout and never uses global transfer shutdown. Host tests use real benign
+fork/guard/lease and official SDK seven-tool calls, with MODEL Windows/archive
+inputs. Windows Popen/handle qualification remains unverified. Binary lifecycle,
+complete object-retention budgets, safe prefix/export/cut and successful close
+headers are still pending; production startup continues to refuse.

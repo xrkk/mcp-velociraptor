@@ -109,6 +109,7 @@ class GuestTransferService:
         self._guest = _guest
         self._worker_delay = _worker_delay
         self._owned = {}
+        self._observed_children = {}
         self._chunk_cache = {}
         self.observation = _observation if _observation is not None else observe_windows()
         self.acl = (_acl_verifier if _acl_verifier is not None
@@ -448,6 +449,11 @@ class GuestTransferService:
         record = self._owned.get(pid)
         if record is None or record[:2] != (owner["transfer_id"], owner["nonce"]):
             return
+        observed = self._observed_children.get(pid)
+        if observed is not None:
+            if observed._poll():
+                self._owned.pop(pid, None)
+            return
         if os.name == "posix":
             try:
                 finished, _ = os.waitpid(pid, os.WNOHANG)
@@ -513,25 +519,60 @@ class GuestTransferService:
             if state["cancelled"] or time.monotonic() >= state["deadline_monotonic"]:
                 raise Error("deadline_or_cancelled")
             lease = self._check_idle(store)
+            from velociraptor_observation_workers import _CURRENT_OWNER
+            causal_owner = _CURRENT_OWNER.get()
+            observed = None
+            if causal_owner is not None:
+                controller = getattr(causal_owner.group, "_controller", None)
+                if controller is None:
+                    raise Error("worker_controller_unavailable")
+                observed = controller._reserve_transfer(causal_owner, transfer_id,
+                    digest, job, nonce, self.policy.work_root)
+            report_read = report_write = None
             if os.name == "posix":
-                read_fd, write_fd = os.pipe()
-                pid = os.fork()
+                try:
+                    if observed is not None:
+                        report_read, report_write = os.pipe()
+                        os.set_blocking(report_read, False)
+                    read_fd, write_fd = os.pipe()
+                    pid = os.fork()
+                except BaseException:
+                    for fd in (report_read,report_write,locals().get("read_fd"),write_fd):
+                        if fd is not None: os.close(fd)
+                    if observed is not None:
+                        observed.no_spawn = True
+                        observed._poll()
+                    raise
                 if pid == 0:
                     os.close(write_fd)
+                    if report_read is not None: os.close(report_read)
+                    # A transfer child is independent maintenance work, never
+                    # an SDK journal emitter inherited from the fork thread.
+                    from velociraptor_observation import _current
+                    _current.set(None)
+                    _CURRENT_OWNER.set(None)
                     if store._lock_fd is not None:
                         os.close(store._lock_fd)
                         store._lock_fd = None
                     try:
                         with os.fdopen(read_fd, "rb", buffering=0) as incoming:
-                            self._child(transfer_id, digest, job, nonce, incoming)
+                            self._child(transfer_id, digest, job, nonce, incoming,
+                                        _report_fd=report_write)
                     finally:
                         os._exit(0)
+                if observed is not None:
+                    observed.pid, observed.report = pid, report_read
+                    self._observed_children[pid] = observed
+                    os.close(report_write)
                 os.close(read_fd)
                 child = pid
                 self._owned[pid] = (transfer_id, nonce)
             elif os.name == "nt":
                 configured = os.environ.get("VELOCIRAPTOR_TRANSFER_POLICY")
                 if not configured or (self.policy_path is not None and str(self.policy_path) != configured):
+                    if observed is not None:
+                        observed.no_spawn = True
+                        observed._poll()
                     raise Error("worker_policy_configuration_mismatch")
                 # A Windows venv python.exe can be a redirector: Popen then
                 # reports the redirector PID, while the worker runs in its
@@ -539,20 +580,36 @@ class GuestTransferService:
                 # and creation time identify the worker itself.
                 executable = getattr(sys, "_base_executable", sys.executable)
                 if not executable or not os.path.isfile(executable):
+                    if observed is not None:
+                        observed.no_spawn = True
+                        observed._poll()
                     raise Error("worker_interpreter_unavailable")
                 worker_env = os.environ.copy()
                 worker_env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
                 args = [executable, "-m", "velo_transfer.guest_cli", "--internal-worker",
                         transfer_id, digest, job, nonce]
-                child = subprocess.Popen(args, env=worker_env, stdin=subprocess.PIPE,
-                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                         close_fds=True)
+                try:
+                    child = subprocess.Popen(args, env=worker_env, stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE if observed is not None else subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL, close_fds=True)
+                except BaseException:
+                    if observed is not None:
+                        observed.no_spawn = True
+                        observed._poll()
+                    raise
                 pid = child.pid
+                if observed is not None:
+                    observed.pid, observed.process, observed.report = pid, child, child.stdout
+                    self._observed_children[pid] = observed
                 self._owned[pid] = (transfer_id, nonce, child)
             else:
+                if observed is not None:
+                    observed.no_spawn = True
+                    observed._poll()
                 raise Error("worker_platform_unsupported")
             try:
                 birth = process_birth(pid)
+                if observed is not None: observed.birth = birth
                 owner = {"transfer_id": transfer_id, "job": job, "nonce": nonce,
                          "pid": pid, "birth": birth, "deadline_monotonic": state["deadline_monotonic"],
                          "stopped": False}
@@ -565,9 +622,16 @@ class GuestTransferService:
                 self._save(store, envelope, state)
                 lease_state = {"active": owner}
                 store.save(_LEASE_ID, lease["binding"], lease["revision"], lease_state)
-            except Exception:
+            except Exception as primary:
                 if write_fd is not None:
                     os.close(write_fd)
+                if observed is not None:
+                    if isinstance(child, subprocess.Popen): child.stdin.close()
+                    observed.activation_closed = True
+                    observed._fault(primary)
+                    # Keep the actual child/pipe ownership. Controller failure
+                    # is not authorization to terminate or fabricate cleanup.
+                    raise
                 reaped = False
                 if isinstance(child, subprocess.Popen):
                     child.stdin.close()
@@ -598,21 +662,31 @@ class GuestTransferService:
                 raise
         try:
             if write_fd is not None:
-                os.write(write_fd, (nonce + "\n").encode("ascii"))
-                os.close(write_fd)
+                try:
+                    raw=(nonce + "\n").encode("ascii")
+                    if os.write(write_fd, raw) != len(raw):
+                        raise Error("worker_activation_unknown")
+                finally:
+                    os.close(write_fd)
+                    if observed is not None: observed.activation_closed = True
             else:
                 child.stdin.write((nonce + "\n").encode("ascii"))
                 child.stdin.flush()
                 child.stdin.close()
-        except OSError:
+            if observed is not None: observed.activation_closed = True
+        except (OSError, Error) as primary:
+            if observed is not None: observed._fault(primary)
             # The durable owner remains for explicit reconciliation.
             raise Error("worker_activation_unknown")
 
-    def _child(self, transfer_id, digest, job, nonce, incoming):
+    def _child(self, transfer_id, digest, job, nonce, incoming, *, _report_fd=None):
+        lease = guard = None
+        lease_closed = guard_joined = True
         try:
             read_activation(incoming, nonce)
             lease = RootLease(self.policy.work_root)
             lease.acquire()
+            lease_closed = False
             try:
                 lock_info = _no_link(lease.path)
                 if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_nlink != 1:
@@ -634,15 +708,18 @@ class GuestTransferService:
                         os._exit(124)
                 guard = threading.Thread(target=deadline_guard, daemon=False)
                 guard.start()
+                guard_joined = False
                 try:
                     if self._worker_delay:
                         time.sleep(self._worker_delay)
                     self._execute(transfer_id, digest, job)
                 finally:
                     finished.set()
-                    guard.join(timeout=1)
+                    guard.join()
+                    guard_joined = not guard.is_alive()
             finally:
                 lease.release()
+                lease_closed = True
         except Exception as exc:
             code = exc.code if isinstance(exc, Error) else "worker_failed"
             # A status poll can momentarily own the writer lock as this worker
@@ -674,6 +751,21 @@ class GuestTransferService:
                     time.sleep(0.005)
                 except Exception:
                     break
+        finally:
+            if _report_fd is not None:
+                # A receipt is emitted only after the real body/guard/lease
+                # cleanup. Parent still requires native wait and EOF.
+                try:
+                    raw = canonical_json(dict(transfer_id=transfer_id,digest=digest,
+                        job=job,nonce=nonce,pid=os.getpid(),birth=process_birth(os.getpid()),
+                        guard_joined=guard_joined,lease_closed=lease_closed,body_exited=True))+b"\n"
+                    if len(raw)<=4096:
+                        view=memoryview(raw)
+                        while view:
+                            n=os.write(_report_fd,view)
+                            if n<=0: break
+                            view=view[n:]
+                finally: os.close(_report_fd)
 
     def _execute(self, transfer_id, digest, job):
         envelope = self._load(transfer_id, digest)

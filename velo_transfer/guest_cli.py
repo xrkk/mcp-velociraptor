@@ -92,7 +92,8 @@ def main(argv=None):
         _, transfer_id, digest, job, nonce = args
         try:
             service = GuestTransferService()
-            service._child(transfer_id, digest, job, nonce, sys.stdin.buffer)
+            service._child(transfer_id, digest, job, nonce, sys.stdin.buffer,
+                           _report_fd=os.dup(sys.stdout.fileno()))
             return 0
         except Exception:
             return 3
