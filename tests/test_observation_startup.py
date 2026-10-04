@@ -138,7 +138,7 @@ class LifecyclePreflightTests(unittest.TestCase):
             self.assertEqual(bridge.main(on_failure=failures), 2)
         create.assert_not_called()
         run.assert_not_called()
-        failures.assert_called_once_with('SERVICE_OBSERVATION_INVALID')
+        failures.assert_called_once_with('OBSERVATION_STARTUP_REJECTED')
         self.assertEqual(out.getvalue(), '')
         self.assertNotIn('MODEL', err.getvalue())
         self.assertEqual(inventory(self.root), before)

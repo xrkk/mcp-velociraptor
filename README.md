@@ -962,3 +962,9 @@ internal owner, stdio and protocol fixtures retain their existing thread path.
 This primitive is not yet connected to an approved HTTP session controller:
 SDK streams/queues, transfer child processes and RootLease completion, cut
 publication and formal DELETE headers still require implementation and tests.
+
+
+Formal lifecycle startup refusal is classified as `OBSERVATION_STARTUP_REJECTED`
+through the bridge and the fixed SCM failure-message map. The separate
+`SERVICE_OBSERVATION_INVALID` code continues to describe the read-only dispatch
+observer. Neither category includes raw exception text or credentials.

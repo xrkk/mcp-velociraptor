@@ -80,6 +80,7 @@ _FAILURE_MESSAGES = {
     "ARTIFACT_REGISTRY_INVALID": "Approved artifact definitions or tool schemas failed startup validation; verify the locked registry.",
     "BACKEND_INITIALIZATION_FAILED": "The Velociraptor connection or root artifact metadata read failed during startup.",
     "SERVICE_OBSERVATION_INVALID": "The read-only SDK dispatch observation could not be installed or retained.",
+    "OBSERVATION_STARTUP_REJECTED": "The approved observation lifecycle inputs or native archival capability failed startup qualification.",
     "HTTP_RUNTIME_FAILED": "The HTTP server failed during startup or service execution.",
     "BRIDGE_EXIT_FAILED": "The bridge exited unsuccessfully without a classified startup failure.",
     "SERVICE_STATUS_FAILED": "The Windows service status update failed.",

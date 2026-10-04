@@ -91,7 +91,7 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
             precheck_formal_http()
         except Exception:
             if on_failure is not None:
-                on_failure('SERVICE_OBSERVATION_INVALID')
+                on_failure('OBSERVATION_STARTUP_REJECTED')
             print('Velociraptor MCP startup rejected: observation lifecycle unavailable', file=sys.stderr)
             return 2
 

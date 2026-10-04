@@ -1,6 +1,8 @@
 """Replay the deployed SCM stop callback without starting a Windows service."""
 
 import ast
+import json
+import tempfile
 from contextlib import nullcontext
 import os
 from pathlib import Path
@@ -24,6 +26,49 @@ def load_host_function(name, namespace):
 
 
 class ServiceStopOrderTests(unittest.TestCase):
+    def test_actual_bridge_startup_rejection_survives_scm_mapping_without_exception_text(self):
+        import mcp_velociraptor_bridge as bridge
+        tree = ast.parse(HOST.read_text())
+        mapping = next(node.value for node in tree.body if isinstance(node, ast.Assign)
+                       and any(isinstance(t, ast.Name) and t.id == '_FAILURE_MESSAGES' for t in node.targets))
+        messages = ast.literal_eval(mapping)
+        self.assertIn('OBSERVATION_STARTUP_REJECTED', messages)
+        self.assertIn('read-only', messages['SERVICE_OBSERVATION_INVALID'])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            namespace = {'advapi32': SimpleNamespace(RegisterServiceCtrlHandlerW=lambda *_: 1),
+                'SERVICE_NAME': 'mcp-velociraptor', '_service_handler': lambda *_: None,
+                '_report': Mock(), '_load_protected_env': lambda: None, '_status_handle': None,
+                '_exit_code': 0, '_stop_requested': threading.Event(), '_status_report_failed': threading.Event(),
+                'SERVICE_STATUS': {'START_PENDING': 2, 'RUNNING': 4, 'STOPPED': 1},
+                'REPO_ROOT': root, 'Path': Path, '__file__': str(HOST), 'sys': sys, 'os': os,
+                'ctypes': SimpleNamespace(get_last_error=lambda: 0), 'json': json, '_FAILURE_MESSAGES': messages}
+            writer = load_host_function('_write_failure', namespace)
+            service_main = load_host_function('_service_main', namespace)
+            observation = ModuleType('p05_service_observation')
+            observation.observe_dispatch = lambda _: nullcontext()
+            original_path = sys.path[:]
+            try:
+                with patch.dict(sys.modules, {'p05_service_observation': observation}), \
+                        patch.object(bridge, 'resolve_transport_config', return_value=SimpleNamespace(mode='http')), \
+                        patch('velociraptor_observation_startup.precheck_formal_http', side_effect=RuntimeError('MODEL-SECRET')), \
+                        patch.object(bridge, 'create_server') as create, patch.object(bridge, 'run_formal_http') as run:
+                    service_main(0, None)
+                create.assert_not_called()
+                run.assert_not_called()
+            finally:
+                sys.path[:] = original_path
+            path = root/'Logs/service-host-error.log'
+            document = json.loads(path.read_bytes())
+            self.assertEqual(document, dict(code='OBSERVATION_STARTUP_REJECTED',
+                message=messages['OBSERVATION_STARTUP_REJECTED'],exit_code=2))
+            self.assertEqual(namespace['_exit_code'], 2)
+            self.assertNotIn('MODEL-SECRET', path.read_text())
+            writer('SERVICE_OBSERVATION_INVALID', 10)
+            self.assertEqual(json.loads(path.read_bytes())['code'], 'SERVICE_OBSERVATION_INVALID')
+            writer('MODEL-SECRET', 10)
+            self.assertEqual(json.loads(path.read_bytes())['code'], 'BRIDGE_EXIT_FAILED')
+
     def test_pending_is_reported_before_bridge_observes_stop(self):
         events = []
         status = {"STOP_PENDING": 3, "STOPPED": 1}
