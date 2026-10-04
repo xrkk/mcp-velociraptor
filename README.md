@@ -934,3 +934,21 @@ remain pending. Production observer/controller wiring, session cuts, host
 association, retention maintenance and new actual deployment/freeze/approval
 are separate work. The 137 schemas, seven transfer tools and 645 DFIR relations
 are unchanged; the historical agent gains no archival integration.
+
+
+The adopted PC026 lifecycle contract now adds a fixed SDK source pin and a
+read-only formal HTTP startup gate. It checks the approved archive/lifecycle
+inputs, export and pending reserves, and exact installed dependency versions,
+source bytes, AST boundaries and handshake protocols before backend setup.
+The pin includes current host Python 3.13.15; another deployment must pass the
+same reviewed pin or undergo an explicit new source review. Local hashes alone
+do not qualify interpreter provenance or native Windows storage.
+
+Formal HTTP currently refuses startup, including a valid MODEL approval graph,
+because the native session exporter is unavailable. There is no runtime enable
+switch. Direct formal app construction has the same gate; internal protocol
+fixtures use the private composition helper and grant no archive authority.
+The stdio entry retains its existing behavior and performs no archival input
+loading. Session controller, retained worker barriers and safe cut publication
+remain unfinished; this change does not establish DELETE completion or Windows
+acceptance. Tool names and all 137 schemas are unchanged.

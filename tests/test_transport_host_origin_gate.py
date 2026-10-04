@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from velociraptor_transport import FORMAL_TRANSPORT, HostOriginGate, TransportConfig, build_formal_http_app
+from velociraptor_transport import FORMAL_TRANSPORT, HostOriginGate, TransportConfig, _build_protocol_http_app
 
 GOOD_HOST = "127.0.0.1:28790"
 
@@ -137,7 +137,7 @@ class FormalAppWiringTests(unittest.TestCase):
             bearer_token="secret-token",
             allowed_origins=("https://allowed.example",),
         )
-        app = build_formal_http_app(_StubSdkServer(config.path), config)
+        app = _build_protocol_http_app(_StubSdkServer(config.path), config)
         return TestClient(app)
 
     def _headers(self, *, host=GOOD_HOST, origin=None, bearer="secret-token"):

@@ -29,6 +29,7 @@ class BridgeServiceDiagnosticsTests(unittest.TestCase):
         failure = Mock()
         with patch.object(bridge, 'resolve_transport_config', return_value=SimpleNamespace(mode='http')), \
                 patch.object(bridge, 'create_server', side_effect=bridge.ArtifactRegistryError('synthetic-sensitive-value')), \
+                patch('velociraptor_observation_startup.precheck_formal_http'), \
                 patch.object(bridge, 'run_formal_http') as run, redirect_stderr(StringIO()):
             self.assertEqual(bridge.main(on_failure=failure), 2)
         failure.assert_called_once_with('ARTIFACT_REGISTRY_INVALID')
@@ -38,6 +39,7 @@ class BridgeServiceDiagnosticsTests(unittest.TestCase):
         failure = Mock()
         with patch.object(bridge, 'resolve_transport_config', return_value=SimpleNamespace(mode='http')), \
                 patch.object(bridge, 'create_server', side_effect=RuntimeError('synthetic-sensitive-value')), \
+                patch('velociraptor_observation_startup.precheck_formal_http'), \
                 patch.object(bridge, 'run_formal_http') as run, redirect_stderr(StringIO()):
             self.assertEqual(bridge.main(on_failure=failure), 2)
         failure.assert_called_once_with('BACKEND_INITIALIZATION_FAILED')
@@ -48,6 +50,7 @@ class BridgeServiceDiagnosticsTests(unittest.TestCase):
         ready, stop, failure = Mock(), Mock(), Mock()
         with patch.object(bridge, 'resolve_transport_config', return_value=config), \
                 patch.object(bridge, 'create_server', return_value=server) as create, \
+                patch('velociraptor_observation_startup.precheck_formal_http'), \
                 patch.object(bridge, 'run_formal_http') as run:
             self.assertEqual(bridge.main(on_ready=ready, stop_requested=stop, on_failure=failure), 0)
         create.assert_called_once_with()

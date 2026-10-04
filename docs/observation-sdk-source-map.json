@@ -1,0 +1,72 @@
+{
+  "boundaries": [
+    {
+      "ast_sha256": "a359315c1f8728a3aa5d5789e1957686743de0823e126b14495ff50a51351cb1",
+      "end_line": 368,
+      "line": 248,
+      "module": "mcp.server.streamable_http_manager",
+      "source_lines": 121,
+      "symbol": "StreamableHTTPSessionManager._handle_stateful_request"
+    },
+    {
+      "ast_sha256": "81c7558edd428df67fe5588bebd333d124b30d4c8f56401e787f259b628a468c",
+      "end_line": 457,
+      "line": 445,
+      "module": "mcp.server.streamable_http",
+      "source_lines": 13,
+      "symbol": "StreamableHTTPServerTransport._clean_up_memory_streams"
+    },
+    {
+      "ast_sha256": "62045d079ffd6e34ed267659c9f5edc63aea874603e6dbf47a587e549ea19643",
+      "end_line": 685,
+      "line": 517,
+      "module": "mcp.server.streamable_http",
+      "source_lines": 169,
+      "symbol": "StreamableHTTPServerTransport._handle_post_request"
+    },
+    {
+      "ast_sha256": "732ff90f0e09e8600907c194678892c1df3f993e7ab3f22e376f70075cb2ef32",
+      "end_line": 782,
+      "line": 687,
+      "module": "mcp.server.streamable_http",
+      "source_lines": 96,
+      "symbol": "StreamableHTTPServerTransport._handle_get_request"
+    },
+    {
+      "ast_sha256": "2231f091ac872f203e89e153f97961eed05db85bf3cf56b9596b9f9cf8c37a4e",
+      "end_line": 836,
+      "line": 807,
+      "module": "mcp.server.streamable_http",
+      "source_lines": 30,
+      "symbol": "StreamableHTTPServerTransport.terminate"
+    },
+    {
+      "ast_sha256": "945eb936ffc34f23828e97abe7f409ce13ecf29408cdf3112dbb95821c07d3ad",
+      "end_line": 1092,
+      "line": 984,
+      "module": "mcp.server.streamable_http",
+      "source_lines": 109,
+      "symbol": "StreamableHTTPServerTransport.connect"
+    },
+    {
+      "ast_sha256": "f4ac4119dbd67f2ffacaf27dbb3078f4bc7782226c21935209d96013883fe84f",
+      "end_line": 467,
+      "line": 447,
+      "module": "mcp.server.runner",
+      "source_lines": 21,
+      "symbol": "serve_connection"
+    },
+    {
+      "ast_sha256": "c6a47fcb687d3d75abb3bc8007bd35ffa61864d98f78d69cf52fa49dddd18a29",
+      "end_line": 501,
+      "line": 470,
+      "module": "mcp.server.runner",
+      "source_lines": 32,
+      "symbol": "serve_loop"
+    }
+  ],
+  "implemented_adapter": false,
+  "license": "MIT; Copyright (c) 2024 Anthropic, PBC",
+  "total_source_lines": 591,
+  "upstream": "mcp 2.1.1"
+}

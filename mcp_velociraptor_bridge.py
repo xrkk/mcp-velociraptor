@@ -85,6 +85,16 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
         print('Service lifecycle requires the formal HTTP transport', file=sys.stderr)
         return 2
 
+    if config.mode == FORMAL_TRANSPORT:
+        try:
+            from velociraptor_observation_startup import precheck_formal_http
+            precheck_formal_http()
+        except Exception:
+            if on_failure is not None:
+                on_failure('SERVICE_OBSERVATION_INVALID')
+            print('Velociraptor MCP startup rejected: observation lifecycle unavailable', file=sys.stderr)
+            return 2
+
     try:
         server = create_server()
     except ArtifactRegistryError as exc:

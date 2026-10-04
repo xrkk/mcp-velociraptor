@@ -264,7 +264,14 @@ class ServerInstanceHeader:
 
 
 def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
-    """Wrap the single registered MCPServer instance for the formal entry.
+    """Production constructor refuses without the complete native lifecycle."""
+    from velociraptor_observation_startup import precheck_formal_http
+    precheck_formal_http()
+    return _build_protocol_http_app(server, config)
+
+
+def _build_protocol_http_app(server: Any, config: TransportConfig) -> Any:
+    """Internal protocol-test composition; grants no formal archive authority.
 
     The SDK app keeps stateful sessions (``stateless_http=False``) and DNS
     rebinding protection enabled with the exact allowed Host generated from

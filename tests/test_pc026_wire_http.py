@@ -23,7 +23,7 @@ from functools import wraps
 from velo_transfer import wire
 from velo_transfer.http_wire import TransferHTTPGate, SDKSessionBindings, BodyLimitExceeded
 from velo_transfer.mcp_tools import register_transfer_tools
-from velociraptor_transport import build_formal_http_app, TransportConfig
+from velociraptor_transport import _build_protocol_http_app, TransportConfig
 
 
 def connected_test(fn):
@@ -42,7 +42,7 @@ class HTTPTests(unittest.IsolatedAsyncioTestCase):
         manager = register_transfer_tools(self.server, factory=lambda:self.f.service)
         self.server._guest_transfer_tools = manager
         sock = socket.socket(); sock.bind(('127.0.0.1',0)); self.port=sock.getsockname()[1]; sock.close()
-        self.app=build_formal_http_app(self.server, TransportConfig('http',host='127.0.0.1',port=self.port,
+        self.app=_build_protocol_http_app(self.server, TransportConfig('http',host='127.0.0.1',port=self.port,
             bearer_token='local-only-fixture-token',allowed_origins=('https://allowed.example',)))
         self.running=uvicorn.Server(uvicorn.Config(self.app,host='127.0.0.1',port=self.port,log_level='critical'))
         self.thread=threading.Thread(target=self.running.run,daemon=False);self.thread.start()

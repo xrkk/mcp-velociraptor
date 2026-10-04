@@ -230,12 +230,14 @@ class TransferMcpRegistrationTests(unittest.TestCase):
         server = SimpleNamespace(_guest_transfer_tools=Manager())
         config = SimpleNamespace(mode="http")
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
+                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http") as run:
             self.assertEqual(bridge.main(stop_requested=lambda: True), 0)
             run.assert_called_once()
         self.assertEqual(callbacks, ["shutdown"])
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
+                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http", side_effect=RuntimeError("synthetic")):
             with self.assertRaisesRegex(RuntimeError, "synthetic"):
@@ -247,6 +249,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
                 raise TransferContentError("worker_stop_unconfirmed")
         server._guest_transfer_tools = FailingManager()
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
+                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http"), \
                 mock.patch("sys.stderr"):
@@ -255,7 +258,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
 
     def test_formal_app_rejects_unauthenticated_and_wrong_host_before_tool(self):
         from starlette.testclient import TestClient
-        from velociraptor_transport import TransportConfig, build_formal_http_app
+        from velociraptor_transport import TransportConfig, _build_protocol_http_app
         made = []
         def factory():
             made.append("constructed")
@@ -263,7 +266,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
         server = MCPServer("transfer-gate")
         manager = register_transfer_tools(server, factory=factory)
         self.addCleanup(manager.shutdown)
-        app = build_formal_http_app(server, TransportConfig("http", host="127.0.0.1",
+        app = _build_protocol_http_app(server, TransportConfig("http", host="127.0.0.1",
             bearer_token="local-fixture-token"))
         payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                    "params": {"name": "transfer_capabilities", "arguments": {}}}

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import httpx2
 from mcp.server.mcpserver import MCPServer
 from velo_transfer.adapters import AdapterError, TransportAdapter, _DirectChunkChannel
-from velociraptor_transport import TransportConfig, build_formal_http_app
+from velociraptor_transport import TransportConfig, _build_protocol_http_app
 
 
 ARGS = {'transfer_id': 'trial', 'request_digest': 'a' * 64, 'offset': 0,
@@ -57,7 +57,7 @@ class SafetyClientTests(unittest.IsolatedAsyncioTestCase):
             return SimpleNamespace(status='success', result={'verified_offset': 1, 'accepted': 1})
         server = MCPServer('pc026-security-composition')
         server._guest_transfer_tools = SimpleNamespace(invoke=invoke)
-        app = build_formal_http_app(server, TransportConfig('http', host='fixture', port=28790,
+        app = _build_protocol_http_app(server, TransportConfig('http', host='fixture', port=28790,
             bearer_token='fixture-token', allowed_origins=('https://allowed.example',)))
         self.app = app
         self.transport_app = ResponseMutation(app)

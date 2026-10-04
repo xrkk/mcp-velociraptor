@@ -50,6 +50,8 @@ RAW_CONTRACTS = ((BODY_CONTRACT,6354,BODY_CONTRACT_SHA),
                  (HTTP_BINDING_CONTRACT,7999,HTTP_BINDING_CONTRACT_SHA))
 ARCHIVE_CONTRACT = 'PLAN/2026.10.04-01-PC026-正式归档attempt账契约.md'
 ARCHIVE_CONTRACT_SHA = 'd9ba3b368bc70e300fbead2f4e3ffe7af354158659d450bdae4f485000365ceb'
+LIFECYCLE_CONTRACT = 'PLAN/2026.10.04-02-PC026-归档生命周期与结束消费契约.md'
+LIFECYCLE_CONTRACT_SHA = 'b739f989632d86fe71084cdbcb2c0291b49198330b69b1595cd171d6e5f5a1d8'
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
 MODEL = BASE + "pc026-r01/attachments/controller-model.schema.json"
@@ -96,13 +98,17 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
     *('tests/scenarios/full/' + name + '.json' for name in (
         'p06-compromise-scope', 'p06-ransomware-root-cause', 'p06-credential-lateral-movement',
         'p06-data-exfiltration', 'p06-remediation-validation'))})
-RESOURCES = RESOURCES | frozenset({ARCHIVE_CONTRACT, 'README.md', 'agent_poc/README.md',
+RESOURCES = RESOURCES | frozenset({ARCHIVE_CONTRACT, LIFECYCLE_CONTRACT,
+    'docs/observation-sdk-pin.json', 'docs/observation-sdk-source-map.json',
+    'docs/observation-sdk-LICENSE.txt', 'README.md', 'agent_poc/README.md',
     'PLAN/2026.10.03-08-PC026-观察归档记录格式契约.md',
     'PLAN/2026.10.03-09-PC026-Windows观察记录发布原语.md',
     'PLAN/2026.10.03-10-PC026-请求归档写入接缝契约.md',
     'PLAN/2026.10.03-11-PC026-Windows私有目录分配原语.md'})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
-    if path in {ARCHIVE_CONTRACT, BODY_CONTRACT, JOIN_CONTRACT, HTTP_BINDING_CONTRACT, NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(('PLAN/2026.10.03-08-', 'PLAN/2026.10.03-09-',
+    if path in {LIFECYCLE_CONTRACT, 'docs/observation-sdk-pin.json',
+        'docs/observation-sdk-source-map.json', 'docs/observation-sdk-LICENSE.txt',
+        ARCHIVE_CONTRACT, BODY_CONTRACT, JOIN_CONTRACT, HTTP_BINDING_CONTRACT, NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(('PLAN/2026.10.03-08-', 'PLAN/2026.10.03-09-',
         'PLAN/2026.10.03-10-', 'PLAN/2026.10.03-11-', 'tests/data/', 'tests/scenarios/')))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
@@ -206,6 +212,8 @@ LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/p05_service_qualification.py',
     'tests/test_observation_windows.py', 'tests/test_observation_archive.py'})
 
 LOCAL_MODULES = LOCAL_MODULES | frozenset({
+    'velociraptor_observation_sdk.py', 'velociraptor_observation_startup.py',
+    'tests/test_observation_startup.py',
     'velociraptor_observation_attempts.py', 'velociraptor_observation_catalog.py',
     'velociraptor_observation_config.py', 'tests/test_observation_attempts.py',
     'tests/test_observation_catalog.py', 'tests/test_observation_config.py',
@@ -356,6 +364,7 @@ def _read(path, *, reader=None):
         reader = reader or WindowsSession()
         try:
             return reader.read(path, private=path.name in {
+                'observation-lifecycle-configuration.json',
                 "observation-archive-configuration.json", "observation-namespace-root.json",
                 "controller-runtime-record.json", "controller-approval.json",
                 "deployment-configuration.json", "p06-completion-record.json", ".env", "api.config.yaml"})
@@ -750,6 +759,8 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
             'sha256': CALL_CLOCK_CONTRACT_SHA}, 'call-clock contract allowlist anchor missing')
     require(allowed.get(ARCHIVE_CONTRACT) == {'path': ARCHIVE_CONTRACT, 'size': 23088,
             'sha256': ARCHIVE_CONTRACT_SHA}, 'archive contract allowlist anchor missing')
+    require(allowed.get(LIFECYCLE_CONTRACT) == {'path': LIFECYCLE_CONTRACT, 'size': 57074,
+            'sha256': LIFECYCLE_CONTRACT_SHA}, 'lifecycle contract allowlist anchor missing')
     for path,size,sha in RAW_CONTRACTS:
         require(allowed.get(path)=={'path':path,'size':size,'sha256':sha},
                 'raw HTTP contract allowlist anchor missing: ' + path)
@@ -797,7 +808,7 @@ def _load_group(repository: Path, *, synthetic_fixture, reader):
           "pc026-implementation-freeze-v1", "FROZEN")
     require(freeze["normative_manifest"] == approval["normative_manifest"], "freeze normative binding differs")
     group.freeze_refs = refs(freeze["members"])
-    forbidden = {BASE+'observation-archive-configuration.json', BASE+'observation-namespace-root.json', RUNTIME, APPROVAL, FREEZE, COMPLETION, approval["publication_receipt"]["path"]}
+    forbidden = {BASE+'observation-lifecycle-configuration.json', BASE+'observation-archive-configuration.json', BASE+'observation-namespace-root.json', RUNTIME, APPROVAL, FREEZE, COMPLETION, approval["publication_receipt"]["path"]}
     require(not forbidden & set(group.freeze_refs)
             and not any(path.startswith("Logs/") for path in group.freeze_refs),
             "cyclic implementation freeze or future evidence member")
