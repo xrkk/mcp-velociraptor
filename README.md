@@ -992,3 +992,9 @@ transfer-child ownership, binary ingress, complete retained-state budgets,
 response-only envelopes, safe prefix/export/cut publication and formal completion
 headers are pending. The production approved constructor continues to refuse
 before writer/backend/listener; there is no CLI/env/HTTP MODEL activation.
+
+The SDK pin also locks the full `mcp.shared.dispatcher` source and the actual
+`coerce_request_id` AST used by the new typed-slot queue (15 source modules).
+A helper-source drift with otherwise unchanged SDK versions is rejected before
+manager creation. This adds no upstream adapter copy and grants no deployment
+or archive authority.
