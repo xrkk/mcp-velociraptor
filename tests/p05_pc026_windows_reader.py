@@ -13,6 +13,7 @@ import os
 from pathlib import Path, PureWindowsPath
 import re
 import struct
+import sys
 import threading
 
 _PRIVILEGE_LOCK = threading.RLock()
@@ -320,6 +321,17 @@ class WindowsSession:
         with self.lock:
             return self._read_bound(path, private=private)
 
+    def _read_original(self, path, limit):
+        """Private snapshot read: enforce the finite limit before ReadFile.
+
+        Ancestor/full-SD binding still happens first and owns retained handles.
+        This is a content bound, not a complete native/Python heap reservation.
+        """
+        if type(limit) is not int or not 0 < limit <= sys.maxsize:
+            raise NativeReadError('record read budget')
+        with self.lock:
+            return self._read_bound(path, private=True, max_bytes=limit)
+
     def _directory_names(self, path, limit):
         if type(limit) is not int or limit <= 0:
             raise NativeReadError('directory enumeration budget')
@@ -343,10 +355,10 @@ class WindowsSession:
     def _record_bytes(self, path, limit):
         """One bounded private original, releasing only its leaf on every exit."""
         with self.lock:
-            if type(limit) is not int or limit <= 0:
+            if type(limit) is not int or not 0 < limit <= sys.maxsize:
                 raise NativeReadError('record read budget')
             path = check_path(path)
-            stream = self._stream_bound(path, private=True)
+            stream = self._stream_bound(path, private=True, max_bytes=limit)
             primary = None
             try:
                 data = bytearray()
@@ -369,13 +381,15 @@ class WindowsSession:
                             raise
                         _note(primary, 'record_leaf_close_failed')
 
-    def _read_bound(self, path, *, private):
-        stream = self._stream_bound(path, private=private)
+    def _read_bound(self, path, *, private, max_bytes=None):
+        stream = self._stream_bound(path, private=private, max_bytes=max_bytes)
         chunks = []
-        while True:
-            try: chunks.append(next(stream))
-            except StopIteration as end:
-                return b''.join(chunks), *end.value
+        try:
+            while True:
+                try: chunks.append(next(stream))
+                except StopIteration as end:
+                    return b''.join(chunks), *end.value
+        finally:stream.close()
 
     def stream(self, path):
         # Keep the same retained handles, principal and full SD gate while
@@ -383,7 +397,7 @@ class WindowsSession:
         with self.lock:
             return (yield from self._stream_bound(path, private=False))
 
-    def _stream_bound(self, path, *, private):
+    def _stream_bound(self, path, *, private, max_bytes=None):
         check_path(path)
         chain = list(reversed(path.parents)) + [path]
         if len(chain) > 64:
@@ -396,6 +410,11 @@ class WindowsSession:
             observations.append(observed)
         if len({row[0][0] for row in observations}) != 1:
             raise NativeReadError('native volume differs across ancestor chain')
+        # The confirmed same-handle file length precedes native content buffers
+        # and Python chunk accumulation. A changed/lying source still fails the
+        # existing length/EOF and post-read identity/SD rechecks.
+        if max_bytes is not None and observations[-1][2][0] > max_bytes:
+            raise NativeReadError('record byte budget exceeded')
         self.api.rewind(handle)
         count = 0
         while chunk := self.api.read(handle):

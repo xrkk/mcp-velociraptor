@@ -113,6 +113,17 @@ class NativeReservationTests(close_io.CloseIOTests):
         row=self.c._close_io['live'];self.assertTrue(row.thread.is_alive());self.assertEqual(self.c._temporary_reserved,1000)
         self.release.set();row.thread.join(3);self.assertFalse(row.thread.is_alive())
         self.assertEqual(self.c._temporary_reserved,0);self.assertFalse(row.joined)
+    async def test_join_task_launch_failure_keeps_native_quota_and_first_error(self):
+        primary=RuntimeError('join-task-start')
+        with patch.object(module.asyncio,'create_task',side_effect=primary):
+            with self.assertRaises(RuntimeError) as caught:
+                await self.c._owned_close_io('live',self.native,time.monotonic_ns()+3000000000,temporary_bytes=1000)
+        row=self.c._close_io['live']
+        self.assertIs(caught.exception,primary);self.assertIs(row.error,primary)
+        self.assertTrue(row.thread.is_alive());self.assertEqual(self.c._temporary_reserved,1000)
+        self.release.set();row.thread.join(3)
+        self.assertFalse(row.thread.is_alive());self.assertEqual(self.c._temporary_reserved,0)
+        self.assertFalse(row.joined);self.assertEqual(self.c._state,'UNKNOWN')
 
 
 class HTTPStorageTests(unittest.IsolatedAsyncioTestCase):
@@ -170,3 +181,51 @@ class DescriptorBufferTests(unittest.TestCase):
                 else:
                     with self.assertRaises(reader.NativeReadError):api.descriptor(9)
                     allocate.assert_not_called()
+
+
+class SnapshotReadBounds(unittest.TestCase):
+    def fixture(self):
+        from tests import test_p05_pc026_windows_reader as models
+        f=models.NativeReaderModels();self.addCleanup(f.doCleanups)
+        return f.reader()
+    def test_confirmed_size_above_limit_refuses_before_native_content_read(self):
+        from pathlib import PureWindowsPath
+        from tests import p05_pc026_windows_reader as reader_module
+        reader=self.fixture();path=PureWindowsPath(r'C:\controlled\original.json')
+        with patch.object(reader.api,'read',wraps=reader.api.read) as native_read:
+            with self.assertRaisesRegex(reader_module.NativeReadError,'record byte budget'):
+                reader._read_original(path,len(reader.api.data)-1)
+            native_read.assert_not_called()
+        self.assertTrue(reader.objects)  # Original retained security ownership.
+        reader.close();self.assertFalse(reader.api.pending)
+    def test_exact_original_and_lying_metadata_still_require_real_eof(self):
+        from pathlib import PureWindowsPath
+        from tests import p05_pc026_windows_reader as reader_module
+        reader=self.fixture();path=PureWindowsPath(r'C:\controlled\original.json')
+        raw,_,identity=reader._read_original(path,len(reader.api.data))
+        self.assertEqual(raw,reader.api.data);self.assertEqual(identity['principal_sid'],reader.sid)
+        reader.close();reader=self.fixture()
+        with patch.object(reader.api,'metadata',return_value=(len(reader.api.data)-1,1,2,3,0)):
+            with self.assertRaisesRegex(reader_module.NativeReadError,'extra read'):
+                reader._read_original(path,len(reader.api.data)-1)
+    def test_invalid_limit_never_opens_native_handle(self):
+        from pathlib import PureWindowsPath
+        reader=self.fixture()
+        with patch.object(reader.api,'open',wraps=reader.api.open) as open_file:
+            for bad in (True,0,-1,1.0,None,sys.maxsize+1):
+                with self.assertRaises(Exception):reader._read_original(PureWindowsPath(r'C:\controlled\x'),bad)
+            open_file.assert_not_called()
+    def test_actual_snapshot_oversize_record_does_not_read_its_content(self):
+        from tests import test_observation_attempts as models
+        from tests import p05_pc026_windows_reader as reader_module
+        f=models.LedgerModels();self.addCleanup(f.doCleanups)
+        ledger,fs,config=f.ledger();path=ledger._catalog_dir.path/'00000000.json'
+        fs.nodes[str(path)]['data']+=b' '*config.catalog_codec.max_record_bytes
+        node=fs.nodes[str(path)];node['meta']=(len(node['data']),*node['meta'][1:])
+        before={p:n['data'] for p,n in fs.nodes.items() if not n['directory']}
+        reads=[];actual=fs.read
+        def read(handle):reads.append(fs.handles[handle]['node'] is node);return actual(handle)
+        with patch.object(fs,'read',read),self.assertRaisesRegex(reader_module.NativeReadError,'record byte budget'):
+            ledger._session_prefix('one',max_files=100,max_bytes=1000000)
+        self.assertFalse(any(reads));self.assertTrue(ledger._unknown)
+        self.assertEqual(before,{p:n['data'] for p,n in fs.nodes.items() if not n['directory']})

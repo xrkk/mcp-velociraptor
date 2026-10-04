@@ -1151,3 +1151,14 @@ this preflight. Historical MODEL cut fixtures retain their original vector.
 Host tests execute the complete isolated approval loader and actual ctypes
 buffer sizing at the maximum and one above it. They do not execute Win32 APIs
 or establish full native workspace, allocator, NTFS or RSS qualification.
+
+
+Snapshot originals now enter a private bounded Reader path. Their confirmed
+same-handle file length is checked against the catalog/request codec limit
+before ReadFile or complete Python chunk accumulation; ledger END readback uses
+the same early check. Full SD/ancestor binding, actual EOF and post-read identity
+rechecks remain required. A lying length still fails the original read gate.
+Oversized, invalid or overflowing bounds retain source originals and refuse
+without content reads or export writes. Host tests exercise actual Reader and
+ledger algorithms with MODEL Windows APIs. This content bound does not complete
+reservation of SD/ctypes buffers, parser intermediates or the full snapshot graph.

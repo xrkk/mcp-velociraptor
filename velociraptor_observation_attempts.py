@@ -368,7 +368,7 @@ class ArchiveAttemptLedger:
                 def read(path,coordinate,limit):
                     nonlocal total
                     _require(len(originals)<max_files,'prefix_file_budget')
-                    raw,_,identity=reader.read(path,private=True)
+                    raw,_,identity=reader._read_original(path,limit)
                     _require(len(raw)<=limit,'prefix_record_budget')
                     sd=reader._bind(path,False,'state')[1][1]
                     _require(hashlib.sha256(sd).hexdigest()==identity['acl_sha256'],'prefix_sd_differs')
