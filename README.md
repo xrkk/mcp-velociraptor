@@ -1155,3 +1155,10 @@ Retained measurement also follows exception cause/context chains, SDK async
 generator frames and actual slotted path/state objects; measurement failure is
 sticky UNKNOWN. Real socket loss after SDK claim keeps the live handler and
 journal until its actual finish. Complete allocation-before-construction bounds remain unfinished.
+
+
+Eight queued control requests hold pending capacity until DELETE settles them;
+no late tool BEGIN is created. A timeout at the final MODEL export close keeps
+complete residual files but cannot create a late success receipt. The first
+timeout and actual native join remain recorded. Production/native allocation
+and publication qualification remain separate work.

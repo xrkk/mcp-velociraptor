@@ -548,3 +548,86 @@ class ExportBudgetTests(unittest.IsolatedAsyncioTestCase):
     async def test_actual_cut_encode_budget_before_first_write(self):await self.limited('max_cut_bytes')
     async def test_actual_lifecycle_encode_budget_before_first_write(self):await self.limited('max_proof_bytes')
     async def test_actual_source_manifest_encode_budget_before_first_write(self):await self.limited('max_source_manifest_bytes')
+
+class FullPendingTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def test_eight_actual_queued_controls_hold_pending_until_delete_settles_them(self):
+        import asyncio,time
+        session=await self.initialize();first=asyncio.create_task(self.call(7,'latch'))
+        queued=[];delete=None
+        try:
+            until=time.monotonic()+2
+            while not self.started.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(self.started.is_set())
+            for number in range(8):
+                queued.append(asyncio.create_task(self.http.post(self.url,json=dict(jsonrpc='2.0',
+                    id='0'*(number+1)+'7',method='tools/list'))))
+            until=time.monotonic()+3
+            while self.controller._pending_count()<8 and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertEqual(self.controller._pending_count(),8)
+            self.assertTrue(all(not task.done() for task in queued))
+            before=(self.controller._sequence,self.ledger._attempt_count,len(self.controller._work))
+            response=await self.call(9,'never')
+            self.assertEqual(response.status_code,503);self.assertIn('pending_budget',response.text)
+            self.assertEqual((self.controller._sequence,self.ledger._attempt_count,len(self.controller._work)),before)
+            delete=asyncio.create_task(self.http.delete(self.url))
+            for task in queued:self.assertIn('Request cancelled',(await task).text)
+            self.assertEqual(self.controller._pending_count(),0)
+            self.assertFalse(delete.done());self.assertFalse(self.release.is_set())
+            self.release.set();await first
+            self.assertEqual((await delete).status_code,200)
+            proof=json.loads(self.exporter.files['lifecycle.json'])
+            self.assertEqual(proof['attempt_sequences'],[1])
+            self.assertEqual(len(proof['sdk_work']['messages']),11)
+            controls=[r for r in proof['sdk_work']['messages'] if r['method']=='tools/list']
+            self.assertEqual(len(controls),8)
+            self.assertTrue(all(r['handler_outcome']=='cancelled' and r['worker_exited'] for r in controls))
+            self.assertEqual(self.calls,['latch'])
+        finally:
+            self.release.set()
+            for task in [first,*queued,delete]:
+                if task is not None and not task.done():await task
+
+class FinalReceiptTimeoutTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def test_final_close_timeout_keeps_complete_files_without_success_receipt(self):
+        import asyncio,threading,time
+        session=await self.initialize();await self.call(7)
+        entered=threading.Event();release=threading.Event();c=self.controller
+        def latch(stage):
+            if stage=='final_close':
+                entered.set()
+                if not release.wait(3):raise AssertionError('final-receipt latch expired')
+        self.exporter.fault=latch;c._limits['close_timeout_ns']=100000000
+        response_task=asyncio.create_task(self.http.delete(self.url))
+        try:
+            until=time.monotonic()+2
+            while not entered.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(entered.is_set())
+            self.assertTrue((self.exporter.base/'cut.json').exists())
+            self.assertTrue((self.exporter.base/'export.json').exists());self.assertFalse(self.exporter.handles)
+            response=await response_task;self.assertEqual(response.status_code,503)
+            self.assertNotIn('x-velo-observation-cut',response.headers)
+            primary=c._close_errors[session];self.assertEqual(primary.code,'close_io_timeout')
+            row=c._close_io[(session,'export')]
+            self.assertTrue(row.thread.is_alive());self.assertFalse(row.joined)
+            release.set()
+            async def settle():await row.task
+            await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(settle(),self.server_loop))
+            self.assertTrue(row.joined and row.wrapper_exited);self.assertFalse(row.thread.is_alive())
+            self.assertEqual(row.error.code,'export_owner_unknown')
+            self.assertIs(c._close_errors[session],primary);self.assertFalse(self.exporter.completed or self.exporter.closed)
+            self.assertEqual(c._state,'UNKNOWN');self.assertTrue((self.exporter.base/'export.json').exists())
+        finally:
+            release.set()
+            if not response_task.done():await response_task

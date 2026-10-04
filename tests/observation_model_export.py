@@ -152,6 +152,7 @@ class ModelExporter:
             retain((files,manifest,projection,cut,lifecycle,source,catalog,begins,exported,observed))
             self.codec.verify(observed,self.config.catalog_codec,self.config.codec,self.lifecycle_config_raw)
             self.fault('final_close')
+            retain((files,exported,observed))  # External final state before receipt.
             _require(not self.handles,'final_io_closed')
             self.closed=True
             self.descriptor=ref(relative+'/cut.json',files['cut.json'])
