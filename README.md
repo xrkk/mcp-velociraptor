@@ -1039,3 +1039,17 @@ constructing pending entries. The source pin includes the three additional
 upstream hook algorithms; the eight copied adapter boundaries remain 592 lines.
 Complete lifecycle proof/export/cut, full retained-object budgets and Windows
 qualification remain unfinished, and formal production startup still refuses.
+
+
+After its real causal barrier, the private controller now obtains a bounded
+native-reader catalog snapshot under the actual publication transaction lock.
+It verifies the anchored global head, complete names before/after reads, full
+source SDs and every original in the selected session's NEW chains against ACK
+and END. Other open sessions' metadata remains in the complete prefix while
+their event originals are excluded; REJECTED tombstones create no request chain.
+Temporary snapshot handles close before immutable originals are retained.
+Missing/extra/pending/drifting originals and uncertain closure poison the ledger
+and controller. Host tests exercise actual ledger/reader algorithms with MODEL
+Windows storage. This remains a snapshot, with no published export or cut and
+no successful DELETE headers. Full export codecs, runtime I/O closure, object
+budget qualification, service drain and native Windows validation remain pending.

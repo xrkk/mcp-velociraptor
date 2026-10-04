@@ -102,6 +102,24 @@ class _RequestPublisher:
             raise
 
 
+@dataclass(frozen=True)
+class _PrefixOriginal:
+    path: str
+    raw: bytes
+    identity: bytes
+    sd: bytes
+
+
+@dataclass(frozen=True)
+class _SessionPrefix:
+    instance: str
+    session: str
+    catalog_count: int
+    catalog_head: bytes
+    attempts: tuple
+    originals: tuple
+
+
 class ArchiveAttemptLedger:
     def __init__(self):
         raise TypeError('use open_approved(instance_id)')
@@ -323,6 +341,105 @@ class ArchiveAttemptLedger:
             raise
         finally:
             self._retire(attempt)  # Caller asserted actual worker exit, not HTTP cancel.
+
+    def _session_prefix(self, session, *, max_files, max_bytes):
+        """Private bounded native snapshot; format EOF is never storage EOF.
+
+        Temporary source handles are closed before returning immutable bytes.
+        This snapshot grants no export authority or final-close certificate.
+        """
+        _require(type(session) is str and bool(session), 'session_invalid')
+        _require(all(type(x) is int and x>0 for x in (max_files,max_bytes)), 'prefix_budget_invalid')
+        reader=None;primary=None
+        try:
+            # Actual catalog publication owns this same lock through readback.
+            # It cannot leave a pending transaction outside this snapshot.
+            with self._catalog_lock, self._security_lock:
+                with self._state_lock:self._available()
+                self._recheck(self._catalog_dir)
+                count=self._catalog_count;head=copy.deepcopy(self._head)
+                _require(count>0 and head is not None,'prefix_head_missing')
+                reader=WindowsSession()
+                _require(reader.sid==self._allocator.root.identity['principal_sid'],'prefix_principal_differs')
+                expected=frozenset(f'{i:08d}.json' for i in range(count))
+                names=reader._directory_names(self._catalog_dir.path,self._config.catalog_codec.max_records+1)
+                _require(names==expected,'prefix_catalog_members_differ')
+                originals=[];total=0;catalog=[];begins={};ends={};acks={}
+                def read(path,coordinate,limit):
+                    nonlocal total
+                    _require(len(originals)<max_files,'prefix_file_budget')
+                    raw,_,identity=reader.read(path,private=True)
+                    _require(len(raw)<=limit,'prefix_record_budget')
+                    sd=reader._bind(path,False,'state')[1][1]
+                    _require(hashlib.sha256(sd).hexdigest()==identity['acl_sha256'],'prefix_sd_differs')
+                    # Includes actual source bytes, SD and retained metadata;
+                    # caller reserves against its remaining retained budget.
+                    total+=len(raw)+len(sd)+len(_canonical(identity))+len(coordinate.encode('utf-8'))+512
+                    _require(total<=max_bytes,'prefix_byte_budget')
+                    originals.append(_PrefixOriginal(coordinate,raw,_canonical(identity),bytes(sd)))
+                    return raw
+                for index in range(count):
+                    raw=read(self._catalog_dir.path/f'{index:08d}.json',f'c/{index:08d}.json',
+                        self._config.catalog_codec.max_record_bytes)
+                    row=self._config.catalog_codec.parse(raw);catalog.append(raw)
+                    kind,p=row['record_type'],row['payload']
+                    if kind=='ATTEMPT_BEGIN':begins[p['attempt_sequence']]=p
+                    elif kind=='ATTEMPT_END':ends[p['attempt_sequence']]=p
+                    elif kind=='ACCEPT_ACK':acks[p['attempt_sequence']]=p
+                summary=self._config.catalog_codec.verify(iter(catalog))
+                _require(summary['instance_id']==self._instance and summary['record_count']==count
+                    and summary['head_ref']==head,'prefix_catalog_head_differs')
+                _require(reader._directory_names(self._catalog_dir.path,self._config.catalog_codec.max_records+1)==names,
+                    'prefix_catalog_directory_drift')
+                selected=tuple(number for number,p in begins.items() if p['key']['session_id']==session)
+                by_sequence={a.sequence:a for a in self._attempts.values() if a.key['session_id']==session}
+                _require(set(selected)==set(by_sequence),'prefix_session_attempts_differ')
+                for number in selected:
+                    begin=begins[number];end=ends.get(number);attempt=by_sequence[number]
+                    _require(end is not None and attempt.state=='ENDED','prefix_session_unended')
+                    _require(begin['key']==attempt.key and begin['tool']==attempt.tool
+                        and begin['arguments_sha256']==attempt.sha and begin['decision']==attempt.decision,
+                        'prefix_session_parent_differs')
+                    if attempt.decision=='REJECTED':
+                        _require(end['disposition']=='REJECTED' and number not in acks,'prefix_rejection_differs')
+                        continue
+                    self._recheck(attempt.directory)
+                    maximum=self._config.codec.max_records+1
+                    expected=frozenset(f'{i:08d}.json' for i in range(end['record_count']))
+                    names=reader._directory_names(attempt.directory.path,maximum)
+                    _require(names==expected,'prefix_request_members_differ')
+                    records=[]
+                    for index in range(end['record_count']):
+                        coordinate=attempt.directory.path.name+f'/{index:08d}.json'
+                        records.append(read(attempt.directory.path/f'{index:08d}.json',coordinate,
+                            self._config.codec.max_record_bytes))
+                    actual=self._config.codec.verify(iter(records))
+                    expected_head={k:end['head_ref'][k] for k in ('size','sha256')}
+                    _require(actual['status']==end['disposition'] and actual['key']==begin['key']
+                        and actual['tool']==begin['tool'] and actual['arguments_sha256']==begin['arguments_sha256']
+                        and actual['acceptance_sequence']==number and actual['outcome']==end['outcome']
+                        and actual['head_ref']==expected_head and actual['event_count']==end['event_count']
+                        and sum(map(len,records))==end['total_bytes'],'prefix_request_originals_differ')
+                    accept=dict(path=attempt.directory.path.name+'/00000000.json',size=len(records[0]),
+                        sha256=hashlib.sha256(records[0]).hexdigest())
+                    _require(acks.get(number,{}).get('accept_ref')==accept,'prefix_accept_ack_differs')
+                    _require(reader._directory_names(attempt.directory.path,maximum)==names,
+                        'prefix_request_directory_drift')
+                    self._recheck(attempt.directory)
+                self._recheck(self._catalog_dir)
+                with self._state_lock:self._available()
+                # Head cannot be cut ahead of completed publication/readback.
+                _require(count==self._catalog_count and head==self._head,'prefix_head_drift')
+                return _SessionPrefix(self._instance,session,count,_canonical(head),selected,tuple(originals))
+        except BaseException as error:
+            primary=error;self._poison();raise
+        finally:
+            if reader is not None:
+                try:reader.close()
+                except BaseException:
+                    self._poison()
+                    if primary is None:raise
+                    _note(primary,'prefix_reader_close_failed')
 
     def _cleanup(self, primary=None):
         first = primary

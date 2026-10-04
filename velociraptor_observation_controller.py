@@ -193,6 +193,8 @@ class SessionController:
         self._binary_sequences = set()
         self._outgoing = {}
         self._outgoing_records = []
+        self._prefixes = {}
+        self._close_errors = {}
 
     def _unknown(self, session=None):
         with self._lock:
@@ -499,7 +501,23 @@ class SessionController:
                 data['state']='UNKNOWN'
                 if self._state!='UNKNOWN':self._state='DRAINING'
             raise
-        # No fake cut. Export/child closure is not implemented yet.
+        # Collect the actual native prefix only after the causal barrier.
+        # Export publication is still unavailable: a prefix cannot authorize 200.
+        try:
+            remaining=self._limits['max_retained_state_bytes']-self._retained
+            prefix=self._ledger._session_prefix(session,max_files=self._limits['max_export_files'],
+                max_bytes=min(self._limits['max_export_bytes'],remaining))
+            if time.monotonic_ns()>=deadline:raise ControllerError('close_unknown')
+            retained=_message_size(vars(prefix))+sum(_message_size(vars(r)) for r in prefix.originals)
+            with self._lock:
+                if self._state=='UNKNOWN' or self._ledger._unknown:raise ControllerError('prefix_unknown')
+                if self._retained+retained>self._limits['max_retained_state_bytes']:
+                    raise ControllerError('prefix_retained_budget')
+                self._prefixes[session]=prefix
+                self._retained+=retained
+        except BaseException as error:
+            self._close_errors[session]=error
+            self._unknown(session);raise
         raise ControllerError('cut_unavailable')
 
 
@@ -695,7 +713,7 @@ class _HTTPIngress:
                 row.error=row.error or error
                 c._unknown(row.session)
             if response_started:raise
-            return await JSONResponse({'error':{'code':'invalid_or_unknown'}},status_code=400 if row is None else 503)(scope,receive,send)
+            return await JSONResponse({'error':{'code':'invalid_or_unknown'}},status_code=503 if row is not None or scope.get('method')=='DELETE' else 400)(scope,receive,send)
         except BaseException:
             if row is not None and row.attempt is not None and row.journal is not None and not row.enqueued:
                 with anyio.CancelScope(shield=True):

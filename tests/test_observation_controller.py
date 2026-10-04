@@ -280,3 +280,16 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ControllerError):self.controller._admit(None,b'x'*32,message)
         self.assertEqual(self.controller._pending,0)
         self.assertEqual(self.controller._state,'DRAINING')
+
+    async def test_native_prefix_failure_on_delete_is_503_sticky_and_preserves_primary(self):
+        session=await self.initialize()
+        await self.call(1)
+        primary=OSError('MODEL-native-prefix-primary')
+        with patch.object(self.ledger,'_session_prefix',side_effect=primary):
+            response=await self.http.delete(self.url)
+        self.assertEqual(response.status_code,503,response.text)
+        self.assertNotIn('MODEL-native-prefix-primary',response.text)
+        self.assertIs(self.controller._close_errors[session],primary)
+        self.assertEqual(self.controller._state,'UNKNOWN')
+        self.assertNotIn('x-velo-observation-close',response.headers)
+        self.assertNotIn(session,self.controller._prefixes)
