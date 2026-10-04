@@ -1126,3 +1126,15 @@ catalog append. These observed graph peaks do not establish allocator/native/RSS
 limits or every allocation between observation points. Full preallocation and
 Windows qualification remain required. Actual initialize handler/HTTP tails are
 also awaited before OPEN and before a racing initialized notification proceeds.
+
+
+Prefix/export cancellation and timeout tests now keep the actual native thread
+and join task until exit. A late MODEL publisher checks the retained controller
+state at publication boundaries and refuses to start a successful export after
+UNKNOWN. Join-task launch failure also retains the live native thread and first
+error. Fixed manifest/proof/projection/cut/export close faults preserve their
+first exception, residual files and UNKNOWN without success headers. Queue
+receive tasks remain permanent records and must be done before handoff or proof.
+DELETE-before-cancel tests verify queued alias END, zero late BEGIN and no 200
+until the live native handler exits. Native Windows publication and allocation
+qualification still require B2 and an approved source.

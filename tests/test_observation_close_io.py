@@ -355,3 +355,21 @@ class SDKPayloadBudgetTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await send.aclose();await receive.aclose()
         self.assertTrue(send.closed and receive.closed)
+
+class JoinTaskLaunchTests(CloseIOTests):
+    test_timeout_retains_actual_thread_and_join_task_until_exit=None
+    test_http_waiter_cancellation_does_not_cancel_native_join=None
+    test_actual_native_primary_preserved_after_true_join=None
+
+    async def test_join_task_launch_failure_retains_live_native_thread_and_primary(self):
+        primary=RuntimeError('join-task-launch')
+        with patch.object(asyncio,'create_task',side_effect=primary):
+            with self.assertRaises(RuntimeError) as caught:
+                await self.c._owned_close_io('session',self.native,time.monotonic_ns()+3000000000)
+        self.assertIs(caught.exception,primary)
+        row=self.c._close_io['session']
+        self.assertIs(row.error,primary);self.assertIsNone(row.task)
+        self.assertTrue(row.thread.is_alive());self.assertFalse(row.joined)
+        self.assertEqual(self.c._state,'UNKNOWN')
+        self.release.set();row.thread.join(3)
+        self.assertTrue(row.wrapper_exited);self.assertFalse(row.thread.is_alive() or row.joined)

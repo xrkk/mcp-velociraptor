@@ -127,10 +127,12 @@ class ModelExporter:
         self.files={}
         self.base.mkdir(parents=True,exist_ok=False)
         try:
-            for name in sorted(n for n in files if n.startswith(('originals/','sd/'))):self._write(name,files[name])
+            for name in sorted(n for n in files if n.startswith(('originals/','sd/'))):
+                retain((files,manifest,lifecycle));self._write(name,files[name])
             # Source-copy close witness is reached before lifecycle is published.
             _require(not self.handles,'copy_io_closed')
-            for name in ('source-manifest.json','lifecycle.json','attempts.json','cut.json'):self._write(name,files[name])
+            for name in ('source-manifest.json','lifecycle.json','attempts.json','cut.json'):
+                retain((files,manifest,lifecycle));self._write(name,files[name])
             exported=dict(common,kind='pc026-observation-session-export-v1',cut_ref=ref('cut.json',files['cut.json']),
                 cut_identity=self.identities['cut.json'],members=sorted(cut['members']+[ref('cut.json',files['cut.json'])],
                     key=lambda r:r['path']),status='PUBLISHED')

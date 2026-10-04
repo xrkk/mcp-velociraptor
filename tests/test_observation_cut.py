@@ -372,3 +372,127 @@ class FullCapacityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.controller._sequence_records),32)
         self.assertEqual(len(self.exporter.completed),2)
         self.assertTrue(all(r.joined for r in self.controller._close_io.values()))
+
+class NativePhaseFaultTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def phase_fault(self, phase, mode):
+        import asyncio,threading,time
+        from velociraptor_observation_controller import ControllerError
+        session=await self.initialize();await self.call(7)
+        entered=threading.Event();release=threading.Event();c=self.controller
+        target,method=(self.ledger,'_session_prefix') if phase=='prefix' else (self.exporter,'publish')
+        actual=getattr(target,method)
+        def latched(*args,**kwargs):
+            entered.set()
+            if not release.wait(3):raise AssertionError('native-phase latch expired')
+            return actual(*args,**kwargs)
+        key=session if phase=='prefix' else (session,'export')
+        if mode=='timeout':c._limits['close_timeout_ns']=100000000
+        future=None;http=None
+        try:
+            with patch.object(target,method,latched):
+                if mode=='timeout':http=asyncio.create_task(self.http.delete(self.url))
+                else:future=asyncio.run_coroutine_threadsafe(c._close_session(session,c._sessions[session]['owner']),self.server_loop)
+                until=time.monotonic()+2
+                while not entered.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+                self.assertTrue(entered.is_set());row=c._close_io[key]
+                if mode=='timeout':
+                    response=await http
+                    self.assertEqual(response.status_code,503,response.text)
+                    self.assertNotIn('x-velo-observation-cut',response.headers)
+                    self.assertIsInstance(c._close_errors[session],ControllerError)
+                else:
+                    future.cancel()
+                    until=time.monotonic()+2
+                    while session not in c._close_errors and time.monotonic()<until:await asyncio.sleep(.001)
+                    self.assertIsInstance(c._close_errors[session],asyncio.CancelledError)
+                self.assertEqual(c._state,'UNKNOWN')
+                self.assertTrue(row.thread.is_alive());self.assertFalse(row.joined or row.task.done())
+                self.assertFalse(self.exporter.completed)
+                release.set()
+                async def settle():await row.task
+                await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(settle(),self.server_loop))
+                self.assertTrue(row.joined and row.wrapper_exited);self.assertFalse(row.thread.is_alive())
+                self.assertEqual(c._state,'UNKNOWN');self.assertFalse(self.exporter.completed)
+                if phase=='export':self.assertEqual(row.error.code,'export_owner_unknown')
+        finally:
+            release.set()
+            if http is not None and not http.done():await http
+
+    async def test_prefix_timeout_keeps_native_owner_until_true_join(self):await self.phase_fault('prefix','timeout')
+    async def test_prefix_cancel_keeps_native_owner_until_true_join(self):await self.phase_fault('prefix','cancel')
+    async def test_export_timeout_cannot_publish_after_unknown(self):await self.phase_fault('export','timeout')
+    async def test_export_cancel_cannot_publish_after_unknown(self):await self.phase_fault('export','cancel')
+
+    async def close_fault(self, stage):
+        session=await self.initialize();await self.call(7)
+        primary=OSError('actual-MODEL-close:'+stage)
+        def fail(actual):
+            if actual==stage:raise primary
+        self.exporter.fault=fail
+        response=await self.http.delete(self.url)
+        self.assertEqual(response.status_code,503,response.text)
+        self.assertNotIn('x-velo-observation-cut',response.headers)
+        self.assertIs(self.controller._close_errors[session],primary)
+        self.assertEqual(self.controller._state,'UNKNOWN');self.assertFalse(self.exporter.completed)
+        self.assertFalse(self.exporter.handles)
+        self.assertTrue(all(r.joined for r in self.controller._close_io.values()))
+        before=dict(self.exporter.files)
+        self.assertEqual((await self.http.delete(self.url)).status_code,503)
+        self.assertEqual(before,self.exporter.files)
+        self.assertIs(self.controller._close_errors[session],primary)
+
+    async def test_source_manifest_write_close_fault(self):await self.close_fault('write_close:source-manifest.json')
+    async def test_lifecycle_write_close_fault(self):await self.close_fault('write_close:lifecycle.json')
+    async def test_projection_write_close_fault(self):await self.close_fault('write_close:attempts.json')
+    async def test_cut_write_close_fault(self):await self.close_fault('write_close:cut.json')
+    async def test_export_write_close_fault(self):await self.close_fault('write_close:export.json')
+    async def test_final_graph_export_read_close_fault(self):await self.close_fault('read_close:export.json')
+
+class DeleteOrderTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def test_delete_cancels_queued_alias_then_late_cancel_and_tool_have_zero_begin(self):
+        import asyncio,time
+        session=await self.initialize();first=asyncio.create_task(self.call(7,'latch'))
+        second=delete=None
+        try:
+            until=time.monotonic()+2
+            while not self.started.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(self.started.is_set())
+            second=asyncio.create_task(self.call('007','never'))
+            until=time.monotonic()+2
+            while self.ledger._attempt_count<2 and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertEqual(self.ledger._attempt_count,2)
+            delete=asyncio.create_task(self.http.delete(self.url))
+            until=time.monotonic()+2
+            while self.controller._sessions[session]['state']=='OPEN' and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertEqual(self.controller._sessions[session]['state'],'CLOSING')
+            self.assertIn('Request cancelled',(await second).text)
+            queued=next(r for r in self.controller._work.values() if r.message.get('id')=='007')
+            self.assertFalse(queued.enqueued);self.assertTrue(queued.receive_waiter.done())
+            self.assertFalse(delete.done());self.assertFalse(self.release.is_set())
+            before=self.ledger._attempt_count
+            self.assertEqual((await self.call(8,'late')).status_code,409)
+            cancel=await self.http.post(self.url,json=dict(jsonrpc='2.0',method='notifications/cancelled',params=dict(requestId=7)))
+            self.assertEqual(cancel.status_code,409);self.assertEqual(self.ledger._attempt_count,before)
+            self.release.set();await first
+            self.assertEqual((await delete).status_code,200)
+            self.assertEqual(self.calls,['latch'])
+            self.assertEqual(sorted(r['payload']['outcome'] for r in self.records() if r['record_type']=='ATTEMPT_END'),['cancelled','returned'])
+            proof=json.loads(self.exporter.files['lifecycle.json'])
+            self.assertEqual(proof['attempt_sequences'],[1,2])
+            self.assertEqual(len(proof['sdk_work']['messages']),4)
+        finally:
+            self.release.set()
+            for task in (first,second,delete):
+                if task is not None and not task.done():await task

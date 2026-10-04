@@ -68,6 +68,7 @@ class _Work:
     response_pending: object = None
     request_bytes: int = 0
     response_bytes: int = 0
+    receive_waiter: object = None
 
 
 @dataclass(eq=False)
@@ -411,7 +412,7 @@ class SessionController:
         row=_CloseIO(session)
         def execute():
             try:row.result=function()
-            except BaseException as error:row.error=error
+            except BaseException as error:row.error=row.error or error
             finally:row.wrapper_exited=True
         async def join():
             # Poll the real thread rather than notifying a possibly closed loop
@@ -435,7 +436,14 @@ class SessionController:
         try:row.thread.start()
         except BaseException as error:
             row.error=error;self._unknown(session);raise
-        row.task=asyncio.create_task(join())
+        joining=join()
+        try:row.task=asyncio.create_task(joining)
+        except BaseException as error:
+            joining.close()
+            if row.error is None:row.error=error
+            else:row.error.add_note('close_io_join_task_start_unknown')
+            self._unknown(session)
+            raise row.error
         while not row.task.done():
             if time.monotonic_ns()>=deadline:raise ControllerError('close_io_timeout')
             await anyio.sleep(.001)
@@ -723,7 +731,8 @@ class SessionController:
                         and not (p.http_exited and p.handler_exited and all(s.closed for s in p.streams))]
                     if disconnect is not None and disconnect.done():
                         part=disconnect.result()
-                        if part['type']!='http.disconnect':raise ControllerError('queued_receive_unknown')
+                        if part['type']!='http.disconnect':
+                            self._unknown(row.session);raise ControllerError('queued_receive_unknown')
                         row.cancelled=True
                         return False
                     if not previous:
@@ -735,7 +744,11 @@ class SessionController:
                 # Full request-body EOF was already observed. Only the queued
                 # owner reads disconnect, and it joins before SDK takes receive.
                 if receive is not None and disconnect is None:
-                    disconnect=asyncio.create_task(receive())
+                    receiving=receive()
+                    try:disconnect=asyncio.create_task(receiving)
+                    except BaseException:
+                        receiving.close();raise
+                    row.receive_waiter=disconnect
                 await anyio.sleep(.001)
         finally:
             if disconnect is not None:
@@ -745,7 +758,10 @@ class SessionController:
                     except asyncio.CancelledError:pass
                     else:
                         if part['type']=='http.disconnect':row.cancelled=True
-                        else:raise ControllerError('queued_receive_unknown')
+                        else:
+                            self._unknown(row.session);raise ControllerError('queued_receive_unknown')
+                    if not disconnect.done():
+                        self._unknown(row.session);raise ControllerError('queued_receive_join_unknown')
         with self._lock:
             if not ready or row.cancelled:return False
             row.enqueued=True
@@ -815,7 +831,7 @@ class SessionController:
             proof=self._lifecycle(session,reason)
             self._retained_gate(_message_size(proof))
             descriptor=await self._owned_close_io(session,
-                lambda:self._exporter.publish(prefix,proof,retain=lambda graph:self._retained_gate(temporary=graph)),deadline,'export')
+                lambda:self._exporter.publish(prefix,proof,retain=self._retain_export),deadline,'export')
             self._retained_gate()
             from velociraptor_observation_cut import close_headers
             close_headers(descriptor)  # Strict path/Ref/header before CLOSED.
@@ -828,6 +844,14 @@ class SessionController:
         except BaseException as error:
             self._close_errors[session]=error;self._unknown(session);raise
 
+    def _retain_export(self, graph):
+        # Late native work may release resources after timeout/cancellation;
+        # it must not begin a successful MODEL publication after UNKNOWN.
+        with self._lock:
+            if self._state=='UNKNOWN' or self._ledger._unknown:
+                raise ControllerError('export_owner_unknown')
+            self._retained_gate(temporary=graph)
+
     def _lifecycle(self, session, reason):
         from velociraptor_observation_sdk import PIN_REF
         data=self._sessions[session];resources=data['transport']._owned
@@ -837,7 +861,8 @@ class SessionController:
             messages=[];binary=[];children=[]
             for row in self._work.values():
                 if row.session!=session:continue
-                if not row.handler_exited or not row.http_exited or any(not s.closed for s in row.streams):
+                if (not row.handler_exited or not row.http_exited or any(not s.closed for s in row.streams)
+                        or row.receive_waiter is not None and not row.receive_waiter.done()):
                     raise ControllerError('lifecycle_http_unknown')
                 if row.sequence in self._binary_sequences:
                     binary.append(dict(operation_sequence=row.sequence,request_sha256=row.request_sha256,
