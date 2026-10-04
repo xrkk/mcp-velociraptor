@@ -373,3 +373,98 @@ class JoinTaskLaunchTests(CloseIOTests):
         self.assertEqual(self.c._state,'UNKNOWN')
         self.release.set();row.thread.join(3)
         self.assertTrue(row.wrapper_exited);self.assertFalse(row.thread.is_alive() or row.joined)
+
+class IngressBudgetAndEOFTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=chain.ChainTests.asyncSetUp
+    asyncTearDown=chain.ChainTests.asyncTearDown
+    records=chain.ChainTests.records
+    initialize=chain.ChainTests.initialize
+    call=chain.ChainTests.call
+
+    async def test_actual_body_budget_rejects_before_sdk_ticket_and_begin(self):
+        await self.initialize();before=(self.controller._sequence,len(self.controller._work),self.records())
+        self.controller._limits['max_request_body_bytes']=1
+        response=await self.call(7,'never');self.assertEqual(response.status_code,413)
+        self.assertEqual((self.controller._sequence,len(self.controller._work),self.records()),before)
+        self.assertEqual(self.calls,[])
+
+    async def test_actual_two_session_limit_refuses_third_before_writer_or_sdk_creation(self):
+        first=await self.initialize()
+        self.http.headers.pop('mcp-session-id');self.http.headers.pop('mcp-protocol-version')
+        second=await self.initialize();self.assertNotEqual(first,second)
+        before=(self.controller._sequence,len(self.controller._work),self.records())
+        self.http.headers.pop('mcp-session-id');self.http.headers.pop('mcp-protocol-version')
+        response=await self.http.post(self.url,json=dict(jsonrpc='2.0',id=0,method='initialize',params=
+            dict(protocolVersion='2025-11-25',capabilities={},clientInfo=dict(name='MODEL',version='1'))))
+        self.assertEqual(response.status_code,503);self.assertIn('session_budget',response.text)
+        self.assertEqual((self.controller._sequence,len(self.controller._work),self.records()),before)
+        self.assertEqual(len(self.manager._owned_transports),2);self.assertEqual(self.controller._state,'DRAINING')
+
+    async def test_socket_eof_before_declared_body_end_is_not_complete_json_request(self):
+        import json
+        from urllib.parse import urlsplit
+        import velociraptor_observation_controller as module
+        session=await self.initialize();before=(self.controller._sequence,len(self.controller._work),self.records())
+        url=urlsplit(self.url);reader,writer=await asyncio.open_connection(url.hostname,url.port)
+        body=json.dumps(dict(jsonrpc='2.0',id=7,method='tools/call',params=dict(name='echo',arguments=dict(value='never')))).encode()
+        headers=(f'POST /mcp/ HTTP/1.1\r\nHost: {url.netloc}\r\nAuthorization: Bearer MODEL\r\n'
+            f'Accept: application/json, text/event-stream\r\nContent-Type: application/json\r\n'
+            f'Mcp-Session-Id: {session}\r\nMcp-Protocol-Version: 2025-11-25\r\n'
+            f'Content-Length: {len(body)+1}\r\n\r\n').encode()
+        observed=threading.Event();actual=module.JSONResponse
+        def response(content,*args,**kwargs):
+            if content=={'error':{'code':'body_incomplete'}}:
+                self.assertEqual(kwargs['status_code'],400);observed.set()
+            return actual(content,*args,**kwargs)
+        try:
+            with patch.object(module,'JSONResponse',response):
+                writer.write(headers+body);await writer.drain();writer.close();await writer.wait_closed()
+                until=time.monotonic()+2
+                while not observed.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+                self.assertTrue(observed.is_set())  # Response constructed after real disconnect, not received.
+            self.assertEqual((self.controller._sequence,len(self.controller._work),self.records()),before)
+            self.assertEqual(self.calls,[]);self.assertEqual(self.controller._state,'ACTIVE')
+            self.assertEqual((await self.call(8,'after-eof')).status_code,200)
+        finally:writer.close();await writer.wait_closed()
+
+
+class BudgetShapeTests(PendingTests):
+    test_shared_pending_gate_counts_across_sessions_before_sequence_or_begin=None
+
+    def test_each_of_all_sixteen_limits_is_strict_positive_integer(self):
+        limits=model_budgets();self.assertEqual(len(limits),16)
+        for name in limits:
+            for invalid in (True,0,-1,1.0,None):
+                with self.subTest(name=name,invalid=invalid),self.assertRaises(ControllerError):
+                    controller=object.__new__(SessionController)
+                    controller._initialize(self.ledger,dict(limits,**{name:invalid}))
+        self.assertEqual(self.ledger._attempt_count,0)
+
+class ProtocolHandshakeTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=chain.ChainTests.asyncSetUp
+    asyncTearDown=chain.ChainTests.asyncTearDown
+    records=chain.ChainTests.records
+    call=chain.ChainTests.call
+
+    async def handshake(self, version):
+        import json
+        response=await self.http.post(self.url,json=dict(jsonrpc='2.0',id=0,method='initialize',params=
+            dict(protocolVersion=version,capabilities={},clientInfo=dict(name='MODEL',version='1'))))
+        self.assertEqual(response.status_code,200,response.text)
+        message=json.loads(next(line[6:] for line in response.text.splitlines() if line.startswith('data: ')))
+        self.assertEqual(message['result']['protocolVersion'],version)
+        session=response.headers['mcp-session-id']
+        self.http.headers.update({'mcp-session-id':session,'mcp-protocol-version':version})
+        response=await self.http.post(self.url,json=dict(jsonrpc='2.0',method='notifications/initialized'))
+        self.assertEqual(response.status_code,202,response.text)
+        until=time.monotonic()+2
+        while not self.controller._sessions[session]['initialized'] and time.monotonic()<until:await asyncio.sleep(.001)
+        self.assertEqual((await self.call(7,version)).status_code,200)
+        self.assertEqual(self.calls,[version]);self.assertEqual(self.controller._state,'ACTIVE')
+        self.assertEqual([r['record_type'] for r in self.records()],
+            ['INSTANCE_BEGIN','ATTEMPT_BEGIN','ACCEPT_ACK','ATTEMPT_END'])
+
+    async def test_actual_2024_11_05_handshake_and_tool(self):await self.handshake('2024-11-05')
+    async def test_actual_2025_03_26_handshake_and_tool(self):await self.handshake('2025-03-26')
+    async def test_actual_2025_06_18_handshake_and_tool(self):await self.handshake('2025-06-18')
+    async def test_actual_2025_11_25_handshake_and_tool(self):await self.handshake('2025-11-25')

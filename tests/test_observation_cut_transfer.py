@@ -69,3 +69,28 @@ class TransferCut(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(binary['request_sha256'],hashlib.sha256(body).hexdigest())
         self.assertTrue(binary['thread_exited'] and binary['resources_closed'])
         self.assertTrue(self.controller._sessions[session]['threads']._quiescent())
+
+    async def test_all_eight_actual_binary_operations_retained_and_ninth_denied_before_invoke(self):
+        from velo_transfer import wire
+        import hashlib
+        session=await self.initialize()
+        await self.tool(1,'transfer_begin',dict(request=self.request));await self.settled()
+        body=wire.encode({},b'','pull_request')
+        for _ in range(self.controller._limits['max_binary_work']):
+            response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=self.binary_headers(),content=body)
+            self.assertEqual(response.status_code,200,response.text)
+        c=self.controller;before=(c._sequence,len(c._work),self.ledger._attempt_count)
+        self.assertEqual(len(c._binary_sequences),8)
+        response=await self.http.post(self.url.replace('/mcp/','/chunkbin/'),headers=self.binary_headers(),content=body)
+        self.assertEqual(response.status_code,503);self.assertIn('binary_budget',response.text)
+        self.assertEqual((c._sequence,len(c._work),self.ledger._attempt_count),before)
+        self.assertEqual(c._state,'DRAINING')
+        response=await self.http.delete(self.url);self.assertEqual(response.status_code,200,response.text)
+        proof=json.loads(self.exporter.files['lifecycle.json'])
+        self.assertEqual(proof['attempt_sequences'],[1])
+        expected=sorted(c._binary_sequences)
+        self.assertEqual([r['operation_sequence'] for r in proof['binary_work']],expected)
+        self.assertTrue(all(r['request_sha256']==hashlib.sha256(body).hexdigest()
+            and r['thread_exited'] and r['resources_closed'] for r in proof['binary_work']))
+        self.assertEqual(c._sessions[session]['state'],'CLOSED')
+        self.assertTrue(c._sessions[session]['threads']._quiescent())

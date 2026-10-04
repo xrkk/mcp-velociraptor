@@ -333,6 +333,28 @@ class MaintenanceReservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(c._maintenance)
         c._reserve_maintenance(original,session,owner,**plan)
         with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,owner,**plan)
+    async def test_maintenance_failed_exchange_counts_and_call_exhaustion_cannot_close(self):
+        original,session,_=await self.pair();c=self.controller
+        c._reserve_maintenance(original,session,c._sessions[session]['owner'],calls=2,bytes=10000,
+            attempts=1,binary=1,sdk_work=8)
+        response=await self.http.post(self.url,json=dict(jsonrpc='2.0',id=3,method='tools/list'))
+        self.assertEqual(response.status_code,200)
+        response=await self.http.post(self.url,content=b'{broken')
+        self.assertEqual(response.status_code,400)
+        reservation=c._maintenance[session]
+        self.assertEqual(len(reservation['exchanges']),2)
+        self.assertEqual(reservation['exchanges'][1]['request_bytes'],7)
+        self.assertEqual(reservation['exchanges'][1]['response_bytes'],len(response.content))
+        self.assertEqual(reservation['initial_calls'],2);self.assertGreater(reservation['initial_bytes'],0)
+        self.assertEqual(reservation['plan']['calls'],4)
+        before=(c._sequence,self.ledger._attempt_count)
+        response=await self.http.delete(self.url)
+        self.assertEqual(response.status_code,503);self.assertIn('maintenance_calls',response.text)
+        self.assertNotIn('x-velo-observation-cut',response.headers)
+        self.assertEqual((c._sequence,self.ledger._attempt_count),before)
+        self.assertEqual(c._state,'DRAINING');self.assertEqual(c._sessions[session]['state'],'OPEN')
+        self.assertEqual(set(self.exporter.completed),{original})
+
 
 class FullCapacityTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp=CutHTTPTests.asyncSetUp
@@ -357,6 +379,10 @@ class FullCapacityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ledger._attempt_count,self.ledger._limits['max_attempts'])
         for rid in (501,502):
             self.assertEqual((await self.http.post(self.url,json=dict(jsonrpc='2.0',id=rid,method='tools/list'))).status_code,200)
+        before=self.ledger._attempt_count
+        exhausted=await self.call(9,'never')
+        self.assertEqual(exhausted.status_code,503);self.assertIn('work_budget',exhausted.text)
+        self.assertEqual(self.ledger._attempt_count,before)
         response=await self.http.delete(self.url);self.assertEqual(response.status_code,200,response.text)
         second_proof=json.loads(self.exporter.files['lifecycle.json'])
         self.assertEqual(self.controller._sequence,self.controller._limits['max_sdk_work'])
@@ -496,3 +522,29 @@ class DeleteOrderTests(unittest.IsolatedAsyncioTestCase):
             self.release.set()
             for task in (first,second,delete):
                 if task is not None and not task.done():await task
+
+class ExportBudgetTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def limited(self, name):
+        await self.initialize();await self.call(7)
+        originals={n:r['data'] for n,r in self.fs.nodes.items() if not r['directory']}
+        self.exporter.codec.limits[name]=1  # Target runtime fault, not an approved vector.
+        response=await self.http.delete(self.url)
+        self.assertEqual(response.status_code,503,response.text)
+        self.assertNotIn('x-velo-observation-cut',response.headers)
+        self.assertFalse(self.exporter.events or self.exporter.completed or self.exporter.handles)
+        self.assertEqual(originals,{n:r['data'] for n,r in self.fs.nodes.items() if not r['directory']})
+        self.assertEqual(self.controller._state,'UNKNOWN')
+        self.assertTrue(all(r.joined for r in self.controller._close_io.values()))
+
+    async def test_actual_export_file_reserve_before_first_write(self):await self.limited('max_export_files')
+    async def test_actual_export_byte_reserve_before_first_write(self):await self.limited('max_export_bytes')
+    async def test_actual_export_directory_reserve_before_first_write(self):await self.limited('max_export_directories')
+    async def test_actual_cut_encode_budget_before_first_write(self):await self.limited('max_cut_bytes')
+    async def test_actual_lifecycle_encode_budget_before_first_write(self):await self.limited('max_proof_bytes')
+    async def test_actual_source_manifest_encode_budget_before_first_write(self):await self.limited('max_source_manifest_bytes')

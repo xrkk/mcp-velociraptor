@@ -1138,3 +1138,14 @@ receive tasks remain permanent records and must be done before handoff or proof.
 DELETE-before-cancel tests verify queued alias END, zero late BEGIN and no 200
 until the live native handler exits. Native Windows publication and allocation
 qualification still require B2 and an approved source.
+
+
+Host regressions now exercise all sixteen strict budget fields, the real body
+and two-session gates, permanent sequence exhaustion, eight actual chunkbin
+operations with ninth-operation refusal, and each file/byte/directory/cut/proof/
+manifest export guard before first write. Failed maintenance exchanges count
+toward calls and body bytes; a plan that exhausts calls before DELETE cannot
+claim successful maintenance closure. Actual socket EOF short of Content-Length
+creates a body rejection with no ticket or BEGIN. The MODEL capacity vector and
+observed object peaks remain test evidence, not a complete preallocation or
+Windows native allocator qualification.
