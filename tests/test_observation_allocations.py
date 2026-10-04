@@ -149,3 +149,24 @@ class HTTPStorageTests(unittest.IsolatedAsyncioTestCase):
         finally:
             self.release.set()
             if not first.done():await first
+
+
+class DescriptorBufferTests(unittest.TestCase):
+    def test_actual_ctypes_maximum_and_one_over_refuses_before_buffer_construction(self):
+        import ctypes
+        from tests import p05_pc026_windows_reader as reader
+        from tests.test_p05_pc026_windows_reader import sd
+        for size in (reader.MAX_SD_BYTES,reader.MAX_SD_BYTES+1):
+            api=object.__new__(reader.NativeIO)
+            def security(handle,flags,buffer,capacity,needed):
+                ctypes.cast(needed,ctypes.POINTER(ctypes.c_uint32))[0]=size
+                if buffer is None:return 0
+                ctypes.memmove(buffer,sd(),len(sd()));return 1
+            api.security=security;api.valid=lambda buffer:1;api.length=lambda buffer:size
+            with patch.object(ctypes,'get_last_error',return_value=122,create=True),patch.object(ctypes,'create_string_buffer',wraps=ctypes.create_string_buffer) as allocate:
+                if size<=reader.MAX_SD_BYTES:
+                    raw=api.descriptor(9);self.assertEqual(len(raw),size)
+                    allocate.assert_called_once_with(size)
+                else:
+                    with self.assertRaises(reader.NativeReadError):api.descriptor(9)
+                    allocate.assert_not_called()

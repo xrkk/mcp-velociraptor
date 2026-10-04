@@ -16,6 +16,7 @@ import struct
 import threading
 
 _PRIVILEGE_LOCK = threading.RLock()
+MAX_SD_BYTES = 1 << 20
 
 from tests.p05_pc021_streaming import _WindowsIO as ContentIO
 from velo_transfer import windows_platform as acl
@@ -60,7 +61,7 @@ def check_path(value):
 
 def descriptor_snapshot(data):
     """Evaluate the DACL from the same complete self-relative raw SD bytes."""
-    if not isinstance(data, bytes) or not 20 <= len(data) <= (1 << 20):
+    if not isinstance(data, bytes) or not 20 <= len(data) <= MAX_SD_BYTES:
         raise NativeReadError('full security descriptor unavailable')
     rev, reserved, control, owner, group, sacl, dacl = struct.unpack_from('<BBHIIII', data)
     if rev != 1 or reserved or not control & 0x8000 or not control & 4 or not dacl:
@@ -129,7 +130,7 @@ class NativeIO(ContentIO):
         size = ctypes.c_uint32()
         if self.security(handle, 0xF, None, 0, ctypes.byref(size)) or ctypes.get_last_error() != 122:
             raise NativeReadError('full security descriptor sizing failed')
-        if not 20 <= size.value <= (1 << 20):
+        if not 20 <= size.value <= MAX_SD_BYTES:
             raise NativeReadError('full security descriptor length invalid')
         buffer = ctypes.create_string_buffer(size.value)
         if not self.security(handle, 0xF, buffer, len(buffer), ctypes.byref(size)):

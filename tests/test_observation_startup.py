@@ -85,6 +85,9 @@ class LifecyclePreflightTests(unittest.TestCase):
             contract_ref=startup.CONTRACT_REF, archive_config_ref=self.f.refs[CONFIG],
             deployment_ref=self.f.refs[gov.DEPLOYMENT], implementation_freeze_ref=self.f.refs[gov.FREEZE],
             budgets=model_budgets(), metadata_policy='GLOBAL_PREFIX_NO_OTHER_SESSION_EVENTS', status='AUTHORIZED')
+        # Positive read-only qualification follows the actual 1 MiB Reader
+        # gate. Keep model_budgets() unchanged for historical MODEL cut tests.
+        self.doc['budgets']['max_export_bytes'] = 224870400
         self.bind()
 
     def bind(self):
@@ -109,7 +112,7 @@ class LifecyclePreflightTests(unittest.TestCase):
             lambda d: d.update(metadata_policy='FILTERED'),
             lambda d: d['archive_config_ref'].update(sha256='0'*64),
             lambda d: d['budgets'].update(max_sdk_work=True),
-            lambda d: d['budgets'].update(max_export_bytes=15482879),
+            lambda d: d['budgets'].update(max_export_bytes=224870399),
             lambda d: d['budgets'].update(max_export_files=433),
             lambda d: d['budgets'].update(max_export_directories=24)]
         for mutation in mutations:
@@ -165,6 +168,17 @@ class LifecyclePreflightTests(unittest.TestCase):
 
     def test_fixed_production_entry_has_no_override_parameters(self):
         self.assertFalse(inspect.signature(startup.precheck_formal_http).parameters)
+
+    def test_actual_reader_sd_bound_and_exact_export_reserve_before_sdk_reads(self):
+        from tests.p05_pc026_windows_reader import MAX_SD_BYTES
+        self.assertEqual(MAX_SD_BYTES,1048576)
+        self.assertEqual(self.precheck(),self.doc)  # Actual complete graph/pin.
+        for size in (15482880,224870399):
+            self.doc['budgets']['max_export_bytes']=size;self.bind()
+            before=inventory(self.root)
+            with patch.object(startup,'_verify_approved_sdk') as sdk_gate,self.assertRaisesRegex(gov.GovernanceError,'reserves insufficient'):
+                self.precheck()
+            sdk_gate.assert_not_called();self.assertEqual(inventory(self.root),before)
 
     def test_rebound_omissions_and_cyclic_lifecycle_input_refuse(self):
         for path in (sdk.PIN_PATH, 'velociraptor_observation_sdk.py', startup.CONTRACT):

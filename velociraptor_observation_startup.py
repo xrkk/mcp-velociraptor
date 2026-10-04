@@ -51,9 +51,10 @@ def _precheck_loaded(archive):
     A, C = old['max_attempts'], old['max_catalog_record_bytes']
     R, B, T = (old['request_codec'][k] for k in ('max_records', 'max_record_bytes', 'max_total_bytes'))
     S, K, P, J = (budgets[k] for k in ('max_sessions', 'max_cut_bytes', 'max_proof_bytes', 'max_source_manifest_bytes'))
-    # 05 uses a fixed 65536-byte full-security-descriptor buffer. These are
-    # logical upper-bound reserves, not a native free-space/RSS qualification.
-    D = 65536
+    # Use the actual 05 reader gate, not the historical MODEL SD vector.
+    # These remain logical reserves, not native free-space/RSS qualification.
+    from tests.p05_pc026_windows_reader import MAX_SD_BYTES
+    D = MAX_SD_BYTES
     N = 3*A + 2 + A*R
     minimum = S*((3*A + 2)*C + A*T + N*D + P + J + 3*K)
     gov.require(budgets['max_export_files'] >= S*(2*N + 5)

@@ -1140,3 +1140,14 @@ heap bounds, complete native Reader/export preallocation and Windows allocator
 qualification remain unfinished. These storage charges and observed permanent
 graphs do not certify allocator arenas, extension state or total process RSS.
 Formal production startup continues to refuse before writers/backend/listener.
+
+
+The read-only lifecycle export preflight now derives source-SD reserves from the
+05 Reader's actual 1 MiB sizing gate. The earlier 64 KiB value was only the
+historical MODEL vector and underreserved the production logical closure. For
+the example S=2/A=8/R=10 configuration, the actual minimum including one pending
+file is 224870400 bytes; its previous 15482880-byte MODEL vector is refused by
+this preflight. Historical MODEL cut fixtures retain their original vector.
+Host tests execute the complete isolated approval loader and actual ctypes
+buffer sizing at the maximum and one above it. They do not execute Win32 APIs
+or establish full native workspace, allocator, NTFS or RSS qualification.
