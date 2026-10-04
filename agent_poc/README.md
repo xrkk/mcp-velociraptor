@@ -983,3 +983,16 @@ than only canonical bytes, and failed creation admission does not leak a pending
 slot. Full controller/SDK object-retention accounting, response-only correlation,
 stable prefix/export/cut and successful closure remain unfinished; no public
 production/MODEL activation is added.
+
+
+Private response-only ingress now requires the actual pinned dispatcher's
+issued outgoing waiter with an exact typed id and a single reply reservation.
+Unsolicited, coerced aliases and duplicate replies never reach SDK resolution
+or ledger writes. The dispatcher hooks retain the actual pending streams and
+observe their synchronous closure once; resource faults poison the controller.
+An accepted response is independent SDK work and has no 08 journal parent.
+Host official-SDK backchannel tests verify real requests and replies rather than
+constructing pending entries. The source pin includes the three additional
+upstream hook algorithms; the eight copied adapter boundaries remain 592 lines.
+Complete lifecycle proof/export/cut, full retained-object budgets and Windows
+qualification remain unfinished, and formal production startup still refuses.

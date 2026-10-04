@@ -15,8 +15,8 @@ from pathlib import Path
 import sys
 
 PIN_PATH = 'docs/observation-sdk-pin.json'
-PIN_REF = dict(path=PIN_PATH, size=4464,
-    sha256='5a940f77783444f331e6067b3ee38ed60ea31fbfd7635c2c83aec6e6df121ff8')
+PIN_REF = dict(path=PIN_PATH, size=4954,
+    sha256='c67c12e4e2a8f81bf868a84c4e6d8a85bc655cf05570624b652d9d262e97d0cf')
 
 
 class SDKQualificationError(Exception):

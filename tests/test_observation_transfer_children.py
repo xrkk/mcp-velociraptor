@@ -14,6 +14,9 @@ from velo_transfer.mcp_tools import register_transfer_tools
 from velociraptor_observation_controller import ControllerError
 
 
+TRACES=[]
+
+
 @unittest.skipUnless(os.name=='posix','real fork coverage; Windows Popen is separate')
 class TransferChildren(unittest.IsolatedAsyncioTestCase):
     records=chain.ChainTests.records
@@ -52,6 +55,16 @@ class TransferChildren(unittest.IsolatedAsyncioTestCase):
         for reader,writer in self.latches:
             os.close(reader);os.close(writer)
         await chain.ChainTests.asyncTearDown(self)
+        TRACES.append(dict(test=self.id(),children=[dict(sequence=r.sequence,session=r.session,
+            transfer_id=r.transfer_id,digest=r.digest,nonce=r.nonce,job=r.job,pid=r.pid,
+            birth=r.birth,wait_status=r.wait_status,no_spawn=r.no_spawn,
+            native_resources_closed=r.native_resources_closed,resources_closed=r.resources_closed,
+            error=None if r.error is None else type(r.error).__name__) for r in self.controller._children.values()],
+            binary=[dict(sequence=r.sequence,session=r.session,request_sha256=r.request_sha256,
+                handler_exited=r.handler_exited,http_exited=r.http_exited,outcome=r.outcome)
+                for r in self.controller._work.values() if r.request_sha256 is not None],
+            sessions={key:value['state'] for key,value in self.controller._sessions.items()},
+            test_server_joined=not self.thread.is_alive()))
 
     async def tool(self,number,name,args):
         response=await self.http.post(self.url,json=dict(jsonrpc='2.0',id=number,

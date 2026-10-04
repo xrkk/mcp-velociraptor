@@ -121,6 +121,26 @@ class ResourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(s.closed for s in pair))
         self.assertFalse(resources.known_closed(), 'no actual runner/dispatcher/connection exit yet')
 
+    async def test_real_memory_sync_close_fault_retained_once_not_retried_async(self):
+        resources=adapter._Resources()
+        send,receive=resources.memory(1)
+        original=type(send._stream).close
+        primary=OSError('MODEL-after-real-sync-close')
+        calls=[]
+        def fail(stream):
+            calls.append(stream)
+            original(stream)
+            raise primary
+        with patch.object(type(send._stream),'close',new=fail):
+            with self.assertRaises(OSError) as caught:send.close()
+        self.assertIs(caught.exception,primary)
+        self.assertIs(resources.error,primary)
+        with self.assertRaises(OSError) as caught:await send.aclose()
+        self.assertIs(caught.exception,primary)
+        self.assertEqual(calls,[send._stream])
+        await receive.aclose()
+        self.assertFalse(send.closed)
+
 
 class LoopbackTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

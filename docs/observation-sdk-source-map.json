@@ -71,5 +71,10 @@
   "qualification": "SDK_RESOURCE_ADAPTER_WITH_PRIVATE_PARTIAL_CONTROLLER_NO_CUT",
   "total_source_lines": 591,
   "upstream": "mcp 2.1.1",
-  "upstream_source_lines_consumed": 592
+  "upstream_source_lines_consumed": 592,
+  "original_hooks": [
+    "_TrackedDispatcher._write -> pinned JSONRPCDispatcher._write/send_raw_request",
+    "_TrackedDispatcher._dispatch -> pinned JSONRPCDispatcher._dispatch",
+    "_OwnedStream.close -> actual synchronous pending-stream closure"
+  ]
 }

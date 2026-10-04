@@ -64,6 +64,7 @@ class _Work:
     streams: list = field(default_factory=list)
     pending_creation: bool = False
     request_sha256: str | None = None
+    response_pending: object = None
 
 
 @dataclass(eq=False)
@@ -190,6 +191,8 @@ class SessionController:
         self._close_tasks = {}
         self._children = {}
         self._binary_sequences = set()
+        self._outgoing = {}
+        self._outgoing_records = []
 
     def _unknown(self, session=None):
         with self._lock:
@@ -294,6 +297,66 @@ class SessionController:
             row.request_sha256=sha
             row.enqueued=row.started=True
             return ticket,row
+
+    def _issued_request(self, dispatcher, message):
+        owner=_CURRENT_OWNER.get()
+        group=getattr(owner,'group',None)
+        if type(group) is not _Threads or group._controller is not self:
+            self._unknown();raise ControllerError('outbound_owner_invalid')
+        with group._lock:
+            if not group._valid(owner):
+                self._unknown(group._session);raise ControllerError('outbound_owner_ended')
+            pending=dispatcher._pending.get(coerce_request_id(message.id))
+            if pending is None:raise ControllerError('outbound_pending_missing')
+            with self._lock:
+                key=(id(dispatcher),type(message.id),message.id)
+                previous=self._outgoing.get(key)
+                if previous is not None and dispatcher._pending.get(coerce_request_id(message.id)) is previous['pending']:
+                    self._unknown(group._session);raise ControllerError('outbound_reentered')
+                retained=4096+_message_size(message.model_dump(mode='json',by_alias=True))
+                if self._retained+retained>self._limits['max_retained_state_bytes']:
+                    self._state='DRAINING';raise ControllerError('outbound_retained_budget')
+                sequence=self._sequence_for(group._session,'outbound_request')
+                pending.send=dispatcher._resources.watch(pending.send)
+                pending.receive=dispatcher._resources.watch(pending.receive)
+                issued=dict(dispatcher=dispatcher,pending=pending,owner=owner,
+                    session=group._session,reply=None,sequence=sequence,
+                    message=message.model_dump(mode='json',by_alias=True))
+                self._outgoing[key]=issued
+                self._outgoing_records.append(issued)
+                self._retained+=retained
+
+    def _response_pending(self, session, message):
+        data=self._sessions.get(session)
+        if data is None:raise ControllerError('session_not_found',404)
+        dispatcher=getattr(data['transport']._owned,'dispatcher',None)
+        key=(id(dispatcher),type(message.get('id')),message.get('id'))
+        issued=self._outgoing.get(key)
+        if (issued is None or issued['session']!=session or issued['reply'] is not None
+                or dispatcher._pending.get(coerce_request_id(message['id'])) is not issued['pending']):
+            raise ControllerError('response_not_pending',400)
+        return issued
+
+    async def _consume_response(self, dispatcher, item, consume):
+        request=getattr(item.metadata,'request_context',None)
+        ticket=None if request is None else request.scope.get('pc026.ticket')
+        with self._lock:
+            row=self._work.get(ticket)
+            if row is None or row.started or row.response_pending is None:
+                self._unknown();raise ControllerError('response_ticket_unowned')
+            if type(item.message.id) is not type(row.message.get('id')) or item.message.id!=row.message.get('id'):
+                self._unknown(row.session);raise ControllerError('response_id_differs')
+            issued=row.response_pending
+            if issued['reply'] is not row or issued['dispatcher'] is not dispatcher:
+                self._unknown(row.session);raise ControllerError('response_pending_differs')
+            row.started=True
+            present=dispatcher._pending.get(coerce_request_id(item.message.id)) is issued['pending']
+        try:
+            if present:await consume()
+            row.outcome='returned' if present else 'not_dispatched'
+            row.handler_exited=True
+        except BaseException as error:
+            row.error=error;self._unknown(row.session);raise
 
     def _begin(self, row):
         msg = row.message
@@ -534,7 +597,7 @@ class _HTTPIngress:
     def __init__(self, controller): self.controller=controller
     async def __call__(self, scope, receive, send):
         if scope['type']!='http': return
-        c=self.controller;row=None;response_started=False
+        c=self.controller;row=None;response_started=False;response_pending=None
         try:
             owner=scope.get('velo.bearer_owner')
             if type(owner) is not bytes or len(owner)!=32: raise ControllerError('unauthorized',401)
@@ -567,25 +630,36 @@ class _HTTPIngress:
                     if not part.get('more_body',False):break
                 body=bytes(body);message=strict_json(body)
                 _canonical(_json_copy(message));jsonrpc_message_adapter.validate_python(message,by_name=False)
-                if type(message) is not dict or 'method' not in message:raise ControllerError('response_pending_unimplemented',400)
+                if type(message) is not dict:raise ControllerError('envelope',400)
                 if 'id' in message and type(message['id']) not in (str,int):raise ControllerError('typed_id',400)
-                if message['method']=='initialize':
+                if 'method' not in message:
+                    if session is None or version is None:raise ControllerError('session_required',400)
+                    with c._lock:
+                        data=c._sessions.get(session)
+                        if data is None or data['owner']!=owner:raise ControllerError('session_not_found',404)
+                        response_pending=c._response_pending(session,message)
+                elif message.get('method')=='initialize':
                     if session is not None:raise ControllerError('initialize_conflict',400)
                     if message.get('params',{}).get('protocolVersion') not in _PROTOCOLS:raise ControllerError('protocol',400)
                 elif session is None or version is None:raise ControllerError('session_required',400)
-                if message['method']=='tools/call':
+                if message.get('method')=='tools/call':
                     params=message.get('params')
                     if ('id' not in message or type(params) is not dict or type(params.get('name')) is not str
                         or not params['name'] or type(params.get('arguments',{})) is not dict):
                         raise ControllerError('tool_parent',400)
-            ticket,row=c._admit(session,owner,message)
+            with c._lock:
+                # Recheck and reserve the actual outgoing waiter atomically.
+                if response_pending is not None:response_pending=c._response_pending(session,message)
+                ticket,row=c._admit(session,owner,message)
+                if response_pending is not None:
+                    row.response_pending=response_pending;response_pending['reply']=row
             scope={**scope,'pc026.ticket':ticket}
             c._begin(row)
             if row.attempt is not None and row.attempt.decision=='REJECTED':
                 row.outcome='not_dispatched';row.handler_exited=True
                 return await JSONResponse({'jsonrpc':'2.0','id':message['id'],
                     'error':{'code':-32600,'message':row.attempt.reason}})(scope,receive,send)
-            if message['method']=='notifications/cancelled' and not c._cancel(session,message.get('params',{}).get('requestId')):
+            if message.get('method')=='notifications/cancelled' and not c._cancel(session,message.get('params',{}).get('requestId')):
                 row.outcome='not_dispatched';row.handler_exited=True
                 return await JSONResponse(None,status_code=202)(scope,receive,send)
             if not await c._slot(row):
@@ -606,13 +680,13 @@ class _HTTPIngress:
             token=_CURRENT_HTTP.set((c,ticket,row))
             try:await c._manager.handle_request(scope,replay,observed_send)
             finally:_CURRENT_HTTP.reset(token)
-            if message['method']=='HTTP_GET_SSE':row.handler_exited=True;row.outcome='returned'
-            if message['method']=='initialize':
+            if message.get('method')=='HTTP_GET_SSE':row.handler_exited=True;row.outcome='returned'
+            if message.get('method')=='initialize':
                 with c._lock:
                     if row.session is not None and row.handler_exited and row.outcome=='returned' and status==200:
                         c._sessions[row.session]['state']='OPEN'
                     else:c._unknown(row.session)
-            if message['method']=='notifications/initialized' and row.handler_exited:
+            if message.get('method')=='notifications/initialized' and row.handler_exited:
                 c._sessions[row.session]['initialized']=True
         except ControllerError as exc:
             return await JSONResponse({'error':{'code':exc.code}},status_code=exc.status)(scope,receive,send)

@@ -24,6 +24,8 @@ class _Resources:
     def fault(self, error):
         if self.error is None:
             self.error = error
+        controller=getattr(self,'controller',None)
+        if controller is not None:controller._unknown(getattr(self,'session',None))
     def watch(self, stream):
         wrapped = _OwnedStream(self, stream)
         self.streams.append(wrapped)
@@ -84,6 +86,23 @@ class _OwnedStream:
                 primary.add_note('sdk_owned_stream_close_failed')
                 raise primary
             raise
+    def close(self):
+        # The pinned outgoing dispatcher closes its real memory streams
+        # synchronously. Retain that close witness, just like async aclose.
+        if self._attempted:
+            if not self._done.is_set():
+                error=RuntimeError('sdk_stream_close_in_progress')
+                self._resources.fault(error);raise error
+            if self._error is not None:raise self._error
+            return
+        self._attempted=True
+        try:
+            self._stream.close()
+            self.closed=True
+        except BaseException as error:
+            self._error=error;self._resources.fault(error);raise
+        finally:self._done.set()
+
     async def aclose(self):
         with anyio.CancelScope(shield=True):
             if self._attempted:
@@ -102,11 +121,31 @@ class _OwnedStream:
             finally:
                 self._done.set()
 
+
+class _TrackedDispatcher(JSONRPCDispatcher):
+    """Original small hooks over pinned upstream algorithms; no source copy."""
+    async def _write(self, message, metadata=None):
+        controller=getattr(self._resources,'controller',None)
+        if controller is not None and isinstance(message,JSONRPCRequest):
+            controller._issued_request(self,message)
+        return await super()._write(message,metadata)
+
+    async def _dispatch(self, item, on_request, on_notify, sender_ctx):
+        controller=getattr(self._resources,'controller',None)
+        if (controller is not None and not isinstance(item,Exception)
+                and isinstance(item.message,(JSONRPCResponse,JSONRPCError))):
+            async def consume():
+                await super(_TrackedDispatcher,self)._dispatch(item,on_request,on_notify,sender_ctx)
+            return await controller._consume_response(self,item,consume)
+        return await super()._dispatch(item,on_request,on_notify,sender_ctx)
+
 async def _serve_loop(server, read_stream, write_stream, *, lifespan_state,
                       session_id=None, init_options=None, raise_exceptions=False, resources):
     # Derived from the fixed serve_loop/serve_connection recipes (53 source lines).
-    dispatcher = JSONRPCDispatcher(read_stream, write_stream,
+    dispatcher = _TrackedDispatcher(read_stream, write_stream,
         raise_handler_exceptions=raise_exceptions, inline_methods=frozenset({'initialize'}))
+    dispatcher._resources=resources
+    resources.dispatcher=dispatcher
     connection = Connection.for_loop(dispatcher, session_id=session_id)
     runner = ServerRunner(server, connection, lifespan_state, init_options=init_options)
     primary = None
@@ -425,6 +464,7 @@ class _TrackedManager(_BaseManager):
                 http_transport = _TrackedTransport(mcp_session_id=new_session_id, is_json_response_enabled=self.json_response, event_store=self.event_store, security_settings=self.security_settings, retry_interval=self.retry_interval, resources=_Resources())
                 if self._controller is not None:
                     http_transport._owned.controller = self._controller
+                    http_transport._owned.session = new_session_id
                     self._controller._creating(new_session_id, scope, http_transport)
                 self._owned_transports[new_session_id] = http_transport
                 assert http_transport.mcp_session_id is not None
