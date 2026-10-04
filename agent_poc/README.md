@@ -1054,3 +1054,17 @@ SDK ownership. Close I/O waits on actual thread exit without scheduling into a
 possibly closed event loop; start/join faults retain their records and first
 exception. These are host socket/thread tests with MODEL archive storage. They
 do not complete retained peak, maintenance or native Windows qualification.
+
+
+A private maintenance reservation seam now requires the original session's
+actual CLOSED receipt and a different initialized SDK session with the same
+owner. It reserves remaining catalog attempts, binary work and permanent SDK
+sequences against other business, and bounds future calls and body bytes with
+actual HTTP/chunkbin ingress and response observations. Completed initialization
+calls and bytes also count toward the instance maintenance quota. Reservation
+failure occurs before a new tool ticket/BEGIN; received-byte overflow poisons
+the session. This seam grants capacity only. B2 must still bind an approved
+read-only export source, derive a complete download/retry plan, capture all
+exchanges and close the nonrecursive maintenance session; physical maintenance
+acquisition and native publication remain unqualified. No public selector was
+added, and production startup continues to refuse.

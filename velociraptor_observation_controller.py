@@ -65,6 +65,8 @@ class _Work:
     pending_creation: bool = False
     request_sha256: str | None = None
     response_pending: object = None
+    request_bytes: int = 0
+    response_bytes: int = 0
 
 
 @dataclass(eq=False)
@@ -210,6 +212,81 @@ class SessionController:
         self._close_io = {}
         self._exporter = None
         self._closed_cuts = {}
+        self._maintenance = {}
+
+    def _reserve_maintenance(self, original, session, owner, *, calls, bytes, attempts, binary, sdk_work):
+        """Private future B2 seam; reserves capacity, never download authority.
+
+        Requires an actual closed export and a different real initialized SDK
+        session. No protocol/config input can select this mode or mint a receipt.
+        Totals reserve future exchanges; actual prior SDK initialization bytes
+        and calls are added to the instance quota. Physical capture is still B2.
+        """
+        values=dict(calls=calls,bytes=bytes,attempts=attempts,binary=binary,sdk_work=sdk_work)
+        if any(type(n) is not int or n<0 for n in values.values()) or not calls or not bytes or not sdk_work:
+            raise ControllerError('maintenance_plan_invalid')
+        with self._lock:
+            first=self._sessions.get(original);target=self._sessions.get(session)
+            if (self._state!='ACTIVE' or first is None or target is None or original==session
+                    or first['owner']!=owner or target['owner']!=owner or first['state']!='CLOSED'
+                    or original not in self._closed_cuts or target['state']!='OPEN' or not target['initialized']
+                    or self._exporter is None or not self._exporter.receipt(original,self._closed_cuts[original])):
+                raise ControllerError('maintenance_source_invalid')
+            if session in self._maintenance:raise ControllerError('maintenance_reentered')
+            history=[r for r in self._work.values() if r.session==session]
+            if any(not r.http_exited for r in history):raise ControllerError('maintenance_initialization_pending')
+            planned=dict(values,calls=calls+len(history),
+                bytes=bytes+sum(r.request_bytes+r.response_bytes for r in history))
+            used_calls=sum(r['plan']['calls'] for r in self._maintenance.values())
+            used_bytes=sum(r['plan']['bytes'] for r in self._maintenance.values())
+            if (used_calls+planned['calls']>self._limits['max_maintenance_calls']
+                    or used_bytes+planned['bytes']>self._limits['max_maintenance_bytes']
+                    or self._ledger._attempt_count+self._reserved_capacity('attempts')+attempts>self._ledger._limits['max_attempts']
+                    or len(self._binary_sequences)+self._reserved_capacity('binary')+binary>self._limits['max_binary_work']
+                    or self._sequence+self._reserved_capacity('sdk_work')+sdk_work>self._limits['max_sdk_work']):
+                raise ControllerError('maintenance_capacity')
+            self._retained_gate(_message_size(values)+4096)
+            self._maintenance[session]=dict(original=original,owner=owner,plan=planned,initial_calls=len(history),
+                initial_bytes=planned['bytes']-bytes,
+                remaining=dict(values),exchanges=[])
+
+    def _reserved_capacity(self, kind, except_session=None):
+        return sum(r['remaining'][kind] for session,r in self._maintenance.items() if session!=except_session)
+
+    def _maintenance_exchange(self, session, owner, method):
+        with self._lock:
+            maintenance=self._maintenance.get(session)
+            if maintenance is None:return None
+            if maintenance['owner']!=owner:raise ControllerError('maintenance_owner')
+            if maintenance['remaining']['calls']<=0:
+                self._state='DRAINING';raise ControllerError('maintenance_calls')
+            self._retained_gate(512)
+            maintenance['remaining']['calls']-=1
+            row=dict(method=method,request_bytes=0,response_bytes=0,finished=False,error=None)
+            maintenance['exchanges'].append(row)
+            return row
+
+    def _maintenance_bytes(self, session, row, count, response=False):
+        if row is None:return
+        with self._lock:
+            maintenance=self._maintenance[session]
+            row['response_bytes' if response else 'request_bytes']+=count
+            before=maintenance['remaining']['bytes']
+            maintenance['remaining']['bytes']-=count
+            if before>=0 and maintenance['remaining']['bytes']<0:
+                self._unknown(session);raise ControllerError('maintenance_bytes')
+
+    def _capacity_for(self, session, kind, used, limit):
+        maintenance=self._maintenance.get(session)
+        reserved=self._reserved_capacity(kind,session)
+        if maintenance is None and not reserved:return
+        if maintenance is not None and maintenance['remaining'][kind]<=0:
+            raise ControllerError('maintenance_'+kind)
+        if used+reserved>=limit:
+            raise ControllerError('reserved_'+kind)
+
+    def _consume_capacity(self, session, kind):
+        if session in self._maintenance:self._maintenance[session]['remaining'][kind]-=1
 
     def _unknown(self, session=None):
         with self._lock:
@@ -222,6 +299,8 @@ class SessionController:
             if self._sequence >= self._limits['max_sdk_work']:
                 self._state = 'DRAINING'
                 raise ControllerError('work_budget')
+            self._capacity_for(session,'sdk_work',self._sequence,self._limits['max_sdk_work'])
+            self._consume_capacity(session,'sdk_work')
             self._sequence += 1
             self._sequence_records[self._sequence] = (session, kind)
             return self._sequence
@@ -255,7 +334,7 @@ class SessionController:
             return total
         roots=(self._work,self._sessions,self._sequence_records,self._children,self._binary_sequences,
             self._outgoing,self._outgoing_records,self._prefixes,self._close_errors,self._close_io,
-            self._closed_cuts,self._ledger._attempts,self._ledger._seen)
+            self._closed_cuts,self._maintenance,self._ledger._attempts,self._ledger._seen)
         measured=size(roots)
         self._retained_measured_peak=max(self._retained_measured_peak,measured)
         return measured
@@ -417,6 +496,8 @@ class SessionController:
                 if current['state'] != 'OPEN': raise ControllerError('closing',409)
                 if not current['initialized'] and message.get('method') != 'notifications/initialized':
                     raise ControllerError('session_not_initialized',409)
+            if message.get('method')=='tools/call':
+                self._capacity_for(session,'attempts',self._ledger._attempt_count,self._ledger._limits['max_attempts'])
             self._pending_gate(response)
             copied=_json_copy(message)
             retained=_message_size(copied)+sys.getsizeof(_Work)+1024
@@ -435,7 +516,9 @@ class SessionController:
         with self._lock:
             if len(self._binary_sequences)>=self._limits['max_binary_work']:
                 self._state='DRAINING';raise ControllerError('binary_budget')
+            self._capacity_for(session,'binary',len(self._binary_sequences),self._limits['max_binary_work'])
             ticket,row=self._admit(session,owner,dict(method='HTTP_CHUNKBIN'))
+            self._consume_capacity(session,'binary')
             self._sequence_records[row.sequence]=(session,'binary_http')
             self._binary_sequences.add(row.sequence)
             row.request_sha256=sha
@@ -512,7 +595,10 @@ class SessionController:
             request_id_type='integer' if type(rid) is int else 'string',request_id=rid)
         tool = params['name']; sha=hashlib.sha256(_canonical(params.get('arguments',{}))).hexdigest()
         try:
-            row.attempt = self._ledger.begin(key,tool,sha)
+            with self._lock:
+                self._capacity_for(row.session,'attempts',self._ledger._attempt_count,self._ledger._limits['max_attempts'])
+                row.attempt = self._ledger.begin(key,tool,sha)
+                self._consume_capacity(row.session,'attempts')
             if row.attempt.decision == 'NEW':
                 row.journal = self._ledger.accept(row.attempt)
                 codec = self._ledger._config.codec
@@ -783,6 +869,13 @@ class _BinaryIngress:
     async def __call__(self, scope, receive, send):
         from velo_transfer import wire
         c=self.controller;row=None;owner_token=observation_token=None;primary=None;started=False
+        maintenance=None;session=None;original_send=send
+        async def maintenance_send(message):
+            if message['type']=='http.response.body':
+                if row is not None:row.response_bytes+=len(message.get('body',b''))
+                c._maintenance_bytes(session,maintenance,len(message.get('body',b'')),True)
+            await original_send(message)
+        send=maintenance_send
         try:
             owner=scope.get('velo.bearer_owner')
             if type(owner) is not bytes or len(owner)!=32:raise ControllerError('unauthorized',401)
@@ -796,11 +889,13 @@ class _BinaryIngress:
             if one_header(headers,'content-type')!='application/octet-stream':
                 raise ControllerError('content_type',415)
             direction,args=wire.request_headers(headers)
+            maintenance=c._maintenance_exchange(session,owner,'HTTP_CHUNKBIN')
             body=bytearray()
             while True:
                 part=await receive()
                 if part['type']!='http.request':raise ControllerError('body_incomplete',400)
                 raw=part.get('body',b'')
+                c._maintenance_bytes(session,maintenance,len(raw))
                 if len(body)+len(raw)>min(wire.BODY_LIMIT,c._limits['max_request_body_bytes']):
                     raise ControllerError('body_budget',413)
                 body.extend(raw)
@@ -808,6 +903,7 @@ class _BinaryIngress:
             body=bytes(body)
             wire.decode(body,direction+'_request')
             ticket,row=c._admit_binary(session,owner,hashlib.sha256(body).hexdigest())
+            row.request_bytes=len(body)
             group=c._sessions[session]['threads']
             row.worker_owner=group._admit()
             owner_token=_CURRENT_OWNER.set(row.worker_owner)
@@ -840,6 +936,7 @@ class _BinaryIngress:
                 c._unknown(row.session)
             raise
         finally:
+            if maintenance is not None:maintenance['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
                     try:
@@ -858,6 +955,13 @@ class _HTTPIngress:
     async def __call__(self, scope, receive, send):
         if scope['type']!='http': return
         c=self.controller;row=None;response_started=False;response_pending=None
+        maintenance=None;session=None;original_send=send
+        async def maintenance_send(message):
+            if message['type']=='http.response.body':
+                if row is not None:row.response_bytes+=len(message.get('body',b''))
+                c._maintenance_bytes(session,maintenance,len(message.get('body',b'')),True)
+            await original_send(message)
+        send=maintenance_send
         try:
             owner=scope.get('velo.bearer_owner')
             if type(owner) is not bytes or len(owner)!=32: raise ControllerError('unauthorized',401)
@@ -867,6 +971,7 @@ class _HTTPIngress:
             if version is not None and version not in _PROTOCOLS:raise ControllerError('protocol',400)
             if any(k.lower()==b'last-event-id' for k,v in headers):raise ControllerError('replay_denied',400)
             method=scope['method']
+            maintenance=c._maintenance_exchange(session,owner,'HTTP_'+method)
             if method=='DELETE':
                 descriptor=await c._close_session(session,owner)
                 from velociraptor_observation_cut import close_headers
@@ -887,6 +992,7 @@ class _HTTPIngress:
                     part=await receive()
                     if part['type']!='http.request':raise ControllerError('body_incomplete',400)
                     chunk=part.get('body',b'')
+                    c._maintenance_bytes(session,maintenance,len(chunk))
                     if len(body)+len(chunk)>c._limits['max_request_body_bytes']:raise ControllerError('body_budget',413)
                     body.extend(chunk)
                     if not part.get('more_body',False):break
@@ -914,6 +1020,7 @@ class _HTTPIngress:
                 # Recheck and reserve the actual outgoing waiter atomically.
                 if response_pending is not None:response_pending=c._response_pending(session,message)
                 ticket,row=c._admit(session,owner,message,response_pending)
+                row.request_bytes=len(body)
                 if response_pending is not None:
                     row.response_pending=response_pending;response_pending['reply']=row
             scope={**scope,'pc026.ticket':ticket}
@@ -970,6 +1077,7 @@ class _HTTPIngress:
                     except BaseException:c._unknown(row.session)
             raise
         finally:
+            if maintenance is not None:maintenance['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
                     try:c._settle_unclaimed(row)

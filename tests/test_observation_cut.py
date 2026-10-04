@@ -255,3 +255,81 @@ class ResponseCut(unittest.IsolatedAsyncioTestCase):
             if not get.done():get.cancel()
             if not task.done():task.cancel()
             await asyncio.gather(get,task,return_exceptions=True)
+
+class MaintenanceReservationTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=CutHTTPTests.asyncSetUp
+    asyncTearDown=CutHTTPTests.asyncTearDown
+    records=CutHTTPTests.records
+    initialize=CutHTTPTests.initialize
+    call=CutHTTPTests.call
+
+    async def pair(self):
+        original=await self.initialize();await self.call(1)
+        self.assertEqual((await self.http.delete(self.url)).status_code,200)
+        original_files={str(p):p.read_bytes() for p in self.exporter.base.rglob('*') if p.is_file()}
+        self.http.headers.pop('mcp-session-id');self.http.headers.pop('mcp-protocol-version')
+        session=await self.initialize()
+        return original,session,original_files
+
+    async def test_real_control_and_tool_exchanges_consume_reserved_capacity_and_bytes(self):
+        original,session,files=await self.pair();c=self.controller
+        c._reserve_maintenance(original,session,c._sessions[session]['owner'],calls=3,bytes=10000,attempts=1,binary=1,sdk_work=8)
+        response=await self.http.post(self.url,json=dict(jsonrpc='2.0',id=3,method='tools/list'))
+        self.assertEqual(response.status_code,200)
+        self.assertEqual((await self.call(4,'maintenance')).status_code,200)
+        self.assertEqual((await self.http.delete(self.url)).status_code,200)
+        reservation=c._maintenance[session]
+        self.assertEqual(reservation['remaining']['calls'],0)
+        self.assertEqual(reservation['remaining']['attempts'],0)
+        self.assertEqual(reservation['remaining']['binary'],1)
+        self.assertEqual([r['method'] for r in reservation['exchanges']],['HTTP_POST','HTTP_POST','HTTP_DELETE'])
+        self.assertTrue(all(r['finished'] for r in reservation['exchanges']))
+        total=sum(r['request_bytes']+r['response_bytes'] for r in reservation['exchanges'])
+        self.assertGreater(total,100);self.assertEqual(reservation['remaining']['bytes'],10000-total)
+        self.assertEqual(self.calls,['ok','maintenance'])
+        for name,raw in files.items():self.assertEqual(__import__('pathlib').Path(name).read_bytes(),raw)
+
+    async def test_attempt_and_binary_reserves_deny_other_business_before_ticket_or_begin(self):
+        from velociraptor_observation_controller import ControllerError
+        original,session,_=await self.pair();c=self.controller
+        c._limits['max_sessions']=3
+        c._reserve_maintenance(original,session,c._sessions[session]['owner'],calls=3,bytes=10000,
+            attempts=c._ledger._limits['max_attempts']-c._ledger._attempt_count,
+            binary=c._limits['max_binary_work'],sdk_work=8)
+        self.http.headers.pop('mcp-session-id');self.http.headers.pop('mcp-protocol-version')
+        other=await self.initialize()
+        before=(c._sequence,c._ledger._attempt_count,len(c._work))
+        response=await self.call(6,'never')
+        self.assertEqual(response.status_code,503)
+        self.assertEqual((c._sequence,c._ledger._attempt_count,len(c._work)),before)
+        self.assertEqual(c._state,'ACTIVE');self.assertEqual(self.calls,['ok'])
+        with self.assertRaises(ControllerError) as caught:
+            c._admit_binary(other,c._sessions[other]['owner'],'0'*64)
+        self.assertEqual(caught.exception.code,'reserved_binary')
+        self.assertEqual((c._sequence,c._ledger._attempt_count,len(c._work)),before)
+        self.assertFalse(c._binary_sequences)
+
+    async def test_future_byte_overrun_is_unknown_and_retains_actual_received_bytes(self):
+        original,session,_=await self.pair();c=self.controller
+        c._reserve_maintenance(original,session,c._sessions[session]['owner'],calls=2,bytes=1,
+            attempts=1,binary=0,sdk_work=8)
+        before=self.ledger._attempt_count
+        response=await self.call(2,'never')
+        self.assertEqual(response.status_code,503)
+        self.assertEqual(c._state,'UNKNOWN');self.assertEqual(self.ledger._attempt_count,before)
+        row=c._maintenance[session]['exchanges'][0]
+        self.assertTrue(row['finished']);self.assertGreater(row['request_bytes'],1)
+        self.assertEqual(row['response_bytes'],len(response.content))
+        self.assertEqual(self.calls,['ok'])
+
+    async def test_no_receipt_or_wrong_owner_or_exhausted_plan_cannot_reserve(self):
+        from velociraptor_observation_controller import ControllerError
+        original,session,_=await self.pair();c=self.controller;owner=c._sessions[session]['owner']
+        plan=dict(calls=1,bytes=1000,attempts=1,binary=1,sdk_work=4)
+        with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,b'x'*32,**plan)
+        with self.assertRaises(ControllerError):c._reserve_maintenance(session,session,owner,**plan)
+        with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,owner,**dict(plan,attempts=100))
+        with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,owner,**dict(plan,calls=True))
+        self.assertFalse(c._maintenance)
+        c._reserve_maintenance(original,session,owner,**plan)
+        with self.assertRaises(ControllerError):c._reserve_maintenance(original,session,owner,**plan)
