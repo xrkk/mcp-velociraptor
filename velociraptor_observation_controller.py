@@ -349,18 +349,26 @@ class SessionController:
                 return total+size(value.tb_frame,depth+1)+size(value.tb_next,depth+1)
             if isinstance(value,types.CoroutineType):
                 return total+size(value.cr_frame,depth+1)+size(value.cr_await,depth+1)
+            if isinstance(value,types.AsyncGeneratorType):
+                return total+size(value.ag_frame,depth+1)+size(value.ag_await,depth+1)
             if isinstance(value,types.GeneratorType):
                 return total+size(value.gi_frame,depth+1)+size(value.gi_yieldfrom,depth+1)
             if isinstance(value,asyncio.Task):
                 return total+size(value.get_coro(),depth+1)+size(value.get_stack(),depth+1)
             if isinstance(value,BaseException):
-                return total+size(value.args,depth+1)+size(vars(value),depth+1)+size(value.__traceback__,depth+1)
+                return (total+size(value.args,depth+1)+size(vars(value),depth+1)+size(value.__traceback__,depth+1)
+                    +size(value.__cause__,depth+1)+size(value.__context__,depth+1))
             module=type(value).__module__
             if module.startswith(('velociraptor_observation','anyio.streams.','mcp.shared.',
                     'mcp.server.connection','mcp.server.runner','mcp.types','threading','contextlib',
-                    'anyio._backends._asyncio')):
+                    'anyio._backends._asyncio','pathlib')):
                 if hasattr(value,'__dict__'):total+=size(vars(value),depth+1)
                 if is_dataclass(value):total+=sum(size(getattr(value,f.name),depth+1) for f in fields(value) if hasattr(value,f.name))
+                for cls in type(value).__mro__:
+                    slots=cls.__dict__.get('__slots__',())
+                    if isinstance(slots,str):slots=(slots,)
+                    total+=sum(size(getattr(value,name),depth+1) for name in slots
+                        if name not in ('__dict__','__weakref__') and hasattr(value,name))
             return total
         roots=(self._work,self._sessions,self._sequence_records,self._children,self._binary_sequences,
             self._outgoing,self._outgoing_records,self._prefixes,self._close_errors,self._close_io,
@@ -372,7 +380,9 @@ class SessionController:
 
     def _retained_gate(self, extra=0, *, temporary=()):
         with self._lock:
-            measured=self._measure_retained(temporary)
+            try:measured=self._measure_retained(temporary)
+            except BaseException:
+                self._unknown();raise
             self._retained=max(self._retained,measured)
             if self._retained+extra>self._limits['max_retained_state_bytes']:
                 if self._state!='UNKNOWN':self._state='DRAINING'

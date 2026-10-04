@@ -468,3 +468,65 @@ class ProtocolHandshakeTests(unittest.IsolatedAsyncioTestCase):
     async def test_actual_2025_03_26_handshake_and_tool(self):await self.handshake('2025-03-26')
     async def test_actual_2025_06_18_handshake_and_tool(self):await self.handshake('2025-06-18')
     async def test_actual_2025_11_25_handshake_and_tool(self):await self.handshake('2025-11-25')
+
+class ChainedExceptionGraphTests(PendingTests):
+    test_shared_pending_gate_counts_across_sessions_before_sequence_or_begin=None
+
+    def test_retained_cause_frame_and_path_slots_are_not_opaque(self):
+        from pathlib import Path
+        from types import SimpleNamespace
+        c=self.controller;before=c._measure_retained()
+        def fail():
+            payload=bytearray(65536)
+            raise OSError('actual-cause')
+        try:fail()
+        except OSError as error:primary=RuntimeError('first-error');primary.__cause__=error
+        c._close_errors['first']=primary
+        c._exporter=SimpleNamespace(actual_path=Path('/MODEL/'+65536*'x'))
+        self.assertGreater(c._measure_retained()-before,131072)
+        self.assertIs(c._close_errors['first'],primary)
+
+    def test_unmeasurable_graph_is_sticky_unknown(self):
+        with patch.object(self.controller,'_measure_retained',side_effect=OSError('actual-measurement-fault')):
+            with self.assertRaises(OSError):self.controller._retained_gate()
+        self.assertEqual(self.controller._state,'UNKNOWN')
+
+class ActiveSocketTailTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=chain.ChainTests.asyncSetUp
+    asyncTearDown=chain.ChainTests.asyncTearDown
+    records=chain.ChainTests.records
+    initialize=chain.ChainTests.initialize
+    call=chain.ChainTests.call
+
+    async def test_actual_socket_disconnect_after_sdk_claim_retains_live_handler_journal(self):
+        import json
+        from urllib.parse import urlsplit
+        session=await self.initialize();url=urlsplit(self.url)
+        reader,writer=await asyncio.open_connection(url.hostname,url.port)
+        body=json.dumps(dict(jsonrpc='2.0',id=7,method='tools/call',params=dict(name='echo',arguments=dict(value='latch')))).encode()
+        headers=(f'POST /mcp/ HTTP/1.1\r\nHost: {url.netloc}\r\nAuthorization: Bearer MODEL\r\n'
+            f'Accept: application/json, text/event-stream\r\nContent-Type: application/json\r\n'
+            f'Mcp-Session-Id: {session}\r\nMcp-Protocol-Version: 2025-11-25\r\n'
+            f'Content-Length: {len(body)}\r\n\r\n').encode()
+        try:
+            writer.write(headers+body);await writer.drain()
+            until=time.monotonic()+2
+            while not self.started.is_set() and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(self.started.is_set())
+            row=next(r for r in self.controller._work.values() if r.message.get('id')==7)
+            self.assertTrue(row.started and row.enqueued);self.assertIsNotNone(row.worker_owner)
+            writer.close();await writer.wait_closed()
+            until=time.monotonic()+2
+            while not row.http_exited and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(row.http_exited)
+            self.assertFalse(row.handler_exited);self.assertTrue(self.ledger._active)
+            self.assertEqual([r['record_type'] for r in self.records()],
+                ['INSTANCE_BEGIN','ATTEMPT_BEGIN','ACCEPT_ACK'])
+            self.release.set()
+            until=time.monotonic()+2
+            while not row.handler_exited and time.monotonic()<until:await asyncio.sleep(.001)
+            self.assertTrue(row.handler_exited);self.assertFalse(self.ledger._active)
+            self.assertEqual(self.records()[-1]['record_type'],'ATTEMPT_END')
+            self.assertIn(self.records()[-1]['payload']['outcome'],('returned','cancelled'))
+            self.assertEqual(self.calls,['latch'])
+        finally:self.release.set();writer.close();await writer.wait_closed()

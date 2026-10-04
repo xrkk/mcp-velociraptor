@@ -1106,3 +1106,9 @@ claim successful maintenance closure. Actual socket EOF short of Content-Length
 creates a body rejection with no ticket or BEGIN. The MODEL capacity vector and
 observed object peaks remain test evidence, not a complete preallocation or
 Windows native allocator qualification.
+
+
+Retained measurement also follows exception cause/context chains, SDK async
+generator frames and actual slotted path/state objects; measurement failure is
+sticky UNKNOWN. Real socket loss after SDK claim keeps the live handler and
+journal until its actual finish. Complete allocation-before-construction bounds remain unfinished.
