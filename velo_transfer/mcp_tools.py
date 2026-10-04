@@ -243,7 +243,8 @@ def register_transfer_tools(server: MCPServer, *, factory=None) -> TransferToolS
     manager = TransferToolService(factory)
 
     async def call(name, _context=None, **args):
-        envelope = await asyncio.to_thread(manager.invoke, name, **args)
+        from velociraptor_observation_workers import _owned_to_thread
+        envelope = await _owned_to_thread(manager.invoke, name, **args)
         if name == "transfer_capabilities" and envelope.status == "success" and envelope.result.get("enabled") is True:
             # Only the formal app can grant binary, for this actual SDK session.
             # stdio, direct invocation and unsupported SDK managers remain null.

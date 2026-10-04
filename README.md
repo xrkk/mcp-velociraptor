@@ -952,3 +952,13 @@ The stdio entry retains its existing behavior and performs no archival input
 loading. Session controller, retained worker barriers and safe cut publication
 remain unfinished; this change does not establish DELETE completion or Windows
 acceptance. Tool names and all 137 schemas are unchanged.
+
+
+The transfer SDK wrappers and binary invoke now share a private retained-thread
+primitive when an accepted owner has been internally bound. It keeps the real
+thread and copied context through repeated cancellation and joins before the
+handler can seal; timeout/launch/join uncertainty remains sticky. Without that
+internal owner, stdio and protocol fixtures retain their existing thread path.
+This primitive is not yet connected to an approved HTTP session controller:
+SDK streams/queues, transfer child processes and RootLease completion, cut
+publication and formal DELETE headers still require implementation and tests.

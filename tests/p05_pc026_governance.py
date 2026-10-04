@@ -213,7 +213,8 @@ LOCAL_MODULES = LOCAL_MODULES | frozenset({'tests/p05_service_qualification.py',
 
 LOCAL_MODULES = LOCAL_MODULES | frozenset({
     'velociraptor_observation_sdk.py', 'velociraptor_observation_startup.py',
-    'tests/test_observation_startup.py',
+    'tests/test_observation_startup.py', 'velociraptor_observation_workers.py',
+    'tests/test_observation_workers.py',
     'velociraptor_observation_attempts.py', 'velociraptor_observation_catalog.py',
     'velociraptor_observation_config.py', 'tests/test_observation_attempts.py',
     'tests/test_observation_catalog.py', 'tests/test_observation_config.py',

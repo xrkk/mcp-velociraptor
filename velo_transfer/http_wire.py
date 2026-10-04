@@ -186,7 +186,8 @@ def chunk_endpoint(service):
         try:
             # Existing engine binds direction/digest/budget to registered state
             # and validates the entire batch before obtaining writer ownership.
-            envelope = await asyncio.to_thread(service.invoke, 'transfer_chunks', **arguments)
+            from velociraptor_observation_workers import _owned_to_thread
+            envelope = await _owned_to_thread(service.invoke, 'transfer_chunks', **arguments)
             if envelope.status == 'error':
                 code = envelope.error['code']
                 code = code if type(code) is str and code in wire.CODES else 'internal_error'
