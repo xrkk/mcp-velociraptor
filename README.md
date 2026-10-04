@@ -892,3 +892,45 @@ new isolated source loading checks closure without issuing a freeze. Actual
 Windows dispatcher/token/service stopping, root/SACL qualification and deployment
 remain unverified. This is not T036 observer config/catalog/cut, production
 archival, >4 GiB transfer, N1–N5, a 191 snapshot or P05/P06 acceptance.
+
+
+`velociraptor_observation_attempts.ArchiveAttemptLedger` is an independent
+PC026 attempt ledger, uninstalled in production. Its only approved factory is
+`open_approved(instance_id)` (32 lowercase hex characters); it uses the fixed
+04/05 governance loader and adopted 2026.10.04 attempt contract, with no
+root/SID/fake override. Existing configuration and namespace-root records under
+`PLAN/2026.10.02/` and the complete raw root SD are independently bound in
+runtime allowed_refs outside the implementation freeze and publication set.
+Every immutable input and actual root/lease is rechecked through closure.
+
+`begin(key, tool, arguments_sha256)` permanently reserves the typed parent and
+publishes BEGIN before request allocation. Its opaque immutable lease reports
+NEW or REJECTED; each duplicate gets its own BEGIN/END without another journal.
+`accept(lease)` returns the original owned RequestJournal only after durable
+accept acknowledgment and catalog ACK. The caller still claims that journal
+exactly once through its actual scope. After the awaited SDK worker has exited
+and sealed/closed its journal, `finish(lease, actual_outcome)` privately rereads
+the original chain and bounds two same-handle directory enumerations before END.
+`close()` refuses active requests, writes INSTANCE_END only for known terminal
+attempts and closes the independently owned governance/allocator/catalog leases.
+HTTP cancellation alone is not worker exit. A returned `isError` remains
+`returned`; COMPLETE/FAILED archival status is independent of business success.
+
+Unknown publication, acknowledgment, readback or close permanently stops the
+instance. Original and pending files remain; no deletion, replay, overwrite,
+repair or automatic recovery is offered. Context closure preserves primary
+exceptions/cancellation. Explicit approved logical budgets reserve all attempts,
+catalog records and `max_active * request_max_record_bytes + catalog_max_record_bytes`
+for concurrent pending writes. These are logical byte bounds, not physical NTFS
+capacity, RSS or power-loss durability guarantees. The separate CatalogCodec
+strictly verifies canonical bounded BEGIN/ACK/END originals as one stream;
+its chain summary alone grants neither trusted storage nor business acceptance.
+The public 09 writer still accepts only original 08 records.
+
+Host tests exercise complete synthetic governance graphs and real ledger,
+allocator, publisher, journal and reader control flow with MODEL Win32 I/O.
+New directory-enumeration ABI and joint catalog native Windows qualification
+remain pending. Production observer/controller wiring, session cuts, host
+association, retention maintenance and new actual deployment/freeze/approval
+are separate work. The 137 schemas, seven transfer tools and 645 DFIR relations
+are unchanged; the historical agent gains no archival integration.

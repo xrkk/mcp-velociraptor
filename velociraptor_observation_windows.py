@@ -122,7 +122,7 @@ def _writer_api():
     return _PublisherIO()
 
 
-class WindowsRecordPublisher:
+class _RecordTransaction:
     """Existing directory lease; publish one 08 original without chain authority.
 
     Four explicit codec budgets are required. max_records/max_total_bytes are
@@ -132,11 +132,9 @@ class WindowsRecordPublisher:
     unknown operation through another publisher to hide uncertain residuals.
     """
 
-    def __init__(self, directory, *, max_record_bytes: int, max_records: int,
-                 max_total_bytes: int, max_json_depth: int):
+    def __init__(self, directory, codec):
         try:
-            self.codec = ArchiveCodec(max_record_bytes=max_record_bytes, max_records=max_records,
-                                      max_total_bytes=max_total_bytes, max_json_depth=max_json_depth)
+            self.codec = codec
             self.directory = reader.check_path(directory)
         except Exception as cause:
             raise PublishError("input_invalid") from cause
@@ -371,4 +369,17 @@ class WindowsRecordPublisher:
         except BaseException:
             if primary is None:
                 raise
-            primary.add_note("directory_close_failed")
+            reader._note(primary, "directory_close_failed")
+
+
+class WindowsRecordPublisher(_RecordTransaction):
+    """09 entry remains limited to exact 08 records, with explicit budgets."""
+
+    def __init__(self, directory, *, max_record_bytes: int, max_records: int,
+                 max_total_bytes: int, max_json_depth: int):
+        try:
+            codec = ArchiveCodec(max_record_bytes=max_record_bytes, max_records=max_records,
+                                 max_total_bytes=max_total_bytes, max_json_depth=max_json_depth)
+        except Exception as cause:
+            raise PublishError('input_invalid') from cause
+        super().__init__(directory, codec)

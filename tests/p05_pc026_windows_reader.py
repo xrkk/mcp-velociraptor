@@ -25,6 +25,17 @@ class NativeReadError(RuntimeError):
     pass
 
 
+class _DirectoryInfo(ctypes.Structure):
+    # FILE_ID_BOTH_DIR_INFO: use 16-bit WCHAR, including on host ABI models.
+    _fields_ = [('next', ctypes.c_uint32), ('index', ctypes.c_uint32),
+                *[(name, ctypes.c_int64) for name in ('created', 'accessed', 'written',
+                   'changed', 'eof', 'allocated')],
+                ('attributes', ctypes.c_uint32), ('name_length', ctypes.c_uint32),
+                ('ea', ctypes.c_uint32), ('short_length', ctypes.c_ubyte),
+                ('short_name', ctypes.c_uint16 * 12), ('file_id', ctypes.c_int64),
+                ('name', ctypes.c_uint16 * 1)]
+
+
 def _note(primary, text):
     """Best-effort cleanup diagnostics must never replace a primary error."""
     try:
@@ -135,6 +146,48 @@ class NativeIO(ContentIO):
         if not size or size >= len(buffer) or not buffer.value.startswith('\\\\?\\'):
             raise NativeReadError('final handle path unavailable')
         return buffer.value[4:]
+
+    def _names(self, handle, limit):
+        """Bounded same-handle enumeration; directory IDs are not file authority."""
+        if type(limit) is not int or limit <= 0:
+            raise NativeReadError('directory enumeration budget')
+        count = 0
+        first = True
+        for _ in range(limit + 3):  # No progress or unbounded dots also refuse.
+            buffer = ctypes.create_string_buffer(65536)
+            if not self.info(handle, 11 if first else 10, buffer, len(buffer)):
+                if ctypes.get_last_error() == 18:  # ERROR_NO_MORE_FILES only.
+                    return
+                raise NativeReadError('directory enumeration unavailable')
+            first = False
+            position = 0
+            while True:
+                offset = _DirectoryInfo.name.offset
+                if position + ctypes.sizeof(_DirectoryInfo) > len(buffer):
+                    raise NativeReadError('directory entry header bounds')
+                row = _DirectoryInfo.from_buffer(buffer, position)
+                size = row.name_length
+                end = position + offset + size
+                if not size or size % 2 or size > 510 or end > len(buffer):
+                    raise NativeReadError('directory entry name bounds')
+                try:
+                    name = buffer.raw[position + offset:end].decode('utf-16-le')
+                except UnicodeError as exc:
+                    raise NativeReadError('directory entry encoding') from exc
+                count += 1
+                if count > limit + 2:
+                    raise NativeReadError('directory enumeration exceeded')
+                if name not in ('.', '..'):
+                    if row.attributes & (0x10 | 0x400) or any(c in name for c in '/\\:\0'):
+                        raise NativeReadError('directory entry unsafe')
+                    yield name
+                advance = row.next
+                if not advance:
+                    break
+                if advance % 8 or advance < offset + size or position + advance >= len(buffer):
+                    raise NativeReadError('directory entry offset bounds')
+                position += advance
+        raise NativeReadError('directory enumeration no bounded EOF')
 
 
 class _Luid(ctypes.Structure):
@@ -265,6 +318,55 @@ class WindowsSession:
     def read(self, path, *, private=False):
         with self.lock:
             return self._read_bound(path, private=private)
+
+    def _directory_names(self, path, limit):
+        if type(limit) is not int or limit <= 0:
+            raise NativeReadError('directory enumeration budget')
+        with self.lock:
+            path = check_path(path)
+            chain = list(reversed(path.parents)) + [path]
+            if len(chain) > 64:
+                raise NativeReadError('native ancestor depth limit')
+            rows = [self._bind(p, True, 'state' if p == path else 'ancestor') for p in chain]
+            if len({row[1][0][0] for row in rows}) != 1:
+                raise NativeReadError('native directory volume differs')
+            names = set()
+            for name in self.api._names(rows[-1][0], limit):
+                if type(name) is not str or name in names or len(names) >= limit:
+                    raise NativeReadError('directory enumeration duplicate/budget')
+                names.add(name)
+            for p in chain:
+                self._bind(p, True, 'state' if p == path else 'ancestor')
+            return frozenset(names)
+
+    def _record_bytes(self, path, limit):
+        """One bounded private original, releasing only its leaf on every exit."""
+        with self.lock:
+            if type(limit) is not int or limit <= 0:
+                raise NativeReadError('record read budget')
+            path = check_path(path)
+            stream = self._stream_bound(path, private=True)
+            primary = None
+            try:
+                data = bytearray()
+                for chunk in stream:
+                    if len(data) + len(chunk) > limit:
+                        raise NativeReadError('record byte budget exceeded')
+                    data.extend(chunk)
+                return bytes(data)
+            except BaseException as exc:
+                primary = exc
+                raise
+            finally:
+                stream.close()
+                leaf = self.objects.pop(str(path), None)
+                if leaf is not None:
+                    try:
+                        self.api.close(leaf[0])
+                    except BaseException:
+                        if primary is None:
+                            raise
+                        _note(primary, 'record_leaf_close_failed')
 
     def _read_bound(self, path, *, private):
         stream = self._stream_bound(path, private=private)
