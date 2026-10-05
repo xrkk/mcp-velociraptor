@@ -161,6 +161,134 @@ class AcquisitionHTTP(guest.MaintenanceHTTP):
 for _name in vars(guest.MaintenanceHTTP):
     if _name.startswith('test_'):setattr(AcquisitionHTTP,_name,None)
 
+class ReceiptHTTP(AcquisitionHTTP):
+    test_actual_same_session_full_binary_acquisition_and_c4=None
+    test_host_space_minus_one_before_capture_sdk=None
+
+    async def test_actual_receipt_coverage_and_original_removal(self):
+        import velociraptor_observation_maintenance as maintenance
+        call=maintenance._SDK.call_tool;replayed=[]
+        async def observe_replays(sdk,name,arguments,**kw):
+            response=await call(sdk,name,arguments,**kw)
+            result=(response.structured_content or {}).get('result',{})
+            if name=='transfer_status' and result.get('local_phase')=='SOURCE_RELEASED' and not replayed:
+                replayed.append(True);terminal=result['terminal']
+                for action in ('prepare','release'):
+                    args=dict(transfer_id=arguments['transfer_id'],request_digest=arguments['request_digest'],action=action)
+                    if action=='release':args.update(prepare_receipt=terminal['prepare_receipt'],publication_receipt=terminal['publication_receipt'])
+                    replay=await call(sdk,'transfer_finish',args)
+                    self.assertEqual(replay.structured_content['result']['operation']['status'],'DONE')
+            return response
+        with patch.object(maintenance._SDK,'call_tool',observe_replays):value,run,request,context=await self.acquire()
+        self.assertEqual(value['status'],'COMPLETE')
+        self.assertEqual(replayed,[True])
+        immutable={p.relative_to(run).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in (run/'maintenance').rglob('*') if p.is_file()
+            and (p.name.startswith('result-') or 'raw-mcp' in p.parts)}
+        expected={};observations=[];receipt_rows=[];multi=[]
+        # Independently inspect the saved full SDK results, without using the
+        # production receipt selector or any declared ledger receipt Ref.
+        for row in value['calls']:
+            if row['tool'] is None or row['result_ref'] is None:continue
+            result=json.loads((run/row['result_ref']['path']).read_bytes())['structuredContent']['result']
+            terminal=result.get('terminal') or {}
+            operation=(result.get('operation') or {}).get('result') or {}
+            actual=[]
+            for r in (operation.get('publication_receipt'),operation.get('prepare_receipt'),operation.get('source_validation_receipt'),
+                    terminal.get('publication_receipt'),terminal.get('prepare_receipt'),result.get('source_validation_receipt')):
+                if r is not None and r not in actual:actual.append(r)
+            refs=[native.ref('maintenance/receipt-'+hashlib.sha256(native.canonical(r)).hexdigest()+'.json',
+                native.canonical(r)) for r in actual]
+            expected.update({r['path']:r for r in refs})
+            if row['transfer'] is not None:
+                self.assertEqual(row['transfer']['receipt_ref'],refs[0] if refs else None)
+            if refs:receipt_rows.append(row)
+            if len(refs)>1:multi.append(row['sequence'])
+            observations.append(dict(sequence=row['sequence'],tool=row['tool'],result_ref=row['result_ref'],
+                session=value['maintenance_session'],instance=value['instance_id'],
+                kinds=[r['type'] for r in actual],expected_refs=refs))
+        self.assertTrue(multi)  # Actual released terminal returns prepare AND publication.
+        self.assertEqual(value['transfer_receipts'],sorted(expected.values(),key=lambda r:r['path']))
+        self.assertEqual(len(expected),2)
+        duplicates=[r for r in receipt_rows if r['transfer']['receipt_ref']==receipt_rows[0]['transfer']['receipt_ref']]
+        self.assertGreaterEqual(len(duplicates),2)  # Same real prepare seen in later status.
+        outcomes=[]
+        def reject(kind,changed,code,exception=Exception):
+            data=maintenance.canonical(changed)
+            if hasattr(self,'evidence'):
+                (self.evidence/('negative-'+kind+'.json')).write_bytes(data)
+            try:
+                with patch.object(maintenance,'_write',side_effect=AssertionError('unexpected receipt writer')) as writer:
+                    try:maintenance.validate_maintenance(data,run,context,request)
+                    finally:writer.assert_not_called()
+            except Exception as error:
+                self.assertIsInstance(error,exception,kind);self.assertRegex(str(error),code,kind)
+                outcomes.append(dict(kind=kind,error=type(error).__name__,diagnostic=str(error),
+                    input_sha256=hashlib.sha256(data).hexdigest(),writer_calls=writer.call_count))
+            else:self.fail('receipt negative accepted: '+kind)
+        def clear():
+            changed=copy.deepcopy(value);changed['transfer_receipts']=[]
+            for row in changed['calls']:
+                if row['transfer'] is not None:row['transfer']['receipt_ref']=None
+            return changed
+        reject('all_refs_and_union_removed',clear(),'maintenance_receipt_call_required')
+        originals=[(run/r['path'],(run/r['path']).read_bytes()) for r in value['transfer_receipts']]
+        try:
+            for path,_ in originals:path.unlink()
+            reject('all_refs_union_and_originals_removed',clear(),'maintenance_receipt_call_required')
+            reject('receipt_files_missing_refs_retained',value,'source_unavailable')
+        finally:
+            for path,data in originals:path.write_bytes(data)
+        changed=copy.deepcopy(value);changed['calls'][duplicates[0]['sequence']-1]['transfer']['receipt_ref']=None
+        reject('one_early_ref_removed_later_duplicate_retained',changed,'maintenance_receipt_call_required')
+        changed=copy.deepcopy(value);changed['transfer_receipts']=changed['transfer_receipts'][1:]
+        reject('union_member_removed_only',changed,'maintenance_receipt_union')
+        for kind in ('extra_union','duplicate_union','wrong_result_source','unobserved_call_receipt','bool_ref_size','receipt_alias','foreign_session_ref'):
+            changed=copy.deepcopy(value);row=changed['calls'][receipt_rows[0]['sequence']-1]
+            if kind=='extra_union':changed['transfer_receipts'].append(value['original_cut_ref'])
+            elif kind=='duplicate_union':changed['transfer_receipts'].append(changed['transfer_receipts'][0])
+            elif kind=='wrong_result_source':row['transfer']['receipt_ref']=row['result_ref']
+            elif kind=='unobserved_call_receipt':
+                row=next(r for r in changed['calls'] if r['transfer'] and r['transfer']['receipt_ref'] is None)
+                row['transfer']['receipt_ref']=value['transfer_receipts'][0]
+            elif kind=='bool_ref_size':row['transfer']['receipt_ref']['size']=True
+            else:row['transfer']['receipt_ref']['path']=('maintenance/foreign-session/' if kind=='foreign_session_ref' else
+                'maintenance/')+'aliased-receipt.json'
+            reject(kind,changed,'maintenance_receipt_union' if kind in ('extra_union','duplicate_union') else
+                'integer' if kind=='bool_ref_size' else 'maintenance_receipt_call_required')
+        for receipt in value['transfer_receipts']:
+            path=run/receipt['path'];original=path.read_bytes()
+            try:
+                path.write_bytes(original[:-1])
+                reject('truncated_'+json.loads(original)['type'],value,'maintenance_ref_content')
+            finally:path.write_bytes(original)
+        for kind in ('wrong_transfer','wrong_digest','wrong_kind','wrong_prepare_digest','altered_content'):
+            selected=next(r for r in value['transfer_receipts'] if json.loads((run/r['path']).read_bytes())['type']=='publication')
+            path=run/selected['path'];original=path.read_bytes();doc=json.loads(original)
+            if kind=='wrong_transfer':doc['binding']['transfer_id']='foreign-transfer'
+            elif kind=='wrong_digest':doc['binding']['request_digest']='f'*64
+            elif kind=='wrong_kind':doc['type']='prepare'
+            elif kind=='wrong_prepare_digest':doc['prepare_receipt_sha256']='f'*64
+            else:doc['publication_id']='altered'
+            data=maintenance.canonical(doc);rebound=native.ref(selected['path'],data);changed=copy.deepcopy(value)
+            if hasattr(self,'evidence'):
+                (self.evidence/('altered-'+kind+'.json')).write_bytes(data)
+            changed['transfer_receipts']=[rebound if r==selected else r for r in changed['transfer_receipts']]
+            for row in changed['calls']:
+                if row['transfer'] and row['transfer']['receipt_ref']==selected:row['transfer']['receipt_ref']=rebound
+            try:
+                path.write_bytes(data)
+                reject(kind+'_outer_hash_rebound',changed,'maintenance_receipt_call_required')
+            finally:path.write_bytes(original)
+        self.assertEqual(maintenance.validate_maintenance(maintenance.canonical(value),run,context,request),value)
+        self.assertEqual(immutable,{p:hashlib.sha256((run/p).read_bytes()).hexdigest() for p in immutable})
+        if hasattr(self,'evidence'):
+            (self.evidence/'receipt-coverage.json').write_bytes(native.canonical(dict(
+                boundary='fresh official SDK/socket/transfer workers; Win32/source authority MODEL',
+                status='COMPLETE',observations=observations,expected_union=sorted(expected.values(),key=lambda r:r['path']),
+                multi_receipt_sequences=multi,duplicate_prepare_sequences=[r['sequence'] for r in duplicates],
+                raw_sdk_unchanged=immutable,negatives=outcomes)))
+
 class CloseFailureHTTP(AcquisitionHTTP):
     test_actual_same_session_full_binary_acquisition_and_c4=None
     test_host_space_minus_one_before_capture_sdk=None

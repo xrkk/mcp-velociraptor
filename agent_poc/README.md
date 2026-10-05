@@ -1262,7 +1262,12 @@ original bytes later finish downloading. The independent C4 verifier checks the
 exact maintenance model, every actual raw/result/receipt binding, full package
 hash/prefix, source SD/proof/projection/catalog/cut/member closure, and the real
 maintenance DELETE 200 descriptor before publishing COMPLETE. SDK-swallowed
-DELETE failures and truncated response bodies cannot qualify. The maintenance
+DELETE failures and truncated response bodies cannot qualify. Receipt requirements
+are recomputed from raw-joined full SDK results, including completed finish
+responses. Every receipt-bearing call must keep its actual receipt Ref even
+when later status calls repeat it; the sorted union retains all observed
+prepare/publication originals. Missing references/files or altered receipts
+with rebound hashes cannot qualify as COMPLETE. The maintenance
 session's own cut is recorded only as its actual response descriptor; it is not
 downloaded and no recursive third session is opened.
 

@@ -230,6 +230,28 @@ def _body_ref(r):
     return None if r is None else dict(r,path='maintenance/raw-mcp/'+r['path'])
 
 
+def _actual_receipts(result):
+    """Derive receipt originals from a raw-joined full SDK result, never Refs.
+
+    One call records its completed operation receipt, otherwise the latest
+    terminal receipt (publication, then prepare) or source-validation receipt.
+    Earlier prepare observations retain their own Ref even when a later
+    terminal response contains both receipts.
+    """
+    terminal=(result or {}).get('terminal') or {}
+    operation=((result or {}).get('operation') or {}).get('result') or {}
+    receipts=[]
+    for r in (operation.get('publication_receipt'),operation.get('prepare_receipt'),operation.get('source_validation_receipt'),
+            terminal.get('publication_receipt'),terminal.get('prepare_receipt'),(result or {}).get('source_validation_receipt')):
+        if r is not None and r not in receipts:receipts.append(r)
+    return receipts
+
+
+def _receipt_ref(receipt):
+    data=canonical(receipt);digest=hashlib.sha256(data).hexdigest()
+    return ref('maintenance/receipt-'+digest+'.json',data)
+
+
 def _build_ledger(root,transport,original,run_id,success):
     rows=[];used=set();deadline=None;receipts={}
     for exchange in transport.rows:
@@ -261,9 +283,9 @@ def _build_ledger(root,transport,original,run_id,success):
                         value=worker.get('deadline_monotonic')
                         if type(value) in (int,float) and math.isfinite(value) and value>0:
                             deadline=dict(clock_domain='guest_process_monotonic',value=value,source_ref=result_ref)
-                    terminal=guest.get('terminal') or {}
-                    receipt=terminal.get('publication_receipt') or terminal.get('prepare_receipt') or guest.get('source_validation_receipt')
-                    if receipt is not None:
+                    actual_receipts=_actual_receipts(guest)
+                    if actual_receipts:
+                        receipt=actual_receipts[0]
                         data=canonical(receipt);digest=hashlib.sha256(data).hexdigest()
                         if digest not in receipts:receipts[digest]=_write(root,'receipt-'+digest+'.json',data)
                         transfer['receipt_ref']=receipts[digest]
@@ -559,7 +581,7 @@ def validate_maintenance(raw, run_dir, context, request):
     from datetime import datetime
     _require(datetime.fromisoformat(runner['process_start_time_utc']).utcoffset() is not None,'maintenance_runner_timezone')
     _require(type(value['calls']) is list and len(value['calls'])==len(index['exchanges'])<=limits['max_maintenance_calls'],'maintenance_call_coverage')
-    by_exchange={};previous=None;receipt_refs={};chunks={};packages={};bindings={};tools=0;seen_results={};deadlines={}
+    by_exchange={};previous=None;receipt_refs={};observed_receipts={};prepares={};chunks={};packages={};bindings={};tools=0;seen_results={};deadlines={}
     from tests import p06_mcp_raw_join as join
     from mcp.types import CallToolResult, InitializeResult, ListToolsResult
     from velo_transfer import wire
@@ -663,11 +685,46 @@ def validate_maintenance(raw, run_dir, context, request):
                     and guest['worker']['deadline_monotonic']==deadline['value'],'maintenance_deadline_actual_worker')
                 previous_deadline=deadlines.setdefault(ident,deadline['value'])
                 _require(previous_deadline==deadline['value'],'maintenance_deadline_drift')
+            # These expectations come from independently raw-joined SDK bytes,
+            # not the ledger's declared call Refs or top-level union. Every
+            # occurrence must retain its own Ref, including repeated status.
+            actual_receipts=_actual_receipts(result)
+            expected_ref=_receipt_ref(actual_receipts[0]) if actual_receipts else None
             receipt=transfer['receipt_ref']
-            if receipt is not None:
-                actual=_json(original(receipt));terminal=(result or {}).get('terminal') or {}
-                expected=[terminal.get('prepare_receipt'),terminal.get('publication_receipt'),(result or {}).get('source_validation_receipt')]
-                _require(actual in expected,'maintenance_receipt_actual_result');receipt_refs[receipt['path']]=receipt
+            if receipt is not None:_ref(receipt)
+            _require(receipt==expected_ref,'maintenance_receipt_call_required')
+            if actual_receipts:
+                from velo_transfer import protocol
+                terminal=(result or {}).get('terminal') or {}
+                binding=terminal.get('binding') or actual_receipts[0]['binding']
+                protocol.validate_binding(binding)
+                details=bindings.get(ident)
+                _require(details is not None and (binding['transfer_id'],binding['request_digest'])==ident
+                    and binding['direction']==details['direction']
+                    and all(binding[k]==details['expected_vm_identity'][k] for k in ('vm_uuid','boot_identity','vm_epoch')),
+                    'maintenance_receipt_transfer_binding')
+                package=packages.get(ident)
+                _require(package is not None and all(binding['package_'+k]==package[k] for k in ('size','sha256'))
+                    and binding['manifest_sha256']==package['manifest_sha256'],'maintenance_receipt_package_binding')
+                for actual in actual_receipts:
+                    if actual.get('type')=='prepare':
+                        protocol.validate_prepare(actual,binding)
+                        old=prepares.setdefault(ident,actual)
+                        _require(old==actual,'maintenance_receipt_prepare_drift')
+                for actual in actual_receipts:
+                    if actual.get('type')=='publication':
+                        protocol.validate_publication(actual,binding,prepares.get(ident),details['expected_destination'])
+                        _require(actual['destination']['canonical_path']==request.document['destination_directory'],
+                            'maintenance_receipt_destination_binding')
+                    elif actual.get('type')=='source_validation':
+                        protocol.validate_source_validation(actual,binding,prepares.get(ident))
+                    else:_require(actual.get('type')=='prepare','maintenance_receipt_kind')
+                for actual in actual_receipts:
+                    expected=_receipt_ref(actual);observed_receipts[expected['path']]=expected
+                    _require(original(expected)==canonical(actual),'maintenance_receipt_actual_result')
+                receipt_refs[expected_ref['path']]=expected_ref
+        if complete:
+            _require(observed_receipts==receipt_refs,'maintenance_receipt_stage_coverage')
         _require(value['transfer_receipts']==sorted(receipt_refs.values(),key=lambda r:r['path']),'maintenance_receipt_union')
     finally:reader.close()
     close=value['close']
