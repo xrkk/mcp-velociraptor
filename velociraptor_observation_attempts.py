@@ -141,7 +141,8 @@ class ArchiveAttemptLedger:
         self._accepted = self._rejected = self._catalog_count = self._catalog_bytes = 0
         self._head = None
         self._unknown = self._closed = self._closing = False
-        self._allocator = self._catalog = self._reader = None
+        self._allocator = self._catalog = self._reader = self._exporter = None
+        self._issued_prefixes = {}
         try:
             config.group.recheck()
             self._allocator = WindowsDirectoryAllocator(config.document['guest_namespace_root'],
@@ -430,7 +431,7 @@ class ArchiveAttemptLedger:
                 with self._state_lock:self._available()
                 # Head cannot be cut ahead of completed publication/readback.
                 _require(count==self._catalog_count and head==self._head,'prefix_head_drift')
-                return _SessionPrefix(self._instance,session,count,_canonical(head),selected,tuple(originals))
+                prefix = _SessionPrefix(self._instance,session,count,_canonical(head),selected,tuple(originals))
         except BaseException as error:
             primary=error;self._poison();raise
         finally:
@@ -440,11 +441,15 @@ class ArchiveAttemptLedger:
                     self._poison()
                     if primary is None:raise
                     _note(primary,'prefix_reader_close_failed')
+        with self._state_lock:
+            self._available()
+            self._issued_prefixes[session] = prefix
+        return prefix
 
     def _cleanup(self, primary=None):
         first = primary
         # Returned journals belong to their caller; no active journal is stolen.
-        for resource in (self._reader, self._catalog, self._allocator, self._config.group):
+        for resource in (self._exporter, self._reader, self._catalog, self._allocator, self._config.group):
             if resource is not None:
                 try: resource.close()
                 except BaseException as exc:

@@ -184,6 +184,13 @@ class CutCodec:
             _require(v['status']=='PUBLISHED','export_status')
 
     def verify(self, files, catalog_codec, archive_codec, lifecycle_config_raw):
+        return self._verify(files, catalog_codec, archive_codec, lifecycle_config_raw, exported=True)
+
+    def verify_cut(self, files, catalog_codec, archive_codec, lifecycle_config_raw):
+        """Independent full closure before export wrapper publication."""
+        return self._verify(files, catalog_codec, archive_codec, lifecycle_config_raw, exported=False)
+
+    def _verify(self, files, catalog_codec, archive_codec, lifecycle_config_raw, *, exported):
         """Verify supplied full bytes; caller separately proves safe storage EOF."""
         _require(type(files) is dict,'file_map')
         from velociraptor_observation_startup import CONFIG, CONTRACT_REF
@@ -201,8 +208,8 @@ class CutCodec:
         config_ref=ref(CONFIG,lifecycle_config_raw)
         p=self.parse(files['attempts.json'],'projection');l=self.parse(files['lifecycle.json'],'lifecycle')
         s=self.parse(files['source-manifest.json'],'source');c=self.parse(files['cut.json'],'cut')
-        e=self.parse(files['export.json'],'export')
-        for v in (l,s,c,e):_require((v['instance_id'],v['session_id'])==(p['instance_id'],p['session_id']),'identity_drift')
+        e=self.parse(files['export.json'],'export') if exported else None
+        for v in ((l,s,c,e) if exported else (l,s,c)):_require((v['instance_id'],v['session_id'])==(p['instance_id'],p['session_id']),'identity_drift')
         def original(r):
             _ref(r);raw=files[r['path']];_require(ref(r['path'],raw)==r,'member_content');return raw
         catalog=[original(r) for r in p['catalog_prefix']]
@@ -247,16 +254,18 @@ class CutCodec:
             sds[row['sd_ref']['path']]=row['sd_ref']
         members=sorted(source_refs+list(sds.values())+[ref(n,files[n]) for n in
             ('source-manifest.json','lifecycle.json','attempts.json')],key=lambda r:r['path'])
-        _require(c['members']==members and e['members']==sorted(members+[ref('cut.json',files['cut.json'])],key=lambda r:r['path']),'members_closure')
-        _require(set(files)=={r['path'] for r in e['members']}|{'export.json'},'storage_exact_closure')
+        _require(c['members']==members,'members_closure')
+        all_members=sorted(members+[ref('cut.json',files['cut.json'])],key=lambda r:r['path'])
+        if exported:_require(e['members']==all_members,'members_closure')
+        _require(set(files)=={r['path'] for r in all_members}|({'export.json'} if exported else set()),'storage_exact_closure')
         _require(c['attempts_ref']==ref('attempts.json',files['attempts.json']) and
             p['lifecycle_ref']==ref('lifecycle.json',files['lifecycle.json']) and
-            e['cut_ref']==ref('cut.json',files['cut.json']),'derived_refs')
+            (not exported or e['cut_ref']==ref('cut.json',files['cut.json'])),'derived_refs')
         head=ref(f'c/{len(catalog)-1:08d}.json',catalog[-1])
         _require(c['catalog_head']==s['catalog_head']==head and
             c['instance_ref']==ref('c/00000000.json',catalog[0]) and c['config_ref']==s['config_ref']==config_ref
             and c['close_reason']==l['close_reason'],'cut_source_binding')
-        for r in e['members']:original(r)
+        for r in all_members:original(r)
         return c
 
 

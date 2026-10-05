@@ -232,10 +232,10 @@ class _RecordTransaction:
                 stream.close()
 
     def publish(self, raw: bytes) -> dict:
+        # Public 08/10 entry retains its exact codec and sequence policy.
         with self.lock:
             if self.closed or self.failed:
                 raise PublishError("publisher_unavailable")
-            # Pure validation and name derivation precede all new file effects.
             try:
                 record = self.codec.parse(raw)
             except Exception as cause:
@@ -243,11 +243,23 @@ class _RecordTransaction:
             sequence = record["sequence"]
             if sequence > 99999999:
                 raise PublishError("sequence_filename_limit")
-            final = f"{sequence:08d}.json"
+            return self._publish_named(raw, f"{sequence:08d}.json")
+
+    def _publish_named(self, raw, final):
+        """Private C3 reuse; fixed leaf syntax, no path or authority override."""
+        import re
+        from velociraptor_observation_namespace import _path
+        with self.lock:
+            if self.closed or self.failed:
+                raise PublishError("publisher_unavailable")
+            if (type(raw) is not bytes or not raw or type(final) is not str
+                    or not re.fullmatch(r"(?:[0-9]{8}\.json|[0-9a-f]{64}\.bin|"
+                        r"source-manifest\.json|lifecycle\.json|attempts\.json|cut\.json|export\.json)", final)):
+                raise PublishError("export_leaf_invalid")
             pending = str(uuid.uuid4()) + ".pending"
             candidate, destination = self.directory / pending, self.directory / final
-            reader.check_path(candidate)
-            reader.check_path(destination)
+            _path(candidate)
+            _path(destination)
             self.last_pending, self.last_final = pending, final
             handle = None
             phase = "NOT_CREATED"

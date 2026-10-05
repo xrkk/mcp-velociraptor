@@ -231,6 +231,11 @@ LOCAL_MODULES = LOCAL_MODULES | frozenset({
 ENTRIES = ENTRIES | frozenset({'velociraptor_observation_attempts.py',
     'tests/test_observation_attempts.py', 'tests/test_observation_catalog.py', 'tests/test_observation_config.py'})
 
+# Production native export and its directly executed qualification seams.
+ENTRIES = ENTRIES | frozenset({'velociraptor_observation_export.py',
+    'tests/test_observation_native_export.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 

@@ -1,8 +1,8 @@
 """Private PC026 ingress/ledger/SDK chain, with conservative close refusal.
 
-No public MODEL factory or production fallback. The fixed approved constructor
-still refuses while the native exporter is unavailable. Tests alone install a
-real MODEL publisher; successful close requires its external final I/O witness.
+No public MODEL factory or production fallback. Fixed approved construction
+borrows the native exporter from one ledger-owned group. Successful close
+requires the native publisher/readback external final I/O witness.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import types
+import weakref
 
 import anyio
 from mcp.server.streamable_http import (
@@ -28,6 +29,11 @@ from velo_transfer.wire import strict_json, one_header
 from velociraptor_observation import ObservationScope, _canonical, _json_copy, _current
 from velociraptor_observation_attempts import ArchiveAttemptLedger
 from velociraptor_observation_workers import _WorkerGroup, _CURRENT_OWNER
+
+_APPROVED_CONTROLLERS = weakref.WeakSet()
+
+def _approved_controller(value):
+    return type(value) is SessionController and value in _APPROVED_CONTROLLERS and not value._ledger._closed and not value._ledger._unknown
 
 _CURRENT_HTTP = contextvars.ContextVar('pc026_controller_http', default=None)
 _PROTOCOLS = frozenset(('2024-11-05','2025-03-26','2025-06-18','2025-11-25'))
@@ -277,9 +283,45 @@ class SessionController:
 
     @classmethod
     def open_approved(cls, instance_id):
-        from velociraptor_observation_startup import precheck_formal_http
-        precheck_formal_http()  # No root/writer/listener or test override.
-        raise ControllerError('native_exporter_unavailable')
+        import re
+        if type(instance_id) is not str or not re.fullmatch('[0-9a-f]{32}',instance_id):
+            raise ControllerError('instance_invalid')
+        from velociraptor_observation_config import load_approved, _close_note
+        from velociraptor_observation_startup import _precheck_loaded
+        from velociraptor_observation_export import NativeExporter, _preflight
+        archive=load_approved()
+        ledger=None
+        try:
+            lifecycle=_precheck_loaded(archive)
+            _preflight(archive,lifecycle['budgets'])
+            ledger=object.__new__(ArchiveAttemptLedger)
+            ledger._initialize(instance_id,archive)
+            exporter=NativeExporter._borrow(ledger,lifecycle)
+            self=object.__new__(cls)
+            self._initialize(ledger,lifecycle['budgets'])
+            self._exporter=exporter
+            _APPROVED_CONTROLLERS.add(self)
+            return self
+        except BaseException as primary:
+            # _initialize already cleans its failed acquisition. A completed
+            # ledger owns all subsequent cleanup, including the borrowed group.
+            if ledger is None:
+                try:archive.group.close()
+                except BaseException:_close_note(primary)
+            elif not ledger._closed:
+                ledger._poison()
+                ledger._closed=True
+                ledger._cleanup(primary)
+            raise
+
+    def _abort_startup(self, primary):
+        # Used only before the SDK lifespan/listener starts; never steals live
+        # worker/journal ownership to hide an unknown shutdown.
+        if not self._work and not self._close_io and not self._ledger._closed:
+            self._ledger._poison()
+            self._ledger._closed=True
+            self._ledger._cleanup(primary)
+            self._state='UNKNOWN'
 
     def _initialize(self, ledger, budgets):
         # Private test fixture seam; never reachable from HTTP/config/env/CLI.
@@ -478,7 +520,7 @@ class SessionController:
         roots=(self._work,self._sessions,self._sequence_records,self._children,self._binary_sequences,
             self._outgoing,self._outgoing_records,self._prefixes,self._close_errors,self._close_io,
             self._closed_cuts,self._maintenance,self._close_tasks,
-            None if self._exporter is None else vars(self._exporter),self._ledger._attempts,self._ledger._seen)
+            None if self._exporter is None else vars(self._exporter),self._ledger._attempts,self._ledger._seen,self._ledger._issued_prefixes)
         measured=size((roots,temporary))
         self._retained_measured_peak=max(self._retained_measured_peak,measured)
         return measured
@@ -629,6 +671,7 @@ class SessionController:
                 transport=transport, threads=_Threads(self, session), initialized=False)
             self._pending -= 1
             row.pending_creation=False
+            if hasattr(self,'_bindings'):self._bindings.owners[session]=row.owner
 
     async def _await_initialized(self, session, owner, message):
         if session is None:return
@@ -825,7 +868,9 @@ class SessionController:
             if row.scope is not None: observation_token=_current.set(row.scope)
             result=await call_next(dctx,method,params)
             if method=='notifications/initialized':
-                with self._lock: self._sessions[row.session]['initialized']=True
+                with self._lock:
+                    self._sessions[row.session]['initialized']=True
+                    if hasattr(self,'_bindings'):self._bindings.initialized.add(row.session)
         except BaseException as exc:
             primary=exc
             outcome='cancelled' if isinstance(exc,anyio.get_cancelled_exc_class()) else 'raised'
@@ -938,12 +983,15 @@ class SessionController:
                 if self._state!='UNKNOWN':self._state='DRAINING'
             raise
         # Collect the actual native prefix only after the causal barrier.
-        # Export publication is still unavailable: a prefix cannot authorize 200.
+        # A prefix alone cannot authorize 200. Reserve before its source copy.
         try:
             remaining=self._limits['max_retained_state_bytes']-self._retained
-            prefix=await self._owned_close_io(session,
-                lambda:self._ledger._session_prefix(session,max_files=self._limits['max_export_files'],
-                    max_bytes=min(self._limits['max_export_bytes'],remaining)),deadline)
+            def collect():
+                reserve=getattr(self._exporter,'reserve',None)
+                if reserve is not None:reserve(session)
+                return self._ledger._session_prefix(session,max_files=self._limits['max_export_files'],
+                    max_bytes=min(self._limits['max_export_bytes'],remaining))
+            prefix=await self._owned_close_io(session,collect,deadline)
             if time.monotonic_ns()>=deadline:raise ControllerError('close_unknown')
             retained=_message_size(vars(prefix))+sum(_message_size(vars(r)) for r in prefix.originals)
             with self._lock:
@@ -960,8 +1008,12 @@ class SessionController:
             self._retained_gate()
             proof=self._lifecycle(session,reason)
             self._retained_gate(_message_size(proof))
+            def retain_export(graph):
+                self._retain_export(graph)
+                if time.monotonic_ns()>=deadline:raise ControllerError('export_deadline')
             descriptor=await self._owned_close_io(session,
-                lambda:self._exporter.publish(prefix,proof,retain=self._retain_export),deadline,'export')
+                lambda:self._exporter.publish(prefix,proof,retain=retain_export),deadline,'export')
+            if time.monotonic_ns()>=deadline:raise ControllerError('close_unknown')
             self._retained_gate()
             from velociraptor_observation_cut import close_headers
             close_headers(descriptor)  # Strict path/Ref/header before CLOSED.
@@ -976,7 +1028,7 @@ class SessionController:
 
     def _retain_export(self, graph):
         # Late native work may release resources after timeout/cancellation;
-        # it must not begin a successful MODEL publication after UNKNOWN.
+        # it must not begin a successful native publication after UNKNOWN.
         with self._lock:
             if self._state=='UNKNOWN' or self._ledger._unknown:
                 raise ControllerError('export_owner_unknown')
@@ -1079,6 +1131,9 @@ class _BinaryIngress:
                 raise ControllerError('instance',400)
             if one_header(headers,'content-type')!='application/octet-stream':
                 raise ControllerError('content_type',415)
+            if hasattr(c,'_bindings'):
+                rejected=c._bindings.check(headers,owner,instance_required=True)
+                if rejected is not None:return await rejected(scope,receive,send)
             direction,args=wire.request_headers(headers)
             maintenance=c._maintenance_exchange(session,owner,'HTTP_CHUNKBIN')
             capacity=_body_capacity(headers,min(wire.BODY_LIMIT,c._limits['max_request_body_bytes']))
@@ -1150,9 +1205,12 @@ class _HTTPIngress:
     async def __call__(self, scope, receive, send):
         if scope['type']!='http': return
         c=self.controller;row=None;response_started=False;response_pending=None
-        maintenance=None;session=None;original_send=send;input_storage=None;buffer=None
+        maintenance=None;session=None;original_send=send;input_storage=None;buffer=None;transfer=False
         async def maintenance_send(message):
             if message['type']=='http.response.body':
+                from velo_transfer import wire
+                if transfer and row is not None and row.response_bytes+len(message.get('body',b''))>wire.BODY_LIMIT:
+                    raise ControllerError('response_body_budget',413)
                 if row is not None:row.response_bytes+=len(message.get('body',b''))
                 c._maintenance_bytes(session,maintenance,len(message.get('body',b'')),True)
             await original_send(message)
@@ -1207,10 +1265,13 @@ class _HTTPIngress:
                     if message.get('params',{}).get('protocolVersion') not in _PROTOCOLS:raise ControllerError('protocol',400)
                 elif session is None or version is None:raise ControllerError('session_required',400)
                 if message.get('method')=='tools/call':
+                    from velo_transfer.mcp_tools import TRANSFER_TOOL_NAMES
                     params=message.get('params')
+                    transfer=type(params) is dict and params.get('name') in TRANSFER_TOOL_NAMES
                     if ('id' not in message or type(params) is not dict or type(params.get('name')) is not str
                         or not params['name'] or type(params.get('arguments',{})) is not dict):
                         raise ControllerError('tool_parent',400)
+            if not transfer and len(body)>4<<20:raise ControllerError('body_budget',413)
             await c._await_initialized(session,owner,message)
             with c._lock:
                 # Recheck and reserve the actual outgoing waiter atomically.

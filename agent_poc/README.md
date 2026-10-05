@@ -1,5 +1,20 @@
 # Velociraptor Agent POC
 
+Native C3 export now has a production algorithm privately borrowed from the
+fixed approved ledger. It uses the native 09 transaction and 11 directory
+allocator, reserves shared copy/pending quotas before source snapshots, and
+independently verifies cut and complete export bytes on safely reread originals.
+The controller waits for actual per-export I/O closure and native thread join
+before issuing close headers. Source SD reserves use the Reader's 1 MiB bound;
+failed/unknown operations retain originals and cannot grant a success receipt.
+Host tests use MODEL Windows permissions/identities, actual SDK loopback and
+limited real POSIX file I/O. Native Win32/service qualification, physical NTFS
+limits, host maintenance/consumption and a new approved deployment remain
+unverified. Full parser heap proof is outside the calibrated acceptance scope.
+The next separate change wires the formal bridge/app to this approved controller;
+stdio remains free of archival input loading.
+
+
 TargetContext now emits an exact internal whitelist when a request scope is
 present: actual resolution/cache hits, operation begin/end, existing existence
 probes and actual cache clears. Per-operation UUIDs and attempts associate

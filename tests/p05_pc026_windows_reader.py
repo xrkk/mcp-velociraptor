@@ -149,7 +149,7 @@ class NativeIO(ContentIO):
             raise NativeReadError('final handle path unavailable')
         return buffer.value[4:]
 
-    def _names(self, handle, limit):
+    def _names(self, handle, limit, *, directories=False):
         """Bounded same-handle enumeration; directory IDs are not file authority."""
         if type(limit) is not int or limit <= 0:
             raise NativeReadError('directory enumeration budget')
@@ -180,7 +180,7 @@ class NativeIO(ContentIO):
                 if count > limit + 2:
                     raise NativeReadError('directory enumeration exceeded')
                 if name not in ('.', '..'):
-                    if row.attributes & (0x10 | 0x400) or any(c in name for c in '/\\:\0'):
+                    if row.attributes & (0x400 | (0 if directories else 0x10)) or any(c in name for c in '/\\:\0'):
                         raise NativeReadError('directory entry unsafe')
                     yield name
                 advance = row.next
@@ -332,7 +332,7 @@ class WindowsSession:
         with self.lock:
             return self._read_bound(path, private=True, max_bytes=limit)
 
-    def _directory_names(self, path, limit):
+    def _directory_names(self, path, limit, *, directories=False):
         if type(limit) is not int or limit <= 0:
             raise NativeReadError('directory enumeration budget')
         with self.lock:
@@ -344,7 +344,9 @@ class WindowsSession:
             if len({row[1][0][0] for row in rows}) != 1:
                 raise NativeReadError('native directory volume differs')
             names = set()
-            for name in self.api._names(rows[-1][0], limit):
+            entries = (self.api._names(rows[-1][0], limit, directories=True) if directories
+                       else self.api._names(rows[-1][0], limit))
+            for name in entries:
                 if type(name) is not str or name in names or len(names) >= limit:
                     raise NativeReadError('directory enumeration duplicate/budget')
                 names.add(name)
