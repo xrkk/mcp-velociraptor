@@ -46,9 +46,10 @@ and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
 gates. All 137 schemas and seven transfer protocols remain unchanged. Host
 verification exercises the production native algorithm with MODEL Windows
 permissions/identities, actual SDK loopback and limited real POSIX file I/O.
-It does not qualify Win32/NTFS/service identity, directory durability, B1 overall,
-maintenance acquisition, independent host consumption or the new production
-freeze/deployment/approval. Those remain separately authorized Windows work.
+The admitted maintenance API below now exercises complete original acquisition
+and independent C4 verification on the host. It does not qualify Win32/NTFS/service
+identity, directory durability, B1 overall, S2 consumer success gates or the new
+production freeze/deployment/approval. Windows qualification remains separate.
 Finite body/record/SD and queue gates, observed permanent byte/object peaks and
 copy-before resource reserves remain required; full CPython/Rust parser heap
 proof is outside the calibrated acceptance scope. No RSS claim is made.
@@ -1282,6 +1283,42 @@ provide no Windows qualification or new production approval.
 Binary transfer requests now carry the actual protocol version negotiated by
 that existing SDK session. They retain its session ID and bearer connection;
 no second initialization or guessed protocol version is used for chunkbin.
+
+
+The admitted host API is `velociraptor_observation_maintenance.acquire_original`.
+An existing caller supplies its fixed `Admission`, locked run directory, parsed
+`HostRequest` from that run's `maintenance-request.json`, and the original fully
+consumed business DELETE response. The request is a single pull source named
+`original`, derived from the actual close descriptor under the approved namespace;
+its destination is `maintenance/downloaded` in the same run. The connection
+profile must already be in that fixed group's source allowlist. The host API
+reads the existing lifecycle/archive configuration and checks source/run drift
+before capture or RPC. It issues no approval and does not widen transfer roots.
+
+It opens one different official SDK session, uses the existing seven tools and
+chunkbin on that same session, and preserves full raw request/response bodies,
+original headers, complete SDK results, monotonic intervals, transfer attempts
+and actual prepare/publication/release receipts. Bounded retries reopen the same
+durable prefix with the same transfer ID, digest and original deadline; no
+business call is replayed. A network capture failure stays FAILED even if the
+original bytes later finish downloading. The independent C4 verifier checks the
+exact maintenance model, every actual raw/result/receipt binding, full package
+hash/prefix, source SD/proof/projection/catalog/cut/member closure, and the real
+maintenance DELETE 200 descriptor before publishing COMPLETE. SDK-swallowed
+DELETE failures and truncated response bodies cannot qualify. The maintenance
+session's own cut is recorded only as its actual response descriptor; it is not
+downloaded and no recursive third session is opened.
+
+Artifacts live below `run_dir/maintenance`: `maintenance.json`, `raw-mcp`, header
+originals, SDK result/error originals, each `transfer-attempt-NN.json`, the final
+transfer result, configuration originals and `downloaded/original`. An admitted
+caller may independently read them with `validate_maintenance`; a caller-made
+hash or consistent context never supplies source authorization. Current host
+verification uses MODEL Win32 authority plus actual POSIX no-follow files,
+official SDK sockets and joined transfer processes. Windows/NTFS allocation,
+free-space/durability, service identity and production approval remain unverified.
+This API is not yet required by P06 sidecar/receive/package/aggregate/handoff
+success gates; that S2 consumer integration remains separate work.
 
 
 Maintenance source detection is enabled only by the native exporter source

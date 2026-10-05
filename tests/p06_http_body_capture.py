@@ -304,9 +304,12 @@ class CaptureTransport(httpx2.AsyncBaseTransport):
         if self.failure is None:
             self.failure = diagnostic
 
+    def _allow_failed_requests(self):
+        return False
+
     async def handle_async_request(self, request):
         require(not self.closing and not self.closed, 'capture transport is closed')
-        require(self.failure is None, 'capture transport has failed')
+        require(self.failure is None or self._allow_failed_requests(), 'capture transport has failed')
         sequence = len(self.rows) + 1
         require(sequence <= 99_999_999, 'capture sequence exhausted')
         row = dict(sequence=sequence, method=request.method, request_ref=None, request_end='not_started',

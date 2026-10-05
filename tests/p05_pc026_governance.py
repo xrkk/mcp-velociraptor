@@ -245,6 +245,16 @@ LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 ENTRIES = ENTRIES | frozenset({'tests/test_transfer_protocol_channel.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+# Admitted host acquisition and its complete existing transfer consumer seam.
+ENTRIES = ENTRIES | frozenset({'velociraptor_observation_maintenance.py',
+    'tests/test_observation_maintenance_acquisition.py',
+    'tests/test_observation_maintenance_admission.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({
+    'velo_transfer/request.py', 'velo_transfer/host_coordinator.py',
+    'velo_transfer/host_journal.py', 'velo_transfer/host_content.py',
+    'velo_transfer/host_partial.py', 'velo_transfer/host_publication.py',
+    'velo_transfer/result.py', 'velo_transfer/host_cleanup.py'})
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 
