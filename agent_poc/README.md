@@ -1297,3 +1297,14 @@ reservation or block the event loop while waiting for native I/O.
 Maintenance quota boundary tests include the actual initial SDK/control history:
 one call or one byte below its controlled acquisition plan rejects before BEGIN
 and leaves the transfer writer, ledger attempt and child set unchanged.
+
+
+Host readback now shares the fixed maintenance source authorization seam. Its
+private reader recovers the original DELETE correlation from complete saved
+request/response header occurrences and the physical body-capture index, without
+retaining or reconstructing an httpx response. Duplicate headers, incomplete
+bodies, non-200 closes, unapproved profiles and source/run drift refuse with no
+writer or new SDK session. The profile remains an independently approved source;
+its content hash or a close descriptor does not grant authority. This reader
+seam has MODEL governance and real POSIX read-only checks. The independent C5
+sidecar and mandatory producer/consumer integration remain unfinished.

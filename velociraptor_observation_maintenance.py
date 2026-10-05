@@ -360,7 +360,7 @@ def _verify_export(context, request, descriptor):
     return files
 
 
-def _authorize(admission,run_dir,request,original_close):
+def _source_authority(admission,run_dir,request):
     """Existing fixed Admission and approved allowlist, before any host writer.
 
     A connection profile must already be an allowed original in that same
@@ -386,10 +386,8 @@ def _authorize(admission,run_dir,request,original_close):
     _require(admission.group.allowed.get(archive_ref['path'])==archive_ref,'maintenance_archive_approval')
     archive_raw=admission.group.read(archive_ref);archive=_json(archive_raw)
     _require(lifecycle['status']=='AUTHORIZED' and lifecycle['metadata_policy']=='GLOBAL_PREFIX_NO_OTHER_SESSION_EVENTS','maintenance_source_approval')
-    _require(original_close.request.method=='DELETE' and original_close.status_code==200
-        and original_close.is_closed and original_close.request.headers.get('mcp-session-id')==sid,'maintenance_original_close')
-    descriptor=_descriptor([(k.decode('latin1'),v.decode('latin1')) for k,v in original_close.headers.raw],instance,sid)
-    source=str(PureWindowsPath(archive['guest_namespace_root']).joinpath(*descriptor['path'].split('/')[:-1]))
+    relative='e'+instance+'/s'+hashlib.sha256(sid.encode()).hexdigest()
+    source=str(PureWindowsPath(archive['guest_namespace_root']).joinpath(*relative.split('/')))
     _require(request.document['direction']=='pull' and request.document['sources']==[
         dict(absolute_path=source,relative_path='original')],'maintenance_fixed_source')
     _require(request.document['destination_directory']==str(root/'maintenance'/'downloaded')
@@ -410,7 +408,67 @@ def _authorize(admission,run_dir,request,original_close):
         and request.document['expected_vm_identity']['vm_uuid']==deployment['vm_uuid'],'maintenance_server_source')
     admission.recheck()
     return dict(lifecycle_raw=lifecycle_raw,lifecycle=lifecycle,archive=archive,archive_raw=archive_raw,instance=instance,original_session=sid,
-        run_id=report['run_id'],descriptor=descriptor)
+        run_id=report['run_id'])
+
+
+def _authorize(admission,run_dir,request,original_close):
+    context=_source_authority(admission,run_dir,request)
+    _require(original_close.request.method=='DELETE' and original_close.status_code==200
+        and original_close.is_closed and original_close.request.headers.get('mcp-session-id')==context['original_session'],
+        'maintenance_original_close')
+    context['descriptor']=_descriptor([(k.decode('latin1'),v.decode('latin1')) for k,v in original_close.headers.raw],
+        context['instance'],context['original_session'])
+    admission.recheck()
+    return context
+
+
+def _read_authority(admission, run_dir):
+    """Recover authority from fixed sources and actual saved DELETE originals.
+
+    No last-response object, caller context, download or writer participates.
+    The descriptor is correlation after source authorization, never approval.
+    """
+    from velo_transfer.request import load_request
+    from tests.p06_http_binding import _AdmissionReader
+    root=Path(run_dir)
+    request=load_request(root/'maintenance-request.json')
+    context=_source_authority(admission,root,request)
+    reader=_AdmissionReader(admission,root)
+    index=capture.verify(root,context['run_id'],_reader=reader)
+    _require(index['status']=='RECORDED' and index['failure'] is None,'original_capture_complete')
+    rows=[r for r in index['exchanges'] if r['method']=='DELETE']
+    _require(len(rows)==1,'original_close_unique')
+    close=rows[0];seq=close['sequence']
+    _require(close['request_end']=='eof' and close['response_end']=='eof'
+        and close['response_status']==200 and close['error'] is None,'original_close_actual')
+    def headers(name):
+        value=_json(admission.read(root/name))
+        _require(type(value) is list,'original_header_array')
+        seen=set();found=None
+        for row in value:
+            _require(type(row) is dict and set(row)=={'exchange_sequence','headers'}
+                and type(row['exchange_sequence']) is int and row['exchange_sequence']>0
+                and row['exchange_sequence'] not in seen,'original_header_sequence')
+            seen.add(row['exchange_sequence']);items=row['headers']
+            _require(type(items) is list and len(items)<=256 and all(type(v) is list and len(v)==2
+                and all(type(c) is str and len(c)<=8192 for c in v) for v in items),'original_header_bytes')
+            if row['exchange_sequence']==seq:found=items
+        expected={r['sequence'] for r in index['exchanges']
+            if name=='request-headers.json' or r['response_status'] is not None}
+        _require(seen==expected and found is not None,'original_header_coverage')
+        return found
+    incoming=headers('request-headers.json');outgoing=headers('response-headers.json')
+    sessions=[v for k,v in incoming if k.lower()=='mcp-session-id']
+    _require(sessions==[context['original_session']],'original_request_session_unique')
+    context['descriptor']=_descriptor(outgoing,context['instance'],context['original_session'])
+    header_rows=_json(admission.read(root/'http-headers.json'))
+    summary=[r for r in header_rows if r['exchange_sequence']==seq]
+    _require(len(summary)==1 and set(summary[0])==HEADER_KEYS and summary[0]['method']=='DELETE'
+        and summary[0]['path']=='/mcp' and summary[0]['status_code']==200
+        and summary[0]['request_session_id']==context['original_session']
+        and summary[0]['server_instance_id']==context['instance'],'original_close_header_binding')
+    admission.recheck()
+    return context,request
 
 
 async def acquire_original(admission, run_dir, request, original_close):

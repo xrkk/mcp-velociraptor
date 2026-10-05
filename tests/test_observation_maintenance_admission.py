@@ -102,6 +102,64 @@ class FixedAdmission(unittest.TestCase):
             maintenance._authorize(object(),self.run,self.request,self.close)
         writer.assert_not_called()
 
+    def saved_close(self):
+        # Explicit MODEL input for source/authority gates only. This does not
+        # claim a physical SDK/DELETE observation or a C5 successful report.
+        from tests import p06_http_body_capture as capture
+        from velociraptor_observation_cut import ref
+        raw=self.run/'raw-mcp';raw.mkdir()
+        request=b'';response=b'{}'
+        request_ref=dict(ref('exchange-00000001-request.bin',b'x'),size=0,
+            sha256=hashlib.sha256(request).hexdigest())
+        response_ref=ref('exchange-00000001-response.bin',response)
+        (raw/request_ref['path']).write_bytes(request);(raw/response_ref['path']).write_bytes(response)
+        index=dict(schema_version=1,kind=capture.KIND,run_id=self.run.name,status='RECORDED',failure=None,
+            exchanges=[dict(sequence=1,method='DELETE',request_ref=request_ref,request_end='eof',
+                response_status=200,response_content_type='application/json',response_content_encoding='',
+                response_ref=response_ref,response_end='eof',error=None)])
+        (raw/'capture.json').write_bytes(canonical(index))
+        incoming=[['mcp-session-id',self.sid]]
+        outgoing=[[k.decode('latin1'),v.decode('latin1')] for k,v in self.close.headers.raw]
+        for name,headers in (('request-headers.json',incoming),('response-headers.json',outgoing)):
+            (self.run/name).write_bytes(canonical([dict(exchange_sequence=1,headers=headers)]))
+        summary=dict(exchange_sequence=1,method='DELETE',path='/mcp',status_code=200,
+            mcp_session_id=None,server_instance_id=self.instance,request_session_id=self.sid)
+        (self.run/'http-headers.json').write_bytes(canonical([summary]))
+        return index
+
+    def test_readback_authority_uses_fixed_sources_without_response_or_writer(self):
+        from tests.test_p05_pc026_governance import inventory
+        self.saved_close();before=inventory(self.root)
+        with patch.object(maintenance,'_Capture') as writer,patch.object(maintenance,'_write') as publish:
+            context,request=maintenance._read_authority(self.admission,self.run)
+        self.assertEqual(context,self.authorize())
+        self.assertEqual(request.document,self.request.document)
+        writer.assert_not_called();publish.assert_not_called()
+        self.assertEqual(inventory(self.root),before)
+        for name in ('request-headers.json','response-headers.json','raw-mcp/capture.json'):
+            self.assertIn(self.run/name,self.admission.consumed)
+
+    def test_readback_authority_refuses_duplicate_descriptor_before_writer(self):
+        self.saved_close();path=self.run/'response-headers.json';rows=json.loads(path.read_bytes())
+        headers=rows[0]['headers'];headers.append(next(row for row in headers if row[0]=='x-velo-observation-cut'))
+        path.write_bytes(canonical(rows))
+        with patch.object(maintenance,'_write') as writer,self.assertRaisesRegex(Exception,'maintenance_close_header_unique'):
+            maintenance._read_authority(self.admission,self.run)
+        writer.assert_not_called()
+
+    def test_readback_authority_requires_actual_complete_200_exchange(self):
+        index=self.saved_close();index['exchanges'][0]['response_status']=503
+        (self.run/'raw-mcp/capture.json').write_bytes(canonical(index))
+        with patch.object(maintenance,'_write') as writer,self.assertRaisesRegex(Exception,'original_close_actual'):
+            maintenance._read_authority(self.admission,self.run)
+        writer.assert_not_called()
+
+    def test_readback_authority_missing_profile_approval_precedes_raw_reads(self):
+        self.saved_close();self.group.allowed.pop(self.profile.name)
+        (self.run/'raw-mcp/capture.json').unlink()
+        with self.assertRaisesRegex(Exception,'maintenance_profile_approval'):
+            maintenance._read_authority(self.admission,self.run)
+
     def test_isolated_host_lazy_imports_and_fixed_source_loader(self):
         code='''import sys
 from pathlib import Path
