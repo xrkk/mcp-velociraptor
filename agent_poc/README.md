@@ -1244,3 +1244,9 @@ no second initialization or guessed protocol version is used for chunkbin.
 Maintenance source detection is enabled only by the native exporter source
 interface. Ordinary transfer remains usable with the existing private codec
 exporter verification seam; it does not acquire a maintenance reservation.
+
+
+Maintenance native readback runs outside the controller lock on its retained
+I/O thread. The atomic reservation rechecks the source/session afterward. A
+timeout keeps UNKNOWN and the real join owner; it cannot publish a late
+reservation or block the event loop while waiting for native I/O.

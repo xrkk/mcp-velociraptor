@@ -468,22 +468,23 @@ class SessionController:
                     raise ControllerError('maintenance_reentered')
                 return None  # Same immutable transfer resume uses already reserved capacity.
             if self._transfer_service is None:raise ControllerError('maintenance_transfer_unavailable')
-            service=self._transfer_service._get()
-            service._validate_request(request)  # Read-only identity/policy/schema/producer gate.
-            path=service.policy.resolve_local(sources[0]['absolute_path'],'read')
-            if str(path)!=sources[0]['absolute_path']:raise ControllerError('maintenance_path')
-            from velociraptor_observation_maintenance_plan import acquisition_plan
-            # Reserve temporary native read storage before native source readback.
-            reservation=self._reserve_temporary(2*self._exporter._plan['pending'],'maintenance-source-read')
-            try:
-                facts=self._exporter._maintenance_source(original)
-                plan=acquisition_plan(facts,service.policy.limits,request['budget'],self._limits['max_request_body_bytes'])
+        service=self._transfer_service._get()
+        service._validate_request(request)  # Read-only identity/policy/schema/producer gate.
+        path=service.policy.resolve_local(sources[0]['absolute_path'],'read')
+        if str(path)!=sources[0]['absolute_path']:raise ControllerError('maintenance_path')
+        from velociraptor_observation_maintenance_plan import acquisition_plan
+        # Reserve temporary native read storage before native source readback.
+        reservation=self._reserve_temporary(2*self._exporter._plan['pending'],'maintenance-source-read')
+        try:
+            facts=self._exporter._maintenance_source(original)
+            plan=acquisition_plan(facts,service.policy.limits,request['budget'],self._limits['max_request_body_bytes'])
+            with self._lock:
                 self._reserve_maintenance(original,session,owner,**plan)
-            finally:reservation.release()
-            self._maintenance[session]['transfer_binding']=(request['transfer_id'],request['request_digest'])
-            exchange=self._maintenance_exchange(session,owner,'HTTP_POST')
-            self._maintenance_bytes(session,exchange,body_size)
-            return exchange
+                self._maintenance[session]['transfer_binding']=(request['transfer_id'],request['request_digest'])
+                exchange=self._maintenance_exchange(session,owner,'HTTP_POST')
+                self._maintenance_bytes(session,exchange,body_size)
+                return exchange
+        finally:reservation.release()
 
     async def _prepare_maintenance(self, session, owner, message, body_size):
         params=message.get('params',{})

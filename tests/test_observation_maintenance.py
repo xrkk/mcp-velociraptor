@@ -281,3 +281,35 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(response.status_code,400)
         self.assertFalse(self.controller._maintenance);self.assertFalse(list(self.guest.work.iterdir()))
         self.assertEqual(self.ledger._attempt_count,before)
+
+    async def test_native_source_timeout_keeps_owned_thread_and_no_late_reservation(self):
+        entered=threading.Event();release=threading.Event()
+        real=self.exporter._maintenance_source
+        def blocked(sid):
+            entered.set();release.wait(5)
+            return real(sid)
+        self.exporter._maintenance_source=blocked
+        async with streamable_http_client(self.url,http_client=self.http) as (read,write):
+            async with ClientSession(read,write) as sdk:
+                await sdk.initialize();self.controller._limits['close_timeout_ns']=20_000_000
+                try:
+                    with self.assertRaises(Exception):
+                        await asyncio.wait_for(sdk.call_tool('transfer_begin',{'request':self.request}),2)
+                    self.assertTrue(entered.is_set())
+                    sid=next(s for s in self.controller._sessions if s!=self.original)
+                    io=self.controller._close_io[(sid,'maintenance_activation')]
+                    self.assertTrue(io.thread.is_alive());self.assertFalse(io.joined)
+                    self.assertEqual(self.controller._sessions[sid]['state'],'UNKNOWN')
+                    self.assertFalse(self.controller._maintenance);self.assertFalse(list(self.guest.work.iterdir()))
+                finally:
+                    release.set();self.controller._limits['close_timeout_ns']=300_000_000_000
+                until=time.monotonic()+2
+                while not io.joined and time.monotonic()<until:await asyncio.sleep(.001)
+                self.assertFalse(io.thread.is_alive());self.assertTrue(io.joined)
+                self.assertFalse(self.controller._maintenance);self.assertFalse(list(self.guest.work.iterdir()))
+                # Actual server-loop ownership is preserved, never awaited on
+                # the host test loop. After join, fixture teardown may release
+                # its own held native descriptors without issuing CLOSED_KNOWN.
+                self.exporter.close();self.ledger._poison()
+                with self.assertRaisesRegex(Exception,'ledger_unknown'):self.ledger.close()
+                self.assertEqual(self.controller._sessions[sid]['state'],'UNKNOWN')
