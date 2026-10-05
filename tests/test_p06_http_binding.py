@@ -296,6 +296,10 @@ class TransportModels(unittest.IsolatedAsyncioTestCase):
                 await response.aclose()
             get=asyncio.create_task(call('GET'));await ready.wait();await call('POST');await get;await headers.aclose()
             self.assertEqual([r['exchange_sequence'] for r in headers.responses],[2,1])
+            self.assertEqual([r['exchange_sequence'] for r in headers.request_headers],[1,2])
+            self.assertEqual([r['exchange_sequence'] for r in headers.response_headers],[2,1])
+            self.assertTrue(all(set(r)=={'exchange_sequence','headers'} for r in
+                headers.request_headers+headers.response_headers))
             self.assertTrue(inner.asserted_no_extension)
             self.assertEqual([r['method'] for r in capture.verify(Path(root))['exchanges']],['GET','POST'])
     async def test_inner_sequence_collision_is_failed_and_original_closes_once(self):

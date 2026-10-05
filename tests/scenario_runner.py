@@ -685,6 +685,7 @@ class HttpHeaderCapture:
         self.current_raw = _current_raw
         self.inner = inner
         self.responses: list[dict[str, Any]] = []
+        self.request_headers=[];self.response_headers=[];self.original_close=None
         self.expected_identity: tuple[str, str] | None = None
 
     async def __aenter__(self):
@@ -698,7 +699,17 @@ class HttpHeaderCapture:
         await self.inner.aclose()
 
     async def handle_async_request(self, request: Any) -> Any:
+        if self.current_raw:
+            sequence=len(self.inner.rows)+1
+            self.request_headers.append(dict(exchange_sequence=sequence,headers=[
+                [k.decode('latin1'),v.decode('latin1')] for k,v in request.headers.raw if k.lower()!=b'authorization']))
         response = await self.inner.handle_async_request(request)
+        if self.current_raw:
+            self.response_headers.append(dict(exchange_sequence=response.extensions.get('pc026_capture_sequence'),
+                headers=[[k.decode('latin1'),v.decode('latin1')] for k,v in response.headers.raw]))
+            if request.method=='DELETE':
+                if self.original_close is not None:raise ScenarioFailure('multiple original DELETE responses')
+                self.original_close=response
         record = {
                 "method": request.method,
                 "path": request.url.path,
