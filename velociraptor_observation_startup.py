@@ -1,8 +1,8 @@
 """Read-only fixed lifecycle preflight, before backend and HTTP construction.
 
-The native exporter has not been implemented or qualified. Consequently the
-production entry always refuses after its read-only qualification gates. No
-test seam, CLI option, environment value or HTTP parameter enables it.
+Fixed inputs and native root/SDK/source gates precede writers, RPC and listen.
+No test seam, CLI option, environment value or HTTP parameter grants approval.
+Native Windows service qualification remains separate from host validation.
 """
 from __future__ import annotations
 
@@ -67,13 +67,14 @@ def _precheck_loaded(archive):
 
 
 def precheck_formal_http():
-    """Production closed gate; owns and closes exactly one approved group."""
+    """Read-only preflight; owns and closes exactly one approved group."""
     archive = None
     primary = None
     try:
         archive = load_approved()
-        _precheck_loaded(archive)
-        raise ObservationStartupError('native_exporter_unavailable')
+        lifecycle = _precheck_loaded(archive)
+        from velociraptor_observation_export import _preflight
+        _preflight(archive, lifecycle['budgets'])
     except BaseException as exc:
         primary = exc
         raise

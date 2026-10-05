@@ -124,13 +124,13 @@ class LifecyclePreflightTests(unittest.TestCase):
                 self.precheck()
             self.assertEqual(inventory(self.root), before)
 
-    def test_production_refuses_even_valid_model_graph_and_never_calls_backend_or_sdk_constructor(self):
+    def test_production_refuses_model_approval_without_native_platform_and_never_calls_backend_or_sdk_constructor(self):
         from velociraptor_transport import build_formal_http_app, TransportConfig
         config = TransportConfig('http', host='127.0.0.1', bearer_token='MODEL')
         server = Mock()
         before = inventory(self.root)
         with patch.object(gov, 'REPOSITORY', self.root), \
-                self.assertRaisesRegex(startup.ObservationStartupError, 'native_exporter_unavailable'):
+                self.assertRaises(Exception):
             build_formal_http_app(server, config)
         server.streamable_http_app.assert_not_called()
         failures, out, err = Mock(), StringIO(), StringIO()

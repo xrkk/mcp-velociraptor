@@ -264,10 +264,44 @@ class ServerInstanceHeader:
 
 
 def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
-    """Production constructor refuses without the complete native lifecycle."""
-    from velociraptor_observation_startup import precheck_formal_http
-    precheck_formal_http()
-    return _build_protocol_http_app(server, config)
+    """One approved ledger/controller and actual pinned SDK manager."""
+    from contextlib import asynccontextmanager
+    import anyio
+    from mcp.server.transport_security import TransportSecuritySettings
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    from velociraptor_observation_controller import SessionController, _HTTPIngress, _BinaryIngress, _approved_controller
+    from velociraptor_observation_sdk_adapter import _TrackedManager
+    from velo_transfer.http_wire import SDKSessionBindings
+    controller=getattr(server,'_observation_controller',None)
+    if not _approved_controller(controller):
+        controller=SessionController.open_approved(new_server_instance_id())
+    try:
+        manager=_TrackedManager(server._lowlevel_server, security_settings=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,allowed_hosts=[f'{config.host}:{config.port}'],
+            allowed_origins=list(config.allowed_origins)))
+        controller._attach_manager(manager)
+        bindings=SDKSessionBindings(manager,controller._ledger._instance)
+        controller._bindings=bindings
+        @asynccontextmanager
+        async def lifespan(app):
+            async with manager.run():
+                try:yield
+                finally:
+                    with anyio.CancelScope(shield=True):await controller._drain()
+        routes=[Route(config.path,_HTTPIngress(controller),methods=['GET','POST','DELETE'])]
+        service=getattr(server,'_guest_transfer_tools',None)
+        if service is not None:routes.append(Route('/chunkbin',_BinaryIngress(controller,service),methods=['POST']))
+        app=Starlette(routes=routes,lifespan=lifespan)
+        app.state.transfer_bindings=bindings
+        app.state.observation_controller=controller
+        app.add_middleware(HostOriginGate,allowed_hosts=(f'{config.host}:{config.port}',),allowed_origins=tuple(config.allowed_origins))
+        app.add_middleware(ServerInstanceHeader,instance_id=controller._ledger._instance)
+        app.add_middleware(BearerAuthGate,token=config.bearer_token or '')
+        return app
+    except BaseException as primary:
+        controller._abort_startup(primary)
+        raise
 
 
 def _build_protocol_http_app(server: Any, config: TransportConfig) -> Any:

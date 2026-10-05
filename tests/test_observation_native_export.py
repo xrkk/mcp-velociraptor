@@ -168,6 +168,31 @@ class NativeExportModels(unittest.TestCase):
             self.assertTrue(fired);self.assertFalse(e.completed);self.assertTrue(self.contents(fs))
 
 
+    def test_native_finite_cut_proof_and_manifest_minus_one_before_mkdir(self):
+        for key,name in (('max_cut_bytes','cut.json'),('max_proof_bytes','lifecycle.json'),('max_source_manifest_bytes','source-manifest.json')):
+            l,fs,c,e=self.setup_export();e.reserve('MODEL-session');prefix=self.prefix(l)
+            files,_,_=e._documents(prefix,proof(l,prefix.session));e.codec.limits[key]=len(files[name])-1
+            before=list(fs.created)
+            with self.subTest(key=key),self.assertRaisesRegex(Exception,'byte_budget'):
+                e.publish(prefix,proof(l,prefix.session),retain=lambda g:None)
+            self.assertEqual(before,fs.created);self.assertFalse(self.contents(fs));self.assertFalse(e.completed)
+
+    def test_shared_reserve_concurrent_last_capacity_spent_once_before_copy(self):
+        from concurrent.futures import ThreadPoolExecutor
+        l,fs,c,e=self.setup_export();e.codec.limits['max_export_files']=e._plan['files']
+        barrier=threading.Barrier(2)
+        def reserve(name):
+            barrier.wait()
+            try:e.reserve(name);return 'RESERVED'
+            except Exception as error:return str(error)
+        before=list(fs.created)
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            futures=[workers.submit(reserve,name) for name in ('one','two')]
+            results=[future.result(3) for future in futures]
+        self.assertEqual(sorted(results),['RESERVED','export_files']);self.assertEqual(len(e._reservations),1)
+        self.assertEqual(fs.created,before);self.assertFalse(self.contents(fs))
+
+
 class NativeExportHTTP(unittest.IsolatedAsyncioTestCase):
     records=chain.ChainTests.records
     initialize=chain.ChainTests.initialize
@@ -352,6 +377,8 @@ class PosixExportIO(NativeExportModels):
 
     # Use two meaningful inherited cases with actual disk I/O; MODEL-only
     # mutation tests deliberately change synthetic node content/SD in memory.
+    test_native_finite_cut_proof_and_manifest_minus_one_before_mkdir=None
+    test_shared_reserve_concurrent_last_capacity_spent_once_before_copy=None
     test_copy_before_quota_minus_one_duplicate_path_and_free_zero_writer=None
     test_unissued_prefix_or_source_sd_drift_never_writes=None
     test_publish_readback_and_final_reader_close_fail_preserve_original_and_residual=None
@@ -367,3 +394,60 @@ class PosixExportIO(NativeExportModels):
             os.close(fd)
         self.assertEqual(target.read_bytes(),original)
         l.close();self.assertFalse(fs.fds);self.assertFalse(fs.handles)
+
+
+class FormalNativeHTTP(unittest.IsolatedAsyncioTestCase):
+    """Actual formal app/SDK/native algorithm; approval and Win32 I/O MODEL.
+
+    Fixed loader authority is tested independently in native_startup. This
+    explicitly private registry insertion never exists in a production route.
+    """
+    async def test_formal_app_exact_path_bound_instance_session_and_shutdown(self):
+        import socket
+        import httpx2
+        import uvicorn
+        from contextlib import asynccontextmanager
+        from mcp.server.mcpserver import MCPServer
+        from velociraptor_observation_controller import SessionController, _APPROVED_CONTROLLERS
+        from velociraptor_transport import build_formal_http_app, TransportConfig
+        fixture=attempts.LedgerModels();self.addCleanup(fixture.doCleanups)
+        ledger,fs,config=fixture.ledger();limits=model_budgets()
+        limits.update(max_export_bytes=224870400,max_retained_state_bytes=8<<20)
+        controller=object.__new__(SessionController);controller._initialize(ledger,limits)
+        controller._exporter=install(self,ledger,fs,config,limits)
+        _APPROVED_CONTROLLERS.add(controller)  # Explicit MODEL approval boundary.
+        server=MCPServer('MODEL-formal-native')
+        @server.tool()
+        def echo(value:str)->str:return value
+        server._observation_controller=controller
+        sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen();sock.setblocking(False)
+        port=sock.getsockname()[1];url=f'http://127.0.0.1:{port}/mcp'
+        app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',port=port,bearer_token='MODEL'))
+        http_server=uvicorn.Server(uvicorn.Config(app,log_level='critical'))
+        thread=threading.Thread(target=lambda:http_server.run(sockets=[sock]),daemon=False)
+        thread.start()
+        try:
+            deadline=time.monotonic()+3
+            while not http_server.started and time.monotonic()<deadline:await asyncio.sleep(.01)
+            self.assertTrue(http_server.started)
+            async with httpx2.AsyncClient(trust_env=False,timeout=5,headers={'authorization':'Bearer MODEL',
+                    'accept':'application/json, text/event-stream','content-type':'application/json'}) as client:
+                r=await client.post(url,json=dict(jsonrpc='2.0',id=1,method='initialize',params=dict(
+                    protocolVersion='2025-11-25',capabilities={},clientInfo=dict(name='MODEL',version='1'))))
+                self.assertEqual(r.status_code,200,r.text);self.assertFalse(r.history)
+                self.assertEqual(r.headers['x-mcp-server-instance'],ledger._instance)
+                session_id=r.headers['mcp-session-id'];client.headers.update({'mcp-session-id':session_id,'mcp-protocol-version':'2025-11-25'})
+                r=await client.post(url,json=dict(jsonrpc='2.0',method='notifications/initialized'))
+                self.assertEqual(r.status_code,202,r.text)
+                r=await client.post(url,json=dict(jsonrpc='2.0',id=7,method='tools/call',params=dict(name='echo',arguments=dict(value='actual-formal'))))
+                self.assertEqual(r.status_code,200,r.text)
+                binding=app.state.transfer_bindings
+                self.assertIs(binding.manager,controller._manager);self.assertEqual(binding.instance,ledger._instance)
+                self.assertEqual(binding.owners[session_id],hashlib.sha256(b'MODEL').digest());self.assertIn(session_id,binding.initialized)
+                r=await client.delete(url);self.assertEqual(r.status_code,200,r.text)
+                self.assertIn('x-velo-observation-cut',r.headers)
+        finally:
+            http_server.should_exit=True
+            await asyncio.to_thread(thread.join,5);sock.close()
+            self.assertFalse(thread.is_alive())
+        self.assertEqual(controller._state,'CLOSED');self.assertEqual(config.group.closed,1);self.assertFalse(fs.handles)

@@ -1,18 +1,53 @@
 # Velociraptor MCP
 
-Native C3 export now has a production algorithm privately borrowed from the
-fixed approved ledger. It uses the native 09 transaction and 11 directory
-allocator, reserves shared copy/pending quotas before source snapshots, and
-independently verifies cut and complete export bytes on safely reread originals.
-The controller waits for actual per-export I/O closure and native thread join
-before issuing close headers. Source SD reserves use the Reader's 1 MiB bound;
-failed/unknown operations retain originals and cannot grant a success receipt.
-Host tests use MODEL Windows permissions/identities, actual SDK loopback and
-limited real POSIX file I/O. Native Win32/service qualification, physical NTFS
-limits, host maintenance/consumption and a new approved deployment remain
-unverified. Full parser heap proof is outside the calibrated acceptance scope.
-The next separate change wires the formal bridge/app to this approved controller;
-stdio remains free of archival input loading.
+## Current native archive entry
+
+Formal HTTP now constructs `SessionController.open_approved(instance_id)` before
+backend RPCs or listening. The fixed governance loader must approve the current
+source/resources, SDK pin, archive/lifecycle inputs and actual private Windows
+root identity plus full SD. Read-only preflight checks every generated absolute
+candidate and caller-available free space; there is no root, group, publisher,
+MODEL, CLI or environment approval override. Missing or stale actual approval
+still rejects startup as `OBSERVATION_STARTUP_REJECTED`. stdio does not load
+archive inputs. The historical agent does not acquire archival integration.
+
+`velociraptor_observation_export.py` borrows the same ledger-owned governed group
+and owns a separate native directory allocator for the approved export quota.
+It reserves shared files/bytes/directories and one serialized pending lane before
+copying the source prefix. Every candidate uses the actual root, UTF-16 length
+below 248 and depth at most 64; source SD reserves use the Reader's 1 MiB bound.
+The export layout is `e<instance>/s<SHA256(session UTF-8)>/`, beside the ledger.
+It copies the complete confirmed global catalog and only that session's NEW
+chains, includes all its REJECTED attempts, deduplicates source SD bytes by hash,
+and preserves each file's exact six-field source identity.
+
+Publication reuses the 09 same-handle exclusive pending/write/flush/readback/
+no-replace transaction and 11 private allocation algorithm. Source copies close
+before `source-manifest.json`; `lifecycle.json`, `attempts.json` and `cut.json`
+follow. An independent full `CutCodec.verify_cut` readback precedes `export.json`,
+then full export verification and all per-export publisher/reader closes precede
+the external runtime receipt. DELETE can return the two adopted close headers
+only after the actual native thread has exited and joined. Repeated DELETE
+returns the same cut; failure preserves originals/pending files and UNKNOWN,
+with no successful headers, repair or replay. Timeout/cancellation keeps the
+real thread, join task and pending ownership through its actual finally.
+Only the ledger closes the borrowed group and retained allocators during drain.
+
+The formal app uses one actual pinned SDK manager, controller/ledger instance
+and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
+gates. All 137 schemas and seven transfer protocols remain unchanged. Host
+verification exercises the production native algorithm with MODEL Windows
+permissions/identities, actual SDK loopback and limited real POSIX file I/O.
+It does not qualify Win32/NTFS/service identity, directory durability, B1 overall,
+maintenance acquisition, independent host consumption or the new production
+freeze/deployment/approval. Those remain separately authorized Windows work.
+Finite body/record/SD and queue gates, observed permanent byte/object peaks and
+copy-before resource reserves remain required; full CPython/Rust parser heap
+proof is outside the calibrated acceptance scope. No RSS claim is made.
+
+Component progress notes below preserve earlier implementation stages. Their
+unavailable-exporter and unconditional-startup-refusal statements describe those
+earlier stages; the current fixed construction and remaining gates are above.
 
 
 TargetContext now emits an exact internal whitelist when a request scope is

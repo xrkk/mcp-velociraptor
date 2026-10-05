@@ -85,10 +85,12 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
         print('Service lifecycle requires the formal HTTP transport', file=sys.stderr)
         return 2
 
+    controller = None
     if config.mode == FORMAL_TRANSPORT:
         try:
-            from velociraptor_observation_startup import precheck_formal_http
-            precheck_formal_http()
+            from velociraptor_observation_controller import SessionController
+            from velociraptor_transport import new_server_instance_id
+            controller = SessionController.open_approved(new_server_instance_id())
         except Exception:
             if on_failure is not None:
                 on_failure('OBSERVATION_STARTUP_REJECTED')
@@ -97,12 +99,15 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
 
     try:
         server = create_server()
+        if controller is not None:server._observation_controller=controller
     except ArtifactRegistryError as exc:
+        if controller is not None:controller._abort_startup(exc)
         if on_failure is not None:
             on_failure("ARTIFACT_REGISTRY_INVALID")
         print(f"Velociraptor MCP startup failed: {exc}", file=sys.stderr)
         return 2
     except Exception as exc:
+        if controller is not None:controller._abort_startup(exc)
         if on_failure is not None:
             on_failure("BACKEND_INITIALIZATION_FAILED")
         print(
