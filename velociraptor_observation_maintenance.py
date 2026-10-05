@@ -39,6 +39,43 @@ CALL_KEYS={'sequence','work_kind','method','exchange_sequence','request_key','to
 LEDGER_KEYS={'schema_version','kind','original_cut_ref','maintenance_session','instance_id','capture_ref','headers_ref','calls','clock','transfer_receipts','close','status'}
 
 
+@asynccontextmanager
+async def _settled_sdk(endpoint, http, identity, *, _capture=None):
+    """Stop the SDK reconnect loop, then retain one actual DELETE response."""
+    try:
+        async with streamable_http_client(endpoint,http_client=http,terminate_on_close=False) as streams:
+            try:
+                yield streams
+            finally:
+                # Close the actual owned GET body through its capture stream
+                # before the SDK cancels its task group. Cancellation remains
+                # an error when it is not this explicit normal stream close.
+                if _capture is not None:
+                    primary=sys.exc_info()[1];first_close_error=None
+                    for stream in _capture.streams:
+                        if stream.direction=='response' and stream.row['method']=='GET' and not stream.closed:
+                            try:await stream.aclose()
+                            except BaseException as stream_error:
+                                if primary is not None:
+                                    primary.add_note('formal GET capture close failed: '+type(stream_error).__name__)
+                                elif first_close_error is None:first_close_error=stream_error
+                    if primary is None and first_close_error is not None:raise first_close_error
+    finally:
+        session,protocol=identity()
+        if session is not None:
+            primary=sys.exc_info()[1]
+            try:
+                from tests.p05_pc026_governance import before_effect
+                before_effect()
+                response=await http.delete(endpoint,headers={
+                    'Mcp-Session-Id':session,'Mcp-Protocol-Version':protocol or '2025-11-25',
+                    'Accept':'application/json, text/event-stream'})
+                response.raise_for_status()
+            except BaseException as close_error:
+                if primary is None:raise
+                primary.add_note('formal DELETE failed: '+type(close_error).__name__)
+
+
 def _read(root, name, maximum):
     _require(type(name) is str and name and not name.startswith('/') and '\\' not in name
         and all(p not in ('','.','..') for p in name.split('/')),'maintenance_path')
@@ -515,7 +552,7 @@ async def _acquire(run_dir,request,context,*,recheck):
     try:
         async with httpx2.AsyncClient(headers={'Authorization':'Bearer '+token,'Accept-Encoding':'identity'},
             transport=transport,timeout=request.request_timeout_seconds,trust_env=False,follow_redirects=False) as http:
-            async with streamable_http_client(endpoint.url,http_client=http) as (read,write):
+            async with _settled_sdk(endpoint.url,http,lambda:(transport.sid,'2025-11-25'),_capture=transport) as (read,write):
                 async with ClientSession(read,write) as raw_sdk:
                     sdk=_SDK(raw_sdk,transport,root);await sdk.initialize()
                     _require(transport.sid is not None and transport.sid!=context['original_session'],'maintenance_distinct_session')

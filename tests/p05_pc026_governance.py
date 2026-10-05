@@ -275,6 +275,10 @@ ENTRIES = ENTRIES | frozenset({
     'tests/test_observation_host_failure_producer.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+# Actual SDK/capture stream close ownership and primary-error preservation.
+ENTRIES = ENTRIES | frozenset({'tests/test_observation_sdk_close.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 

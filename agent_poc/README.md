@@ -1361,3 +1361,10 @@ one of seven required originals rejects without writing selection, receipt or
 handoff output. Historical readers cannot treat a current root as old evidence.
 This verifies selected-member consumption, not the outer five-run aggregate or
 P07 completion/publication.
+
+The internal maintenance SDK closes its owned captured GET body normally before
+stopping the SDK reconnect loop and sending the actual session DELETE. It retains
+capture errors and the original DELETE response instead of manufacturing close
+proof. A failed capture can refuse further network effects; an earlier SDK error
+remains primary and receives cleanup notes. COMPLETE still requires the original
+bodies, headers, receipt objects and independent C4 readback to agree.
