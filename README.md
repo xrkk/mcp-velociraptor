@@ -1330,3 +1330,8 @@ Maintenance native readback runs outside the controller lock on its retained
 I/O thread. The atomic reservation rechecks the source/session afterward. A
 timeout keeps UNKNOWN and the real join owner; it cannot publish a late
 reservation or block the event loop while waiting for native I/O.
+
+
+Maintenance quota boundary tests include the actual initial SDK/control history:
+one call or one byte below its controlled acquisition plan rejects before BEGIN
+and leaves the transfer writer, ledger attempt and child set unchanged.

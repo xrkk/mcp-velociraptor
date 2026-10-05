@@ -189,12 +189,26 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(self.controller._children)
 
     async def test_calls_minus_one_before_begin(self):
-        self.controller._limits['max_maintenance_calls']=1
-        await self._deny('maintenance_capacity')
+        await self._history_capacity_minus_one('calls','max_maintenance_calls')
 
     async def test_bytes_minus_one_before_begin(self):
-        self.controller._limits['max_maintenance_bytes']=1
-        await self._deny('maintenance_capacity')
+        await self._history_capacity_minus_one('bytes','max_maintenance_bytes')
+
+    async def _history_capacity_minus_one(self,kind,limit):
+        facts=self.exporter._maintenance_source(self.original)
+        plan=acquisition_plan(facts,self.guest.service.policy.limits,self.request['budget'],self.controller._limits['max_request_body_bytes'])
+        before=self.ledger._attempt_count
+        async with streamable_http_client(self.url,http_client=self.http) as (read,write):
+            async with ClientSession(read,write) as sdk:
+                await sdk.initialize();await sdk.list_tools()
+                sid=next(s for s in self.controller._sessions if s!=self.original)
+                history=[r for r in self.controller._work.values() if r.session==sid]
+                actual=len(history) if kind=='calls' else sum(r.request_bytes+r.response_bytes for r in history)
+                self.controller._limits[limit]=plan[kind]+actual-1
+                with self.assertRaises(Exception):await sdk.call_tool('transfer_begin',{'request':self.request})
+                self.assertIn('maintenance_capacity',[r for r in self.responses if r.status_code>=400][-1].text)
+                self.assertFalse(self.controller._maintenance);self.assertFalse(list(self.guest.work.iterdir()))
+                self.assertEqual(self.ledger._attempt_count,before);self.assertFalse(self.controller._children)
 
     async def test_attempts_minus_one_before_begin(self):
         facts=self.exporter._maintenance_source(self.original)
