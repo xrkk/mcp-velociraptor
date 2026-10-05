@@ -1308,3 +1308,9 @@ writer or new SDK session. The profile remains an independently approved source;
 its content hash or a close descriptor does not grant authority. This reader
 seam has MODEL governance and real POSIX read-only checks. The independent C5
 sidecar and mandatory producer/consumer integration remain unfinished.
+
+The current raw join treats the controller's fully consumed HTTP DELETE 200
+empty JSON control response separately from JSON-RPC messages. Nonempty control
+objects, non-200 responses, and incomplete bodies still refuse success; tool
+responses retain their strict JSON-RPC checks. This does not replace the required
+independent archive and maintenance consumption gate.

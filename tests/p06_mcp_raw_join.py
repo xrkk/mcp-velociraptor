@@ -253,6 +253,12 @@ def messages(reader, row, direction):
     require(kind == 'application/json', 'unsupported nonempty Content-Type')
     require(direction != 'response' or end == 'eof', 'JSON response is incomplete')
     value = strict_json(body)
+    if direction == 'response' and row['method'] == 'DELETE':
+        # The governed controller returns an empty JSON HTTP control body;
+        # it is not a JSON-RPC response and has no invented request id.
+        require(row['response_status'] == 200 and end == 'eof' and value == {},
+                'DELETE control response differs')
+        return
     yield value, dict(exchange_sequence=row['sequence'], direction=direction, frame_index=1, body_ref=ref)
 
 

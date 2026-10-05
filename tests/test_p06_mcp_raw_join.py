@@ -125,6 +125,18 @@ class Models(unittest.TestCase):
                 self.assertEqual(location['body_ref'],f.rows[seq+1][direction+'_ref'])
         self.assertEqual(before,f.hashes())
 
+    def test_controller_delete_control_json_is_not_a_jsonrpc_response(self):
+        f=self.fixture();f.exchange(b'',{},method='DELETE');f.save()
+        before=f.hashes()
+        self.assertEqual(len(rawjoin.join(f.run)['calls']),2)
+        self.assertEqual(before,f.hashes())
+        for body,end,status,pattern in (({'extra':1},'eof',200,'DELETE control'),
+                ({},'closed',200,'JSON response is incomplete'),({},'eof',503,'non-success HTTP')):
+            f=self.fixture();f.exchange(b'',body,method='DELETE',end=end,status=status);f.save()
+            self.reject(f,pattern)
+        f=self.fixture();f.change_body(3,'response',{});f.save()
+        self.reject(f,'version differs')
+
     def test_sse_bom_crlf_cr_multidata_notifications_and_out_of_order(self):
         f=Fixture(self.root);f.exchange(f.init,f.init_result);f.exchange(f.list,f.list_result)
         notice={'jsonrpc':'2.0','method':'notifications/progress','params':{'progressToken':1,'progress':1}}
