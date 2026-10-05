@@ -1353,3 +1353,11 @@ Failed finalization preserves the first failure, raw originals and diagnostic
 package without publishing BOUND. A pre-seal failure can seal its failed candidate
 once; an already-started package or receipt append is never retried. Secondary
 preservation errors attach notes to the primary exception.
+
+The private selected-run member collector requires the real fixed Admission and
+resolves every member through the same public package gates. A finite actual
+acquired-run matrix also checks the public current receipt ledger: missing any
+one of seven required originals rejects without writing selection, receipt or
+handoff output. Historical readers cannot treat a current root as old evidence.
+This verifies selected-member consumption, not the outer five-run aggregate or
+P07 completion/publication.

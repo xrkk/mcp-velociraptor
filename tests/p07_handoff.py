@@ -128,6 +128,28 @@ def _history(raw):
                         'historical absence shape differs')
 
 
+def _selected_run_members(admission, run, root, add):
+    """Private shared selected-member mechanism; no completion or publication.
+
+    Every actual run still goes through the public current package admission.
+    The outer handoff alone owns selection, completion and output authority.
+    """
+    gov.require(type(admission) is binding.Admission and type(admission.group) is gov.GovernedGroup,
+                'selected member admission differs')
+    manifest_path = plain_file(run, package.FINAL_MANIFEST)
+    manifest = ev._json_bytes(admission.read(manifest_path), 'package manifest')
+    sources = package.member_sources(run, root)
+    gov.require(set(sources) == {row['path'] for row in manifest['members']}
+                and len(sources) == len(manifest['members']), 'package closure member set differs')
+    gov.require(admission.read(manifest_path) == package.canonical_bytes(package.member_inventory(run, root)),
+                'package closure inventory differs')
+    for row in manifest['members']:
+        actual = add(sources[row['path']])
+        gov.require((actual['size'], actual['sha256']) == (row['size'], row['sha256']),
+                    'package closure member bytes differ')
+    return add(manifest_path)
+
+
 def _derive(admission):
     group = admission.group
     root = group.repository / ROOT_REL
@@ -164,18 +186,7 @@ def _derive(admission):
         return reference
 
     def run_members(run):
-        manifest_path = plain_file(run, package.FINAL_MANIFEST)
-        manifest = ev._json_bytes(admission.read(manifest_path), 'package manifest')
-        sources = package.member_sources(run, root)
-        gov.require(set(sources) == {row['path'] for row in manifest['members']}
-                    and len(sources) == len(manifest['members']), 'package closure member set differs')
-        gov.require(admission.read(manifest_path) == package.canonical_bytes(package.member_inventory(run, root)),
-                    'package closure inventory differs')
-        for row in manifest['members']:
-            actual = add(sources[row['path']])
-            gov.require((actual['size'], actual['sha256']) == (row['size'], row['sha256']),
-                        'package closure member bytes differ')
-        return add(manifest_path)
+        return _selected_run_members(admission,run,root,add)
 
     qualification = ev._json_bytes(admission.read(root / 'resource-qualification-selection.json'), 'qualification selection')
     qreport = plain_file(root, qualification['report_relative_path'])

@@ -271,7 +271,7 @@ ENTRIES = ENTRIES | frozenset({
     'tests/test_p05_source_layouts.py',
     'tests/test_observation_host_work.py','tests/test_observation_host_semantics.py',
     'tests/test_observation_host_producer.py','tests/test_observation_host_public.py',
-    'tests/test_observation_host_finalization.py',
+    'tests/test_observation_host_selected.py','tests/test_observation_host_finalization.py',
     'tests/test_observation_host_failure_producer.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
