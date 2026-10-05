@@ -117,3 +117,11 @@ class FixedFailureHTTP(HostHTTP):
         self.assertFalse((run/'mcp-observation-binding.json').exists())
         self.preserve(run)
         with self.assertRaises(FileExistsError):publish(self.fresh_admission(),run)
+
+
+def load_tests(loader,tests,pattern):
+    # Imported parent fixtures confer setup/cleanup, not duplicate test cases.
+    return loader.loadTestsFromNames([
+        'FailureHTTP.test_actual_gates_duplicate_failed_end_typed_sessions_and_delete',
+        'FixedFailureHTTP.test_actual_authorized_failure_reader_and_exclusive_publication'],
+        module=__import__(__name__,fromlist=['']))

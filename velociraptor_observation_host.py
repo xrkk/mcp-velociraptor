@@ -182,4 +182,3 @@ def _publish_acquired(admission, run_dir):
     value=_derive(admission,run)
     admission.recheck();_exclusive(run,SIDECAR,value)
     return validate(admission,run)
-
