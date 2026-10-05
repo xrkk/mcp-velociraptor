@@ -445,10 +445,12 @@ class SessionController:
         if type(request) is not dict or request.get('direction')!='pull' or self._exporter is None:return None
         sources=request.get('sources')
         if type(sources) is not list:return None
+        namespace=getattr(self._exporter,'_namespace_source',None)
+        if namespace is None:return None
         candidates=[]
         for item in sources:
             if type(item) is not dict or type(item.get('absolute_path')) is not str:continue
-            if self._exporter._namespace_source(item['absolute_path']):candidates.append(item['absolute_path'])
+            if namespace(item['absolute_path']):candidates.append(item['absolute_path'])
         if not candidates:return None  # Ordinary transfer retains its existing policy.
         with self._lock:
             matches=[original for original,descriptor in self._closed_cuts.items()
@@ -489,8 +491,10 @@ class SessionController:
         if (message.get('method')!='tools/call' or params.get('name')!='transfer_begin'
                 or type(request) is not dict or request.get('direction')!='pull' or self._exporter is None):return None
         sources=request.get('sources')
+        namespace=getattr(self._exporter,'_namespace_source',None)
+        if namespace is None:return None
         if type(sources) is not list or not any(type(r) is dict and type(r.get('absolute_path')) is str
-                and self._exporter._namespace_source(r['absolute_path']) for r in sources):return None
+                and namespace(r['absolute_path']) for r in sources):return None
         with self._lock:
             if session in self._maintenance:
                 return self._activate_maintenance(session,owner,message,body_size)

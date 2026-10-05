@@ -1239,3 +1239,8 @@ provide no Windows qualification or new production approval.
 Binary transfer requests now carry the actual protocol version negotiated by
 that existing SDK session. They retain its session ID and bearer connection;
 no second initialization or guessed protocol version is used for chunkbin.
+
+
+Maintenance source detection is enabled only by the native exporter source
+interface. Ordinary transfer remains usable with the existing private codec
+exporter verification seam; it does not acquire a maintenance reservation.

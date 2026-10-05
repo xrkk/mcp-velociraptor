@@ -36,6 +36,7 @@ class TransferCut(unittest.IsolatedAsyncioTestCase):
         from velo_transfer import wire
         session=await self.initialize();writer=self.latch()
         await self.tool(1,'transfer_begin',dict(request=self.request))
+        self.assertFalse(self.controller._maintenance)  # Ordinary transfer is not an export acquisition.
         row=next(iter(self.controller._children.values()))
         closing=asyncio.create_task(self.http.delete(self.url))
         try:
