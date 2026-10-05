@@ -196,10 +196,11 @@ class _DirectChunkChannel:
     This channel never initializes another session, probes a write, retries a
     write, or falls back to JSON after any uncertain outcome.
     """
-    def __init__(self, http, url, session_id, instance, deadline, timeout):
+    def __init__(self, http, url, session_id, instance, deadline, timeout, protocol_version=None):
         self.http = http; self.url = url.rsplit("/", 1)[0] + "/chunkbin"
         self.session_id = session_id; self.instance = instance
         self.deadline = deadline; self.timeout = timeout
+        self.protocol_version = protocol_version
 
     async def call(self, name, arguments):
         if name != "transfer_chunks":
@@ -210,6 +211,8 @@ class _DirectChunkChannel:
             "Content-Type":"application/octet-stream", "x-velo-direction":direction,
             "x-velo-transfer-id":arguments["transfer_id"],
             "x-velo-request-digest":arguments["request_digest"], "x-velo-offset":str(arguments["offset"])}
+        if self.protocol_version is not None:
+            headers["Mcp-Protocol-Version"] = self.protocol_version
         try:
             if push:
                 meta = [{k:c[k] for k in ("count", "chunk_sha256")} for c in arguments["chunks"]]
@@ -656,7 +659,7 @@ async def open_adapter(profile: ConnectionProfile, channel: str, *, deadline_mon
                             if not session_ids or len(set(session_ids)) != 1 or not instances or len(set(instances)) != 1:
                                 raise AdapterError("protocol_error")
                             return _DirectChunkChannel(http, endpoint.url, session_ids[0], instances[0],
-                                                       deadline_monotonic, request_timeout_seconds)
+                                                       deadline_monotonic, request_timeout_seconds, session.protocol_version)
                         adapter._binary_factory = binary_factory
                         opened = True
                         yield adapter

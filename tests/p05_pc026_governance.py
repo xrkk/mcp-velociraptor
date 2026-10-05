@@ -242,6 +242,9 @@ ENTRIES = ENTRIES | frozenset({'velociraptor_observation_maintenance_plan.py',
     'tests/test_observation_maintenance.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+ENTRIES = ENTRIES | frozenset({'tests/test_transfer_protocol_channel.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 

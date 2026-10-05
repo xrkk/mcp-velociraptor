@@ -1277,3 +1277,8 @@ bindings are rejected before BEGIN. Ordinary transfers retain their existing
 policy; stdio does not create an observation archive. This stage's tests use
 actual SDK sockets, POSIX files and processes with MODEL Win32 authority; they
 provide no Windows qualification or new production approval.
+
+
+Binary transfer requests now carry the actual protocol version negotiated by
+that existing SDK session. They retain its session ID and bearer connection;
+no second initialization or guessed protocol version is used for chunkbin.
