@@ -1426,8 +1426,79 @@ async def run_scenario(
 
 
 def _mark_report_failed(report, exc):
-    report.update(status='failed', coverage=[], failure={
-        'type': type(exc).__name__, 'message': str(exc), 'previous_failure': report.get('failure')})
+    report.update(status='failed',coverage=[])
+    if report.get('failure') is None:
+        report['failure']={'type':type(exc).__name__,'message':str(exc),'previous_failure':None}
+
+
+def _new_current_run(run_dir):
+    # Create only missing owned directories; never change shared ancestors.
+    from tests.p06_http_body_capture import _Directory
+    from velo_transfer.manifest import safe_chain
+    missing=[];path=Path(run_dir)
+    while not path.exists():missing.append(path);path=path.parent
+    safe_chain(path,path)
+    for directory in reversed(missing):
+        anchor=_Directory(directory.parent)
+        try:os.mkdir(directory.name,mode=0o700,dir_fd=anchor.fd);anchor.check()
+        finally:anchor.close()
+
+
+def _save_original_headers(capture,run_dir):
+    from tests.p06_http_binding import _exclusive
+    for name,rows in (('request-headers.json',capture.request_headers),
+                      ('response-headers.json',capture.response_headers)):
+        _exclusive(run_dir,name,rows)
+
+
+async def _finalize_current(report,run_dir,root,clock,capture,admission,*,seal):
+    """No success consumer runs between candidate publication and C5 readback."""
+    seal_started=False
+    try:
+        _finalize_report(report,run_dir,root,clock,seal=False,_admission=admission)
+        if capture is not None:_save_original_headers(capture,run_dir)
+        if report['status']=='success':
+            from velociraptor_observation_host import _complete_candidate
+            await _complete_candidate(admission,run_dir,capture.original_close)
+        if report['status']=='failed':_preserve_failure(run_dir)
+        if seal:
+            seal_started=True
+            _seal_report(run_dir,root)
+    except BaseException as error:
+        _mark_report_failed(report,error)
+        try:
+            (run_dir/'report.json').write_bytes(canonical_bytes(report))
+            _preserve_failure(run_dir)
+        except BaseException as preservation_error:
+            error.add_note('failed candidate preservation: ' + type(preservation_error).__name__)
+        if seal and not seal_started:
+            # Only the new FAILED candidate is sealed, once. Never retry a
+            # seal whose receipt append may already have had a side effect.
+            try:_seal_report(run_dir,root)
+            except BaseException as preservation_error:
+                error.add_note('failed candidate package preservation: ' + type(preservation_error).__name__)
+        raise
+
+
+def _preserve_failure(run_dir):
+    # A failed candidate is a new original, independently reopened. No old
+    # admitted success bytes or caches are repaired to accept its mutation.
+    if not (run_dir/'raw-mcp/capture.json').exists():return
+    try:
+        from tests.p06_pc026_binding import load
+        from velociraptor_observation_failure import publish
+        publish(load(),run_dir)
+    except Exception as error:
+        from tests.p06_http_binding import _exclusive
+        _exclusive(run_dir,'failure-classification-error.json',dict(type=type(error).__name__,message=str(error)[:512]))
+
+
+def _seal_report(run_dir,evidence_root):
+    from tests.p06_package import member_inventory,verify_manifest
+    (run_dir/'package-manifest.json').write_bytes(canonical_bytes(member_inventory(run_dir,evidence_root)))
+    verify_manifest(run_dir,evidence_root)
+    from tests.p06_receive import receive
+    receive(run_dir,evidence_root)
 
 
 def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal, _admission=None):
@@ -1448,12 +1519,7 @@ def _finalize_report(report, run_dir, evidence_root, run_clock, *, seal, _admiss
         if _admission is not None and report['status']=='success':
             from tests.p06_http_binding import publish
             publish(_admission,run_dir)
-        if seal:
-            from tests.p06_package import member_inventory, verify_manifest
-            (run_dir/'package-manifest.json').write_bytes(canonical_bytes(member_inventory(run_dir,evidence_root)))
-            verify_manifest(run_dir,evidence_root)
-            from tests.p06_receive import receive
-            receive(run_dir,evidence_root)
+        if seal:_seal_report(run_dir,evidence_root)
     except BaseException as exc:
         _mark_report_failed(report, exc)
         # Best effort only in this new owned run: never replace a clock original

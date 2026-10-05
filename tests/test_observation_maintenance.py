@@ -62,7 +62,8 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
         # before initialization and never widened after the original cut.
         self.export_parent=self.native.disk_root/'controlled'/('e'+self.ledger._instance)
         # Real path mapping is solely this private OS-I/O test seam.
-        self.exporter._namespace_source=lambda raw:Path(raw).is_relative_to(self.native.disk_root/'controlled')
+        self.exporter._namespace_source=getattr(self,'_native_namespace_source',
+            lambda raw:Path(raw).is_relative_to(self.native.disk_root/'controlled'))
         source_path=self.exporter._source_path
         self.exporter._source_path=lambda sid:self.fs.local(source_path(sid))
         limits=dict(self.exporter.codec.limits)
@@ -88,9 +89,8 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
             self.responses.append(response)
         self.http=httpx2.AsyncClient(headers={'authorization':'Bearer MODEL'},trust_env=False,timeout=15,
             event_hooks={'response':[hook]})
-        async with streamable_http_client(self.url,http_client=self.http) as (read,write):
-            async with ClientSession(read,write) as sdk:
-                await sdk.initialize();await sdk.call_tool('echo',{'value':'original'})
+        await self._original_sdk()
+        if getattr(self,'ENTRYPOINT_OWNS_RUN',False):return
         closed=[r for r in self.responses if r.request.method=='DELETE']
         self.assertEqual(closed[-1].status_code,200,closed[-1].text)
         self.original=next(sid for sid,r in self.controller._sessions.items() if r['state']=='CLOSED')
@@ -111,6 +111,11 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.guest.service.shutdown)
         self.request=self.guest.request('pull',[{'absolute_path':str(self.source),'relative_path':'original'}],
             self.guest.host/'downloaded',transfer_id='maintenance')
+
+    async def _original_sdk(self):
+        async with streamable_http_client(self.url,http_client=self.http) as (read,write):
+            async with ClientSession(read,write) as sdk:
+                await sdk.initialize();await sdk.call_tool('echo',{'value':'original'})
 
     async def asyncTearDown(self):
         await self.http.aclose();self.service.shutdown()

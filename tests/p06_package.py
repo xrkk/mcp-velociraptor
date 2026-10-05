@@ -184,8 +184,13 @@ def _baseline_adoption_member_sources(bundle: Path, restore_attempt_id: object) 
     return sources
 
 
+from tests.p05_pc026_governance import consumption
+
+
+@consumption
 def source_for_member(run_dir: Path, evidence_root: Path, name: str) -> Path:
     """Resolve a frozen archive member to its original source without extraction."""
+    _admit_success(run_dir,evidence_root)
     if not isinstance(name, str) or name.startswith('/') or '\\' in name:
         raise EvidenceError('package member path is invalid')
     namespace, separator, relative = name.partition('/')
@@ -229,7 +234,7 @@ def source_for_member(run_dir: Path, evidence_root: Path, name: str) -> Path:
     raise EvidenceError('package member is not declared by the restore evidence')
 
 
-def member_sources(run_dir: Path, evidence_root: Path) -> dict[str, Path]:
+def _member_sources(run_dir: Path, evidence_root: Path) -> dict[str, Path]:
     """Resolve the complete original set once for a consumption transaction.
 
     No cross-call cache: later reads still verify bytes and path identities.
@@ -266,7 +271,7 @@ def member_sources(run_dir: Path, evidence_root: Path) -> dict[str, Path]:
     return sources
 
 
-def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = False) -> dict:
+def _member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = False) -> dict:
     """Inventory all run bytes and declared original restore files.
 
     Structural completeness and success requirements are checked by the report
@@ -325,6 +330,40 @@ def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool = Fals
                 add('restore/' + record['path'], original)
     return {'schema_version': 1, 'members': [members[name] for name in
             sorted(members, key=lambda value: value.encode('utf-8'))]}
+
+
+def _admit_success(run_dir, evidence_root):
+    """Fixed current authority; historical coordinates cannot alias current runs."""
+    from tests import scenario_runner, p06_pc026_binding
+    path=Path(run_dir)/'report.json'
+    if not path.exists():return
+    report=json.loads(plain_file(run_dir,'report.json').read_bytes())
+    if report.get('status') != 'success':return
+    current=Path(run_dir).is_relative_to(scenario_runner.P06_REPORT_ROOT)
+    snapshot=Path(run_dir)/'snapshot-evidence.json'
+    if snapshot.exists():
+        value=json.loads(plain_file(run_dir,snapshot.name).read_bytes())
+        current=current or _current_restore(value.get('restore',{}))
+    if current:
+        p06_pc026_binding.load()._report_core(report,Path(run_dir),Path(evidence_root))
+
+
+def member_sources(run_dir: Path, evidence_root: Path) -> dict[str, Path]:
+    from tests.p05_pc026_governance import consumption
+    @consumption
+    def consume():
+        _admit_success(run_dir,evidence_root)
+        return _member_sources(run_dir,evidence_root)
+    return consume()
+
+
+def member_inventory(run_dir: Path, evidence_root: Path, *, payload: bool=False) -> dict:
+    from tests.p05_pc026_governance import consumption
+    @consumption
+    def consume():
+        _admit_success(run_dir,evidence_root)
+        return _member_inventory(run_dir,evidence_root,payload=payload)
+    return consume()
 
 
 def _current_restore(restore: dict) -> bool:

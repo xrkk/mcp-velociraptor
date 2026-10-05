@@ -238,3 +238,47 @@ def _publish_acquired(admission, run_dir):
     value=_derive(admission,run)
     admission.recheck();_exclusive(run,SIDECAR,value)
     return validate(admission,run)
+
+
+async def _complete_candidate(admission,run_dir,original_close):
+    """One admitted second SDK, using the fixed root's reserved transfer intent.
+
+    Only the new original source and owned host coordinates are derived after
+    close. The existing transfer schema, identity and finite budget stay intact.
+    """
+    from pathlib import PureWindowsPath
+    from velo_transfer import request as requests
+    from velociraptor_observation_config import _configuration
+    from velociraptor_observation_startup import _precheck_loaded
+    from tests import scenario_runner as runner,p05_pc026_governance as gov
+    from tests.p06_http_binding import _exclusive
+    from velociraptor_observation_maintenance import acquire_original,_descriptor
+    run=Path(run_dir)
+    _require(run.is_relative_to(runner.P06_REPORT_ROOT),'host_run_root')
+    admission.recheck();configuration=_configuration(admission.group);_precheck_loaded(configuration)
+    report=_json(admission.read(run/'report.json'))
+    _require(report['run_id']==run.name and report['scenario']==run.parent.name,'host_run_binding')
+    sid=report['mcp_session']['id'];instance=report['server_identity']['instance_id']
+    _require(original_close is not None and original_close.request.method=='DELETE'
+        and original_close.status_code==200 and original_close.is_closed
+        and original_close.request.headers.get('mcp-session-id')==sid,'host_original_close')
+    _descriptor([(k.decode('latin1'),v.decode('latin1')) for k,v in original_close.headers.raw],instance,sid)
+    document=requests._parse(admission.read(runner.P06_REPORT_ROOT/'maintenance-request.json'))
+    requests._validate_document(document)
+    profile=Path(document['connection_profile'])
+    _require(profile.is_relative_to(admission.group.repository),'host_profile_root')
+    coordinate=profile.relative_to(admission.group.repository).as_posix()
+    _require(coordinate in admission.group.allowed,'host_profile_approval')
+    _require(admission.read(profile)==admission.group.read(admission.group.allowed[coordinate]),'host_profile_bytes')
+    deployment=admission.group.document(admission.group.allowed[gov.DEPLOYMENT])
+    _require(document['direction']=='pull' and document['expected_vm_identity']['vm_uuid']==deployment['vm_uuid'],
+        'host_reserved_identity')
+    source=PureWindowsPath(configuration.document['guest_namespace_root'])/('e'+instance)/('s'+hashlib.sha256(sid.encode()).hexdigest())
+    document.update(sources=[dict(absolute_path=str(source),relative_path='original')],
+        destination_directory=str(run/'maintenance/downloaded'),transfer_id='maintenance',resume=False)
+    requests._validate_document(document)
+    admission.recheck();_exclusive(run,'maintenance-request.json',document)
+    request=requests.load_request(run/'maintenance-request.json')
+    ledger=await acquire_original(admission,run,request,original_close)
+    _require(ledger['status']=='COMPLETE','host_acquisition_failed')
+    return _publish_acquired(admission,run)

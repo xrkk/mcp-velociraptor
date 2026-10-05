@@ -257,13 +257,22 @@ LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({
 
 # Independent fixed-admission original-session consumption and actual SDK tests.
 ENTRIES = ENTRIES | frozenset({'velociraptor_observation_host.py',
-    'tests/test_observation_host.py'})
+    'tests/test_observation_host.py','tests/test_observation_host_consumers.py',
+    'tests/p04_fixture_server.py','tests/test_p04_fixed_tools.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
-
 
 # Finite independent failure diagnostics and actual HTTP MODEL source tests.
 ENTRIES = ENTRIES | frozenset({'velociraptor_observation_failure.py',
     'tests/test_observation_failure.py','tests/test_observation_failure_http.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
+# Historical coordinate consistency and actual host producer/consumer closure.
+ENTRIES = ENTRIES | frozenset({
+    'tests/test_p05_source_layouts.py',
+    'tests/test_observation_host_work.py','tests/test_observation_host_semantics.py',
+    'tests/test_observation_host_producer.py','tests/test_observation_host_public.py',
+    'tests/test_observation_host_finalization.py',
+    'tests/test_observation_host_failure_producer.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)

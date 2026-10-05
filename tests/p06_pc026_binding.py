@@ -53,10 +53,10 @@ class Admission:
             report.update(status='failed', coverage=[], failure={
                 'type':type(exc).__name__, 'message':str(exc), 'previous_failure':report.get('failure')})
 
-    def report(self, report, run_dir, root):
+    def _report_core(self, report, run_dir, root):
         from tests.p06_aggregate_reports import verify_report_shape, verify_tools_schema_binding
         from tests.p06_evidence import plain_file, verify_observation
-        from tests.p06_package import member_inventory, member_sources, canonical_bytes
+
         report_raw = self.read(plain_file(run_dir, 'report.json'))
         governance.require(json.loads(report_raw) == report,
                            'report changed before consumption')
@@ -99,13 +99,6 @@ class Admission:
                 and report['fixture_spec_sha256'] == fixture['sha256'],
                 'qualification source/index/fixture differs from approval')
         else:
-            from tests import p06_call_clock
-            clock = p06_call_clock.validate(self.read(plain_file(run_dir, 'call-clock.json')), report_raw, report)
-            clock_id = clock['clock']['clock_id']
-            owner = self.clock_runs.setdefault(clock_id, report['run_id'])
-            governance.require(owner == report['run_id'], 'call-clock domain reused across runs')
-            from tests.p06_http_binding import validate
-            validate(self,run_dir)
             index_ref = self.group.freeze_refs['tests/data/p06_scenario_index.json']
             index = json.loads(self.group.read(index_ref))
             rows = [row for row in index['scenarios'] if row['scenario_id'] == report['scenario']]
@@ -123,10 +116,23 @@ class Admission:
                                'scenario source does not require 191')
         self.restore(snapshot['restore'], root)
         verify_observation(report, run_dir)
-        inventory = member_inventory(run_dir, root)
+        from velociraptor_observation_host import validate
+        validate(self,run_dir)
+        from tests import p06_call_clock
+        clock = p06_call_clock.validate(self.read(plain_file(run_dir,'call-clock.json')),report_raw,report)
+        owner=self.clock_runs.setdefault(clock['clock']['clock_id'],report['run_id'])
+        governance.require(owner==report['run_id'],'call-clock domain reused across runs')
+        self.recheck()
+        return snapshot['restore']
+
+    def report(self, report, run_dir, root):
+        from tests.p06_evidence import plain_file
+        from tests.p06_package import _member_inventory, _member_sources, canonical_bytes
+        restore=self._report_core(report,run_dir,root)
+        inventory = _member_inventory(run_dir, root)
         governance.require(self.read(plain_file(run_dir, 'package-manifest.json')) == canonical_bytes(inventory),
                            'current package identity differs')
-        sources = member_sources(run_dir, root)
+        sources = _member_sources(run_dir, root)
         governance.require(set(sources) == {row['path'] for row in inventory['members']},
                            'package source set differs')
         for member in inventory['members']:
@@ -134,7 +140,7 @@ class Admission:
             governance.require(size == member['size'] and sha == member['sha256'],
                                'current package member drift')
         self.recheck()
-        return snapshot['restore']
+        return restore
 
     def restore(self, value: dict, root: Path):
         from tests.p06_evidence import RESTORE_KEYS, plain_file

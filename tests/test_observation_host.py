@@ -29,9 +29,10 @@ class HostHTTP(acquisition.AcquisitionHTTP):
     async def asyncSetUp(self):
         self.preflight=startup.LifecyclePreflightTests();self.preflight.setUp()
         self.addCleanup(self.preflight.doCleanups)
+        self._prepare_authority()
         self.root=self.preflight.root
         (self.root/'Logs').chmod(0o700)
-        probe=socket.socket();probe.bind(('127.0.0.1',0));port=probe.getsockname()[1];probe.close()
+        probe=socket.socket();probe.bind(('127.0.0.1',0));port=probe.getsockname()[1];probe.close();port=getattr(self,'FIXED_PORT',port)
         token=self.root/'host-token';token.write_text('MODEL');token.chmod(0o600)
         self.profile=self.root/'host-connection.json'
         self.profile.write_bytes(canonical(dict(version='velo.transfer.connection.v1',
@@ -46,7 +47,7 @@ class HostHTTP(acquisition.AcquisitionHTTP):
         acquisition.guest.lifecycle_limits(self.preflight.doc['budgets']);self.preflight.bind()
         self.report_root=self.root/'Logs/P06/model'
         import uuid
-        self.run=self.report_root/'p06-compromise-scope'/str(uuid.uuid4())
+        self.run=self.report_root/getattr(self,'SCENARIO','p06-compromise-scope')/str(uuid.uuid4())
         for part in reversed((self.run,*self.run.parents)):
             if part.is_relative_to(self.root) and not part.exists():part.mkdir(mode=0o700)
         self.clock=RunClock();self.calls=[];self.original_listing=None;self.original_capture=None
@@ -88,6 +89,7 @@ class HostHTTP(acquisition.AcquisitionHTTP):
                 if disk is not None and actual.startswith(str(disk)+'/'):
                     return str(PureWindowsPath('C:/').joinpath(*Path(actual).relative_to(disk).parts))
                 return actual
+        self._native_namespace_source=lambda raw:ModelPath(raw).is_relative_to(ModelPath(mapping['disk']/'controlled'))
         setup=native.PosixExportIO.setup_export
         def setup_export(fixture):
             result=setup(fixture);mapping['disk']=fixture.disk_root
@@ -125,6 +127,8 @@ class HostHTTP(acquisition.AcquisitionHTTP):
         call=ClientSession.call_tool;listing=ClientSession.list_tools
         async def observed(session,name,arguments,**kwargs):
             if name!='echo':return await call(session,name,arguments,**kwargs)
+            if self.original_listing is None:await session.list_tools()
+            name,arguments=self._business_call(name,arguments)
             row=dict(sequence=len(self.calls)+1,step_id='actual-echo',tool=name,arguments=arguments,
                 attempt=1,started_at=runner.utc_now(),is_error=True,structured=None,mcp_result=None)
             self.calls.append(row)
@@ -143,7 +147,7 @@ class HostHTTP(acquisition.AcquisitionHTTP):
         # Setup failure owns the same finite shutdown as a successful fixture.
         self.addAsyncCleanup(self._shutdown_partial)
         try:
-            await asyncio.wait_for(super().asyncSetUp(),180)
+            await asyncio.wait_for(super().asyncSetUp(),getattr(self,'SETUP_TIMEOUT',180))
         except BaseException:
             import traceback
             evidence=Path(os.environ['PC026_MAINTENANCE_EVIDENCE_ROOT']);evidence.mkdir(parents=True,exist_ok=True)
@@ -155,11 +159,13 @@ class HostHTTP(acquisition.AcquisitionHTTP):
             raise
         # Settle the actual transport before any independent reader uses files.
         await self.http.aclose()
+        if getattr(self,'ENTRYPOINT_OWNS_RUN',False):return
         self.exporter._namespace_source=lambda raw:ModelPath(raw).is_relative_to(ModelPath(mapping['disk']/'controlled'))
         self.source=ModelPath(self.source)
         headers=self.original_capture
         for name,rows in (('request-headers.json',headers.request_headers),('response-headers.json',headers.original_headers),
                           ('http-headers.json',headers.headers)):
+            if getattr(self,'DEFER_FINALIZATION',False) and name!='http-headers.json':continue
             (self.run/name).write_bytes(canonical(rows))
         (self.run/'tools-list.json').write_bytes(canonical(self.original_listing.model_dump(mode='json',by_alias=True,exclude_none=True)))
         identity=dict(computer_name='DESKTOP-3FI41GR',service_name='mcp-velociraptor',pid=os.getpid(),
@@ -173,14 +179,19 @@ class HostHTTP(acquisition.AcquisitionHTTP):
             runner=maintenance._runner(),calls=self.calls,steps=[],cleanup=[],coverage=[],unexecuted_step_ids=[])
         (self.run/'server-observation.json').write_bytes(canonical(dict(identity,observed_at=runner.utc_now())))
         (self.run/'report.json').write_bytes(canonical(self.report))
-        self.clock.save(self.run,self.report,canonical(self.report))
+        self._candidate_inputs()
+        if not getattr(self,'DEFER_FINALIZATION',False):self.clock.save(self.run,self.report,canonical(self.report))
         self.patch(runner,'P06_REPORT_ROOT',self.report_root)
         self.admission_configuration=self.preflight.fixture.load();self.addCleanup(self.admission_configuration.group.close)
         group=self.admission_configuration.group
         c=(self.root/gov.CANONICAL).read_bytes()
         self.admission=Admission(group,c,gov.bindings_for(group,c))
         from tests.p06_http_binding import publish
-        publish(self.admission,self.run)
+        if not getattr(self,'DEFER_FINALIZATION',False):publish(self.admission,self.run)
+
+    def _prepare_authority(self):pass
+    def _business_call(self,name,arguments):return name,arguments
+    def _candidate_inputs(self):pass
 
     async def _shutdown_partial(self):
         if hasattr(self,'http'):await self.http.aclose()

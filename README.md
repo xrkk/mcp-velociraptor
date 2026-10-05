@@ -1364,7 +1364,7 @@ Current HTTP transport capture retains full request and response header original
 
 The separate failure reader derives a finite exact diagnostic record from captured HTTP originals. It assigns attempt numbers only from an independently authorized complete source; missing or ambiguous evidence stays unclassified, and a non-invoked call has only its report sequence. Its exclusive publisher never creates a successful observation sidecar. Actual local HTTP rejection/duplicate/raised-handler tests and a fixed-governance MODEL reader test cover this diagnostic module; current producer and successful consumer integration remains under verification.
 
-Run the bounded diagnostic subset with `.venv/bin/python -B -m unittest tests.test_observation_failure tests.test_observation_failure_http`, supplying the existing isolated bootstrap fixture for fixed-loader tests. The suite loads its own two HTTP cases, while the imported fixtures provide setup and shutdown. Successful package/receive/selection qualification remains blocked by the current protected PC020 source-path migration versus historical approved policy; the successful-entry integration draft is retained separately.
+Run the bounded diagnostic subset with `.venv/bin/python -B -m unittest tests.test_observation_failure tests.test_observation_failure_http`, supplying the existing isolated bootstrap fixture for fixed-loader tests. The suite loads its own two HTTP cases, while the imported fixtures provide setup and shutdown. Historical source coordinates now pass their exact complete-layout checks. Fresh isolated C8 qualification and actual dual-SDK finalization pass the current public package/receive gates; selected package members and the current receipt ledger also pass independent readback. This is host MODEL evidence, with actual SDK/raw/native activity; full scenario aggregation and Windows qualification remain separate.
 
 Historical PC020 and Snapshot187 adoption validation now select between two
 code-owned complete coordinate layouts (34 and 12 sources respectively). Each
@@ -1382,3 +1382,17 @@ require an extra status RPC. Missing, extra, ambiguous or unknown children
 refuse. Actual host tests cover integer/string ID separation, a foreign session
 with an unfinished global prefix, and finite ACK/END/prefix/SDK/binary refusals.
 These scoped tests do not qualify Windows or declare the complete S2 workflow.
+
+Current successful P06 packages require independent readback of the fixed archive,
+maintenance ledger and exact observation sidecar before any public inventory,
+source resolution, manifest verification or receive. The actual producer preserves
+original request/response headers, performs the second maintenance SDK acquisition,
+and publishes the sidecar only after deriving the closed source. Missing original
+sidecar/cut/ledger/capture/body/SDK result/receipt bytes reject even when outer
+hashes are rebound. Selected handoff members reuse these gates; this mechanism
+does not mint a completion record.
+
+Failed finalization preserves the first failure, raw originals and diagnostic
+package without publishing BOUND. A pre-seal failure can seal its failed candidate
+once; an already-started package or receipt append is never retried. Secondary
+preservation errors attach notes to the primary exception.
