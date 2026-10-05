@@ -33,6 +33,14 @@ with no successful headers, repair or replay. Timeout/cancellation keeps the
 real thread, join task and pending ownership through its actual finally.
 Only the ledger closes the borrowed group and retained allocators during drain.
 
+Startup failures after approved construction retain their original exception
+and unwind acquired native resources once, including Config/server/run and SDK
+lifespan entry failures. Cancellation after lifespan entry uses shielded drain;
+cleanup faults remain attached to the original error. Live work or uncertain
+I/O stays owned and UNKNOWN, without a forced ledger close or success receipt.
+Uvicorn lifespan is required; its startup-failure return or exit preserves the
+actual application cause. Transfer shutdown still runs on bridge exit.
+
 The formal app uses one actual pinned SDK manager, controller/ledger instance
 and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
 gates. All 137 schemas and seven transfer protocols remain unchanged. Host

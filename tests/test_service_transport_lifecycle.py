@@ -36,6 +36,8 @@ class ServiceTransportLifecycleTests(unittest.TestCase):
 
         module = types.SimpleNamespace(Server=Server, Config=Mock())
         with patch.dict('sys.modules', uvicorn=module), patch('velociraptor_transport.build_formal_http_app') as app:
+            app.return_value.state.observation_controller=types.SimpleNamespace(
+                _startup_error=None,_abort_startup=Mock())
             run_formal_http(object(), TransportConfig('http', host='192.0.2.2'),
                             on_ready=lambda: events.append('ready'), stop_requested=stop)
             app.assert_called_once()

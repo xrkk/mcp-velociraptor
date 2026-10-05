@@ -285,10 +285,31 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
         controller._bindings=bindings
         @asynccontextmanager
         async def lifespan(app):
-            async with manager.run():
-                try:yield
-                finally:
-                    with anyio.CancelScope(shield=True):await controller._drain()
+            primary=None
+            try:
+                controller._starting()
+                async with manager.run():
+                    controller._lifespan_entered()
+                    try:yield
+                    except BaseException as error:
+                        primary=error
+                        raise
+                    finally:
+                        with anyio.CancelScope(shield=True):
+                            try:await controller._drain()
+                            except BaseException as error:
+                                controller._unknown()
+                                controller._startup_cleanup_error=error
+                                if primary is None:raise
+                                primary.add_note('observation_drain_failed')
+            except BaseException as error:
+                if primary is not None and error is not primary:
+                    primary.add_note('observation_manager_exit_failed')
+                else:primary=error
+                controller._abort_startup(primary)
+                if error is not primary:raise primary from error
+                raise
+            finally:controller._lifespan_exited()
         routes=[Route(config.path,_HTTPIngress(controller),methods=['GET','POST','DELETE'])]
         service=getattr(server,'_guest_transfer_tools',None)
         if service is not None:routes.append(Route('/chunkbin',_BinaryIngress(controller,service),methods=['POST']))
@@ -368,28 +389,50 @@ def run_formal_http(
     stop_requested: Callable[[], bool] | None = None,
 ) -> None:
     """Serve the formal entry with one process and one worker."""
-    import uvicorn
+    from velociraptor_observation_controller import _approved_controller
+    controller=getattr(server,'_observation_controller',None)
+    if not _approved_controller(controller):controller=None
+    http_server=None
+    try:
+        import uvicorn
 
-    class LifecycleServer(uvicorn.Server):
-        async def startup(self, sockets=None):
-            await super().startup(sockets=sockets)
-            if self.started and on_ready is not None:
-                on_ready()
+        class LifecycleServer(uvicorn.Server):
+            async def startup(self, sockets=None):
+                await super().startup(sockets=sockets)
+                if self.started and on_ready is not None:
+                    on_ready()
 
-        async def on_tick(self, counter):
-            if stop_requested is not None and stop_requested():
-                self.should_exit = True
-            return await super().on_tick(counter)
+            async def on_tick(self, counter):
+                if stop_requested is not None and stop_requested():
+                    self.should_exit = True
+                return await super().on_tick(counter)
 
-    app = build_formal_http_app(server, config)
-    http_server = LifecycleServer(
-        uvicorn.Config(
-            app,
-            host=config.host,
-            port=config.port,
-            log_level="warning",
+        app = build_formal_http_app(server, config)
+        controller=app.state.observation_controller
+        http_server = LifecycleServer(
+            uvicorn.Config(
+                app,
+                host=config.host,
+                port=config.port,
+                log_level="warning",
+                lifespan="on",
+            )
         )
-    )
-    http_server.run()
-    if not http_server.started:
-        raise RuntimeError('Formal HTTP startup did not reach readiness')
+        http_server.run()
+        # uvicorn reports ASGI startup/shutdown failures and may return without
+        # raising them. Preserve the actual error recorded by our lifespan.
+        if controller._startup_error is not None:raise controller._startup_error
+        if not http_server.started:
+            raise RuntimeError('Formal HTTP startup did not reach readiness')
+    except BaseException as error:
+        primary=error
+        # Current uvicorn converts a recorded ASGI startup failure into
+        # SystemExit(3); older versions return unstarted. Both retain its cause.
+        if (isinstance(error,SystemExit) and controller is not None
+                and controller._startup_error is not None
+                and getattr(getattr(http_server,'lifespan',None),'startup_failed',False)):
+            primary=controller._startup_error
+            primary.add_note('uvicorn_startup_exit')
+        if controller is not None:controller._abort_startup(primary)
+        if primary is not error:raise primary from error
+        raise

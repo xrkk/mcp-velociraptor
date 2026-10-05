@@ -315,13 +315,41 @@ class SessionController:
             raise
 
     def _abort_startup(self, primary):
-        # Used only before the SDK lifespan/listener starts; never steals live
-        # worker/journal ownership to hide an unknown shutdown.
-        if not self._work and not self._close_io and not self._ledger._closed:
+        # Idempotent pre-lifespan cleanup only. Once the SDK has entered, its
+        # async drain owns cleanup; a lost loop must retain UNKNOWN resources.
+        with self._lock:
+            if self._startup_error is None:self._startup_error=primary
+            if self._ledger._closed:return
+            manager=getattr(self,'_manager',None)
+            safe=(self._startup_phase in ('ACQUIRED','ENTERING') and self._state!='UNKNOWN'
+                and not self._work and not self._sessions and not self._close_io
+                and not self._children and not self._pending and not self._temporary_reserved
+                and (manager is None or manager._task_group is None
+                     and not manager._owned_transports))
+            self._state='UNKNOWN'
+            if not safe:
+                primary.add_note('observation_startup_resources_retained_unknown')
+                return
+            self._startup_phase='ABORTED'
             self._ledger._poison()
             self._ledger._closed=True
-            self._ledger._cleanup(primary)
-            self._state='UNKNOWN'
+            try:self._ledger._cleanup(primary)
+            except BaseException as error:
+                self._startup_cleanup_error=error
+                primary.add_note('observation_startup_cleanup_failed')
+
+    def _starting(self):
+        with self._lock:
+            if self._startup_phase!='ACQUIRED' or self._ledger._closed:
+                raise ControllerError('lifespan_reentered')
+            self._startup_phase='ENTERING'
+
+    def _lifespan_entered(self):
+        with self._lock:self._startup_phase='ACTIVE'
+
+    def _lifespan_exited(self):
+        with self._lock:
+            if self._startup_phase=='ACTIVE':self._startup_phase='EXITED'
 
     def _initialize(self, ledger, budgets):
         # Private test fixture seam; never reachable from HTTP/config/env/CLI.
@@ -334,6 +362,9 @@ class SessionController:
         self._ledger, self._limits = ledger, dict(budgets)
         self._lock = threading.RLock()
         self._state, self._sequence, self._retained = 'ACTIVE', 0, 0
+        self._startup_phase='ACQUIRED'
+        self._startup_error=None
+        self._startup_cleanup_error=None
         self._work, self._sessions, self._sequence_records = {}, {}, {}
         self._pending = 0
         self._close_tasks = {}

@@ -230,14 +230,14 @@ class TransferMcpRegistrationTests(unittest.TestCase):
         server = SimpleNamespace(_guest_transfer_tools=Manager())
         config = SimpleNamespace(mode="http")
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
-                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
+                mock.patch("velociraptor_observation_controller.SessionController.open_approved"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http") as run:
             self.assertEqual(bridge.main(stop_requested=lambda: True), 0)
             run.assert_called_once()
         self.assertEqual(callbacks, ["shutdown"])
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
-                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
+                mock.patch("velociraptor_observation_controller.SessionController.open_approved"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http", side_effect=RuntimeError("synthetic")):
             with self.assertRaisesRegex(RuntimeError, "synthetic"):
@@ -249,7 +249,7 @@ class TransferMcpRegistrationTests(unittest.TestCase):
                 raise TransferContentError("worker_stop_unconfirmed")
         server._guest_transfer_tools = FailingManager()
         with mock.patch.object(bridge, "resolve_transport_config", return_value=config), \
-                mock.patch("velociraptor_observation_startup.precheck_formal_http"), \
+                mock.patch("velociraptor_observation_controller.SessionController.open_approved"), \
                 mock.patch.object(bridge, "create_server", return_value=server), \
                 mock.patch.object(bridge, "run_formal_http"), \
                 mock.patch("sys.stderr"):

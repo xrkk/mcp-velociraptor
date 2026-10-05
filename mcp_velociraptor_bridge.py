@@ -116,6 +116,9 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
             file=sys.stderr,
         )
         return 2
+    except BaseException as exc:
+        if controller is not None:controller._abort_startup(exc)
+        raise
 
     shutdown_failed = False
     try:
@@ -126,6 +129,9 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
                 run_formal_http(server, config, on_ready=on_ready, stop_requested=stop_requested)
         else:
             server.run("stdio")
+    except BaseException as exc:
+        if controller is not None:controller._abort_startup(exc)
+        raise
     finally:
         transfer_service = getattr(server, "_guest_transfer_tools", None)
         if transfer_service is not None:
