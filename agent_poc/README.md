@@ -1377,3 +1377,9 @@ and compares both tools/list results. Failed attempts preserve diagnostics with
 empty coverage and no BOUND sidecar. Host MODEL runs exercise the actual client
 and consumer path; Windows resource readings and production approval remain
 separate acceptance requirements.
+
+Formal failure packets retain UNKNOWN close, unacknowledged calls, returned
+wire errors and truncated maintenance bodies without upgrading coverage or
+publishing BOUND. Attempt numbers require authentic available source originals;
+a missing approved cut remains UNCLASSIFIED. An independently verified native
+source can establish a wire-error classification without rewriting that packet.
