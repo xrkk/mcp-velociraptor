@@ -1357,3 +1357,5 @@ empty JSON control response separately from JSON-RPC messages. Nonempty control
 objects, non-200 responses, and incomplete bodies still refuse success; tool
 responses retain their strict JSON-RPC checks. This does not replace the required
 independent archive and maintenance consumption gate.
+
+The fixed-admission host reader independently verifies the actual original DELETE headers, complete downloaded export and maintenance receipts before accepting the exact observation sidecar. It never downloads or repairs missing evidence. A fresh business SDK and second maintenance SDK passed on native POSIX with isolated MODEL governance; eleven missing, rebound or extra-original cases were rejected without reader writes. Windows and the remaining successful-entry integration are not qualified by these tests.

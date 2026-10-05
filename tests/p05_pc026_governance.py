@@ -255,6 +255,11 @@ LOCAL_MODULES = LOCAL_MODULES | ENTRIES | frozenset({
     'velo_transfer/host_partial.py', 'velo_transfer/host_publication.py',
     'velo_transfer/result.py', 'velo_transfer/host_cleanup.py'})
 
+# Independent fixed-admission original-session consumption and actual SDK tests.
+ENTRIES = ENTRIES | frozenset({'velociraptor_observation_host.py',
+    'tests/test_observation_host.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 
