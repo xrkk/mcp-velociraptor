@@ -1331,3 +1331,11 @@ actual size, SHA-256, Git blob and Ref. They never translate an old coordinate
 to a current file or rewrite historical policy, Source or canonical bytes.
 Current implementation approval and full C8 qualification remain mandatory;
 these layout checks alone do not qualify successful consumers or Windows.
+
+The host occurrence reader now binds real transfer children to their captured
+transfer request/result identities and verified lifecycle source. A finish that
+returns `IN_PROGRESS` needs one uniquely attributable closed child; it does not
+require an extra status RPC. Missing, extra, ambiguous or unknown children
+refuse. Actual host tests cover integer/string ID separation, a foreign session
+with an unfinished global prefix, and finite ACK/END/prefix/SDK/binary refusals.
+These scoped tests do not qualify Windows or declare the complete S2 workflow.

@@ -66,7 +66,7 @@ def _occurrences(files, context, index, joined, reader):
             begins[payload['attempt_sequence']]=payload
         elif record['record_type']=='ATTEMPT_END':ends[payload['attempt_sequence']]=payload
     _require(len(begins)==len(joined['calls']),'host_attempt_bijection')
-    consumed=set()
+    consumed=set();transfer_calls=[]
     for call in joined['calls']:
         rid=call['request_id'];kind='integer' if type(rid) is int else 'string'
         candidates=[(n,b) for n,b in begins.items() if b['key']==dict(instance_id=context['instance'],
@@ -82,6 +82,11 @@ def _occurrences(files, context, index, joined, reader):
             and begin['arguments_sha256']==raw.digest(arguments),
             'host_attempt_call_binding')
         _require(ends[n]['disposition']=='COMPLETE' and ends[n]['outcome']=='returned','host_attempt_success')
+        if call['tool'].startswith('transfer_'):
+            response=index['exchanges'][call['response_location']['exchange_sequence']-1]
+            values=[m for m,location in raw.messages(reader,response,'response') if location==call['response_location']]
+            _require(len(values)==1,'host_transfer_response_location')
+            transfer_calls.append((call['tool'],arguments,values[0]['result']))
     _require(consumed==set(begins),'host_attempt_extra')
     expected=[]
     for exchange in index['exchanges']:
@@ -98,7 +103,58 @@ def _occurrences(files, context, index, joined, reader):
     _require(Counter(actual)==Counter(expected),'host_sdk_work_bijection')
     # Current HTTPbinding supports only /mcp, hence no business chunkbin.
     _require(proof['binary_work']==[],'host_unobserved_binary')
-    _require(proof['sdk_work']['transfer_workers']==[],'host_unobserved_transfer_worker')
+    _transfer_workers(transfer_calls,proof['sdk_work']['transfer_workers'])
+
+
+def _transfer_workers(calls, workers):
+    """Bind causal children to actual transfer requests and full SDK results.
+
+    Already completed status/replay observations do not mint child work. A fresh
+    begin worker or IN_PROGRESS finish still needs its real closed child proof.
+    Proof identity cannot be replaced by the durable public worker.stopped flag.
+    """
+    from velo_transfer.guest_service import request_digest
+    initiated=set();required=set();observed={};required_jobs=set();finish_causes=Counter()
+    for tool,args,envelope in calls:
+        result=(envelope.get('structuredContent') or {}).get('result')
+        _require(type(result) is dict,'host_transfer_sdk_result')
+        details=args.get('request',args);ident=(details.get('transfer_id'),details.get('request_digest'))
+        if tool=='transfer_begin':
+            _require(request_digest(details)==ident[1],'host_transfer_request_digest')
+            job='package' if details['direction']=='pull' else 'verify_partial'
+            initiated.add((*ident,job))
+        elif tool=='transfer_finish':
+            job=args.get('action');initiated.add((*ident,job))
+            if (result.get('operation') or {}).get('status')=='IN_PROGRESS':
+                required_jobs.add((*ident,job));finish_causes[(*ident,job)]+=1
+        worker=result.get('worker')
+        if worker is not None:
+            _require(type(worker) is dict and (result.get('transfer_id'),result.get('request_digest'))==ident,
+                'host_transfer_worker_result')
+            identity=(*ident,worker.get('job'),worker.get('nonce'))
+            value=(worker.get('pid'),worker.get('birth'))
+            _require(identity not in observed or observed[identity]==value,'host_transfer_worker_identity_drift')
+            observed[identity]=value
+            if tool=='transfer_begin':required.add(identity)
+    actual=set();jobs=set()
+    job_counts=Counter((r['transfer_id'],r['request_digest'],r['job']) for r in workers)
+    observed_jobs={identity[:3] for identity in observed}
+    for row in workers:
+        identity=(row['transfer_id'],row['request_digest'],row['job'],row['worker_nonce'])
+        _require(identity not in actual,'host_transfer_worker_duplicate');actual.add(identity)
+        job=identity[:3];jobs.add(job)
+        _require(job in initiated,'host_transfer_worker_causality')
+        if identity in observed:
+            _require(observed[identity]==(row['pid'],row['birth']),'host_transfer_worker_identity')
+        else:
+            # finish returns an operation, not worker PID/nonce. The complete
+            # authenticated source supplies the closed child identity. Bind it
+            # only when the actual IN_PROGRESS call and child are both unique;
+            # an observed different worker or repeated causal call is ambiguity.
+            _require(job not in observed_jobs and finish_causes[job]==1 and job_counts[job]==1,
+                'host_transfer_worker_unobserved')
+        _require(row['process_exited'] is True and row['resources_closed'] is True,'host_transfer_worker_unknown')
+    _require(required<=actual and required_jobs<=jobs,'host_transfer_worker_missing')
 
 
 def _derive(admission, run_dir):
