@@ -271,6 +271,9 @@ def verify_snapshot_evidence(report: dict[str, Any], run_dir: Path,
 
 def verify_baseline_evidence(report: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     """Recompute baseline-binding.json for a schema3 run and cross-check it."""
+    from tests import scenario_runner
+    if Path(run_dir).is_relative_to(scenario_runner.P06_REPORT_ROOT):
+        raise AggregateError('historical baseline cannot consume current report root')
     binding_path = run_dir / "baseline-binding.json"
     if not binding_path.is_file() or binding_path.is_symlink():
         raise AggregateError("run directory lacks baseline-binding.json")
@@ -444,6 +447,9 @@ def aggregate_historical(
     manifest_path: Path = MANIFEST,
     _admission=None,
 ) -> dict[str, Any]:
+    from tests import scenario_runner
+    if _admission is None and Path(evidence_root).is_relative_to(scenario_runner.P06_REPORT_ROOT):
+        raise AggregateError('historical aggregate cannot consume current report root')
     ledger = load_ledger(ledger_path, evidence_root=evidence_root)
     selection = json.loads(selection_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

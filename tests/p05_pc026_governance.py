@@ -279,6 +279,12 @@ LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 ENTRIES = ENTRIES | frozenset({'tests/test_observation_sdk_close.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+# Actual formal HTTP resource/individual entries and historical root separation.
+ENTRIES = ENTRIES | frozenset({'tests/test_observation_host_entrypoint.py',
+    'tests/test_observation_host_qualification_entry.py',
+    'tests/test_observation_historical_entry_gate.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 

@@ -56,12 +56,18 @@ def _derive(run, reader):
             if kind=='notification':continue
             if value['method']=='initialize':init.append(loc['exchange_sequence'])
             if value['method']=='tools/list':listings.append(key)
-    require(len(init)==1 and len(listings)==1,'current binding needs one initialize and one tools/list')
+    listing_count=2 if report['scenario']=='individual-acceptance' else 1
+    require(len(init)==1 and len(listings)==listing_count,
+            'current binding requires one initialize and one tools/list (two for individual acceptance)')
     listed=None
     for row in index['exchanges']:
         for value,_ in raw.messages(reader,row,'response'):
             kind,key=raw.envelope(value,'response')
-            if kind=='response' and key==listings[0]:listed=raw.sdk(ListToolsResult,value['result'])
+            if kind=='response' and key in listings:
+                observed=raw.sdk(ListToolsResult,value['result'])
+                require(listed is None or raw.canonical(listed)==raw.canonical(observed),
+                        'raw tools/list changed within qualification session')
+                listed=observed
     require(raw.canonical(listed)==raw.canonical(raw.strict_json(reader.read('tools-list.json'))),
             'raw tools/list differs from actual tools-list.json')
     by_seq={}

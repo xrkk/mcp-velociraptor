@@ -1411,3 +1411,12 @@ capture errors and the original DELETE response instead of manufacturing close
 proof. A failed capture can refuse further network effects; an earlier SDK error
 remains primary and receives cleanup notes. COMPLETE still requires the original
 bodies, headers, receipt objects and independent C4 readback to agree.
+
+Current HTTP resource qualification and individual acceptance retain their
+actual call clock, complete SDK responses and original request/response headers.
+They use a separate maintenance SDK to acquire the fixed archive before the
+independent binding, package and receiver gates. Individual acceptance retains
+and compares both tools/list results. Failed attempts preserve diagnostics with
+empty coverage and no BOUND sidecar. Host MODEL runs exercise the actual client
+and consumer path; Windows resource readings and production approval remain
+separate acceptance requirements.

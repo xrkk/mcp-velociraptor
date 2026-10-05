@@ -50,7 +50,7 @@ async def acceptance(endpoint, token_env):
             raise ValueError('individual acceptance source differs from approval')
     admission.read(root/'fixture-instance.json')
     admission.recheck()
-    run_dir.mkdir(parents=True,exist_ok=False)
+    runner._new_current_run(run_dir)
     (run_dir/'fixture-instance.json').write_bytes((root/'fixture-instance.json').read_bytes())
     report = dict(schema_version=2,scenario='individual-acceptance',run_id=run_id,
                   source_sha256=runner.sha256_file(Path(__file__)),index_sha256=runner.sha256_file(runner.P06_INDEX_PATH),
@@ -63,6 +63,8 @@ async def acceptance(endpoint, token_env):
                           'executable_sha256':runner._runner_executable_sha256()},
                   started_at=runner.utc_now(),ended_at=None,duration_ms=0,status='running',
                   calls=[],steps=[],cleanup=[],failure=None,unexecuted_step_ids=[],coverage=[])
+    from tests.p06_call_clock import RunClock
+    run_clock=RunClock();session_state={}
     started = time.monotonic()
 
     async def call(session,label,tool,arguments):
@@ -74,7 +76,12 @@ async def acceptance(endpoint, token_env):
             async with asyncio.timeout(60):
                 from tests.p05_pc026_governance import before_effect
                 before_effect()
-                result = await session.call_tool(tool,arguments)
+                result,error,timing=await run_clock.observe(session,tool,arguments,row)
+                if result is not None:
+                    row.update(is_error=bool(result.is_error),structured=result.structured_content,
+                        mcp_result=result.model_dump(mode='json',by_alias=True,exclude_none=True))
+                if error:raise error
+                if timing:raise timing
             row.update(is_error=bool(result.is_error),structured=result.structured_content,
                        mcp_result=result.model_dump(mode='json',by_alias=True,exclude_none=True))
             return result
@@ -82,10 +89,10 @@ async def acceptance(endpoint, token_env):
             row['error'] = {'type':type(exc).__name__,'message':str(exc)}
             raise
         finally:
-            row.update(ended_at=runner.utc_now(),duration_ms=int((time.monotonic()-clock)*1000))
+            row['ended_at']=runner.utc_now()
 
     try:
-        async with formal_session(endpoint,token_env,root/'server-observation.json',run_dir,report,expected_tool_count=137) as session:
+        async with formal_session(endpoint,token_env,root/'server-observation.json',run_dir,report,expected_tool_count=137,_admission=admission,_state=session_state) as session:
             listing = await session.list_tools()
             (run_dir/'tools-list-second.json').write_bytes(runner.canonical_bytes(
                 listing.model_dump(mode='json',by_alias=True,exclude_none=True)))
@@ -147,10 +154,7 @@ async def acceptance(endpoint, token_env):
         (run_dir/'snapshot-evidence.json').write_bytes(runner.canonical_bytes(snapshot))
         report['snapshot_evidence_sha256'] = runner.sha256_file(run_dir/'snapshot-evidence.json')
         admission.finish_report(report)
-        (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
-        (run_dir/'package-manifest.json').write_bytes(runner.canonical_bytes(member_inventory(run_dir,root)))
-        verify_manifest(run_dir,root)
-        receive(run_dir,root)
+        await runner._finalize_current(report,run_dir,root,run_clock,session_state.get('capture'),admission,seal=True)
     return report,run_dir
 
 

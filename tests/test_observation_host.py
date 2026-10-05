@@ -42,6 +42,11 @@ class HostHTTP(acquisition.AcquisitionHTTP):
         self.profile.chmod(0o600)
         self.preflight.f.refs[self.profile.name]=reference(self.root,self.profile.name)
         self.preflight.fixture.doc['budgets']=acquisition.guest.archive_limits()
+        records=getattr(self,'MODEL_REQUEST_RECORDS',None)
+        if records is not None:
+            limits=self.preflight.fixture.doc['budgets'];codec=limits['request_codec']
+            codec.update(max_records=records,max_total_bytes=records*codec['max_record_bytes'])
+            limits['max_total_archive_bytes']=(3*limits['max_attempts']+2)*limits['max_catalog_record_bytes']+limits['max_attempts']*codec['max_total_bytes']+limits['max_active']*codec['max_record_bytes']+limits['max_catalog_record_bytes']
         self.preflight.fixture.bind()
         self.preflight.doc['archive_config_ref']=self.preflight.f.refs[attempts.cfg.CONFIG]
         acquisition.guest.lifecycle_limits(self.preflight.doc['budgets']);self.preflight.bind()

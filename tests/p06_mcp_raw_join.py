@@ -286,7 +286,7 @@ def envelope(value, direction):
 def report_shape(report):
     require(set(report) == REPORT_KEYS and type(report.get('schema_version')) is int
             and report['schema_version'] == 2 and isinstance(report['scenario'],str)
-            and report['scenario'] in SCENARIOS,
+            and report['scenario'] in SCENARIOS | {'resource-qualification','individual-acceptance'},
             'current P06 report root/schema/scenario differs')
     require(report['status'] == 'success' and report['failure'] is None
             and report['transport'] == 'streamable-http', 'report is not current successful HTTP evidence')

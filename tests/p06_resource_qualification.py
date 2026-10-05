@@ -78,8 +78,10 @@ def prepare_download_root(path):
 
 
 
-async def call(session, report, step_id, tool, arguments):
+async def call(session, report, step_id, tool, arguments, *, _clock=None):
     from tests.scenario_runner import utc_now
+    if isinstance(session,_ObservedSession):
+        _clock=session.clock;session=session.session
     started_at, started = utc_now(), time.monotonic()
     row = {'sequence': len(report['calls'])+1, 'step_id': step_id, 'tool': tool,
            'arguments': arguments,
@@ -89,17 +91,29 @@ async def call(session, report, step_id, tool, arguments):
     try:
         from tests.p05_pc026_governance import before_effect
         before_effect()
-        result = await session.call_tool(tool, arguments)
+        if _clock is None:result = await session.call_tool(tool, arguments)
+        else:
+            result,error,timing=await _clock.observe(session,tool,arguments,row)
+            if result is not None:
+                row.update(is_error=bool(result.is_error),structured=result.structured_content,
+                    mcp_result=result.model_dump(mode='json',by_alias=True,exclude_none=True))
+            if error:raise error
+            if timing:raise timing
         row.update(is_error=bool(result.is_error), structured=result.structured_content,
                    mcp_result=result.model_dump(mode='json', by_alias=True, exclude_none=True))
     except BaseException as exc:
         row['error'] = {'type': type(exc).__name__, 'message': str(exc)}
         raise
     finally:
-        row.update(ended_at=utc_now(), duration_ms=math.ceil((time.monotonic()-started)*1000))
+        row['ended_at']=utc_now()
+        if _clock is None:row['duration_ms']=math.ceil((time.monotonic()-started)*1000)
     if result.is_error:
         raise RuntimeError(f'qualification tool failed: {tool}')
     return result.structured_content
+
+
+class _ObservedSession:
+    def __init__(self,session,clock):self.session,self.clock=session,clock
 
 
 async def run_flow(session, report, sampler, label, tool, arguments, timeout):
@@ -202,7 +216,7 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
             raise ValueError('qualification source differs from approval')
     admission.read(fixture_instance_arg)
     admission.recheck()
-    run_dir.mkdir(parents=True, exist_ok=False)
+    runner._new_current_run(run_dir)
     (run_dir/'fixture-instance.json').write_bytes(fixture_instance_arg.read_bytes())
     if schema3:
         (run_dir/'baseline-binding.json').write_bytes(Path(baseline_binding).read_bytes())
@@ -225,6 +239,8 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
         report['snapshot_evidence_sha256'] = None
     invocations = [row for row in json.loads(INVOCATIONS.read_text(encoding='utf-8'))
                    if row['risk_class']=='resource_sensitive' and row['artifact']!='Windows.Network.PacketCapture']
+    from tests.p06_call_clock import RunClock
+    run_clock=RunClock();session_state={}
     started = time.monotonic()
     report['steps'].append({'id':'implementation-identity','kind':'source-identity',
                             'files':{name:runner.sha256_file(REPO_ROOT/'tests'/name) for name in
@@ -238,7 +254,8 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
             raise ValueError('qualification must include all eight in-scope resource-sensitive invocations')
         session_observation = Path(server_observation) if schema3 else evidence_root/'server-observation.json'
         async with formal_session(endpoint, token_env, session_observation, run_dir, report,
-                                  expected_tool_count=137) as session:
+                                  expected_tool_count=137,_admission=admission,_state=session_state) as session:
+            session=_ObservedSession(session,run_clock)
             sampler = GuestResourceSampler(endpoint, run_id, report['server_identity'], run_dir/'resources')
             before = await sampler.sample('qualification-start')
             require_trace_inactive(before)
@@ -291,7 +308,7 @@ async def qualify(endpoint, token_env, *, baseline_binding=None, evidence_root_o
             (run_dir/'snapshot-evidence.json').write_bytes(raw)
             report['snapshot_evidence_sha256'] = hashlib.sha256(raw).hexdigest()
         admission.finish_report(report)
-        (run_dir/'report.json').write_bytes(runner.canonical_bytes(report))
+        await runner._finalize_current(report,run_dir,evidence_root,run_clock,session_state.get('capture'),admission,seal=False)
     if report['status']=='success':
         # Measured payload precedes the budget, avoiding hash/size self-reference.
         manifest = member_inventory(run_dir, evidence_root, payload=True)
