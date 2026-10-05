@@ -1365,3 +1365,12 @@ Current HTTP transport capture retains full request and response header original
 The separate failure reader derives a finite exact diagnostic record from captured HTTP originals. It assigns attempt numbers only from an independently authorized complete source; missing or ambiguous evidence stays unclassified, and a non-invoked call has only its report sequence. Its exclusive publisher never creates a successful observation sidecar. Actual local HTTP rejection/duplicate/raised-handler tests and a fixed-governance MODEL reader test cover this diagnostic module; current producer and successful consumer integration remains under verification.
 
 Run the bounded diagnostic subset with `.venv/bin/python -B -m unittest tests.test_observation_failure tests.test_observation_failure_http`, supplying the existing isolated bootstrap fixture for fixed-loader tests. The suite loads its own two HTTP cases, while the imported fixtures provide setup and shutdown. Successful package/receive/selection qualification remains blocked by the current protected PC020 source-path migration versus historical approved policy; the successful-entry integration draft is retained separately.
+
+Historical PC020 and Snapshot187 adoption validation now select between two
+code-owned complete coordinate layouts (34 and 12 sources respectively). Each
+layout is checked as an exact set; mixed dates, missing/extra sources and aliases
+refuse. Readers still open the original `source/<repo_path>` and verify its
+actual size, SHA-256, Git blob and Ref. They never translate an old coordinate
+to a current file or rewrite historical policy, Source or canonical bytes.
+Current implementation approval and full C8 qualification remain mandatory;
+these layout checks alone do not qualify successful consumers or Windows.

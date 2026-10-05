@@ -81,6 +81,43 @@ ADOPTION_SOURCE_INPUTS = frozenset(
 )
 
 
+# Historical Source.repo_path coordinates are immutable. These complete layouts
+# select an expected set only; readers still open each original source/<repo_path>.
+ADOPTION_HISTORICAL_SOURCE_PATHS = frozenset({
+    'PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md',
+    'PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/快照恢复选择器.py',
+    'PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md',
+    'PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md',
+    'PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md',
+    'PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md',
+    'PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md',
+    'PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md',
+    'PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md',
+    'PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md',
+    'tests/p05_baseline_adoption.py',
+    'tests/p05_snapshot_raw.py',
+})
+ADOPTION_NAVIGATION_COORDINATES = {
+    'PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md': 'PLAN/2026.09.05/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md',
+    'PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md': 'PLAN/2026.09.05/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md',
+    'PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md': 'PLAN/2026.09.12/2026.09.12-18-实施子方案-P07清理与终检.md',
+    'PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md': 'PLAN/2026.09.14/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md',
+    'PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md': 'PLAN/2026.09.14/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md',
+    'PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md': 'PLAN/2026.09.14/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md',
+    'PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md': 'PLAN/2026.09.14/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md',
+}
+ADOPTION_CURRENT_SOURCE_PATHS = frozenset(
+    ADOPTION_NAVIGATION_COORDINATES.get(path, path)
+    for path in ADOPTION_HISTORICAL_SOURCE_PATHS
+)
+
+def _source_layout(paths: set[str]) -> frozenset[str]:
+    for expected in (ADOPTION_HISTORICAL_SOURCE_PATHS, ADOPTION_CURRENT_SOURCE_PATHS):
+        if paths == expected:
+            return expected
+    raise BaselineAdoptionError("source coordinates are not either complete fixed layout")
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -226,13 +263,16 @@ def _verify_old_canonical(payload: bytes) -> None:
 def _verify_sources(root: Path, value: Any, seen: dict[str, tuple[int, str]]) -> None:
     if not isinstance(value, list) or len(value) != len(ADOPTION_SOURCE_INPUTS):
         raise BaselineAdoptionError("source_inputs does not contain the complete fixed set")
+    if any(not isinstance(source, dict) or set(source) != SOURCE_KEYS or not isinstance(source.get("repo_path"), str) for source in value):
+        raise BaselineAdoptionError("source_inputs keys or coordinates differ")
+    expected = _source_layout({source["repo_path"] for source in value})
     paths: set[str] = set()
     for index, source in enumerate(value):
         label = f"source_inputs[{index}]"
         if not isinstance(source, dict) or set(source) != SOURCE_KEYS:
             raise BaselineAdoptionError(f"{label} keys differ")
         repo_path = source.get("repo_path")
-        if not isinstance(repo_path, str) or repo_path not in ADOPTION_SOURCE_INPUTS:
+        if not isinstance(repo_path, str) or repo_path not in expected:
             raise BaselineAdoptionError(f"{label}.repo_path is outside the fixed source set")
         if repo_path in paths:
             raise BaselineAdoptionError(f"{label}.repo_path is duplicated")
@@ -253,9 +293,9 @@ def _verify_sources(root: Path, value: Any, seen: dict[str, tuple[int, str]]) ->
         header = f"blob {len(payload)}\0".encode("ascii")
         if hashlib.sha1(header + payload).hexdigest() != blob:
             raise BaselineAdoptionError(f"{label}.blob does not identify content bytes")
-    if paths != ADOPTION_SOURCE_INPUTS:
+    if paths != expected:
         raise BaselineAdoptionError(
-            f"source_inputs differs from the fixed set: {sorted(ADOPTION_SOURCE_INPUTS - paths)}"
+            f"source_inputs differs from the fixed set: {sorted(expected - paths)}"
         )
 
 

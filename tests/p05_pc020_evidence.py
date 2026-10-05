@@ -137,6 +137,67 @@ PC020_REQUIRED_SOURCE_PATHS = frozenset({
 })
 
 
+# Historical Source.repo_path coordinates are immutable. These complete layouts
+# select an expected set only; readers still open each original source/<repo_path>.
+PC020_HISTORICAL_SOURCE_PATHS = frozenset({
+    '.tmp/velo-codex-20260920-pc017-norm-combined/codex-R02-verdict.md',
+    '.tmp/velo-codex-20260920-pc017-norm-combined/evidence-r02/base-manifest.json',
+    '.tmp/velo-codex-20260920-pc017-norm-combined/proposal-r02.patch',
+    '.tmp/velo-codex-20260920-pc020-activation-time/candidate-manifest.json',
+    '.tmp/velo-codex-20260920-pc020-activation-time/codex-R01-verdict.md',
+    'PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md',
+    'PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md',
+    'PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md',
+    'PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md',
+    'PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md',
+    'PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md',
+    'PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md',
+    'PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md',
+    'PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md',
+    'PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md',
+    'PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md',
+    'PLAN/2026.09.20/2026.09.20-06-PC017作者稿采纳与规范同步范围.md',
+    'PLAN/2026.09.20/2026.09.20-07-PC017主方自评发现-发布后故障边界.md',
+    'PLAN/2026.09.20/2026.09.20-08-PC017发布提交点与故障语义裁决.md',
+    'PLAN/2026.09.20/2026.09.20-10-PLAN-CHANGE-018登记与裁决-分页游标上下文.md',
+    'PLAN/2026.09.20/2026.09.20-11-主方自评发现-固定启动响应状态缺口.md',
+    'PLAN/2026.09.20/2026.09.20-12-PLAN-CHANGE-019裁决-固定启动真实状态.md',
+    'PLAN/2026.09.20/2026.09.20-13-PC018终页字段勘误与自评续作.md',
+    'PLAN/2026.09.20/2026.09.20-15-PLAN-CHANGE-020登记与作者方向-恢复代次重建.md',
+    'PLAN/2026.09.20/2026.09.20-16-PC020主方迁移形状与因果顺序裁决.md',
+    'PLAN/2026.09.20/2026.09.20-17-PC020集合与证据复用边界勘误.md',
+    'PLAN/2026.09.20/2026.09.20-18-PC020作者自评发现与裁决-激活签发时间.md',
+    'PLAN/2026.09.20/2026.09.20-19-PC020作者采纳决定与正式同步范围.md',
+    'PLAN/2026.09.20/2026.09.20-20-PC020主方完整规范自评与限定实现门.md',
+    'PLAN/2026.09.20/current-normative-inputs-pc019-r02.json',
+    'PLAN/2026.09.20/current-normative-inputs-pc019.json',
+    'PLAN/2026.09.20/current-normative-inputs-pc020-r01.json',
+    'PLAN/2026.09.20/pc017-author-revision-2-manifest.json',
+    'PLAN/2026.09.20/pc017-author-sync-manifest.json',
+})
+PC020_NAVIGATION_COORDINATES = {
+    'PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md': 'PLAN/2026.09.04/2026.09.04-01-实施子方案-P01阶段0真实基线.md',
+    'PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md': 'PLAN/2026.09.05/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md',
+    'PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md': 'PLAN/2026.09.05/2026.09.05-07-实施子方案-P03动态artifact工具.md',
+    'PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md': 'PLAN/2026.09.05/2026.09.05-15-实施子方案-P04固定工具与生命周期.md',
+    'PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md': 'PLAN/2026.09.05/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md',
+    'PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md': 'PLAN/2026.09.05/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md',
+    'PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md': 'PLAN/2026.09.12/2026.09.12-18-实施子方案-P07清理与终检.md',
+    'PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md': 'PLAN/2026.09.14/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md',
+    'PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md': 'PLAN/2026.09.14/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md',
+}
+PC020_CURRENT_SOURCE_PATHS = frozenset(
+    PC020_NAVIGATION_COORDINATES.get(path, path)
+    for path in PC020_HISTORICAL_SOURCE_PATHS
+)
+
+def _source_layout(paths: set[str]) -> frozenset[str]:
+    for expected in (PC020_HISTORICAL_SOURCE_PATHS, PC020_CURRENT_SOURCE_PATHS):
+        if paths == expected:
+            return expected
+    raise Pc020EvidenceError("source coordinates are not either complete fixed layout")
+
+
 @dataclass(frozen=True)
 class FrozenIdentity:
     size: int
@@ -355,6 +416,8 @@ def _sources(root: Path, value: Any, policy: Mapping[str, FrozenIdentity], label
             raise Pc020EvidenceError(f"{label}[{index}] content path differs")
         data = path.read_bytes()
         expected = policy[repo_path]
+        if type(expected.size) is not int or expected.size < 0 or not _valid_sha(expected.sha256) or not isinstance(expected.blob, str) or re.fullmatch(r"[0-9a-f]{40}", expected.blob) is None:
+            raise Pc020EvidenceError(f"{label}[{index}] trusted identity is invalid")
         if source.get("blob") != _blob(data) or (len(data), _sha(data), source.get("blob")) != (expected.size, expected.sha256, expected.blob):
             raise Pc020EvidenceError(f"{label}[{index}] differs from the trusted frozen identity")
         copies[repo_path] = path
@@ -568,7 +631,8 @@ def _legacy_graph(root: Path, root_file: Path, label: str) -> None:
 
 
 def verify_preparation(path: Path, *, policy: FrozenSourcePolicy) -> dict[str, Any]:
-    if set(policy.source_inputs) != PC020_REQUIRED_SOURCE_PATHS or not policy.implementation_sources:
+    _source_layout(set(policy.source_inputs))
+    if not policy.implementation_sources:
         raise Pc020EvidenceError("trusted policy does not distinguish the fixed PC020 sources from a non-empty post-freeze implementation set")
     root, admission_id = _bundle_root(path, "pc020-preparation", "admission.json")
     document = _json_bytes(path.read_bytes(), "preparation admission")
@@ -698,7 +762,8 @@ def _tree_identity(root: Path, *, omit: frozenset[str] = frozenset()) -> dict[st
 
 
 def verify_migration(path: Path, *, original_preparation: Path, policy: FrozenSourcePolicy) -> dict[str, Any]:
-    if set(policy.source_inputs) != PC020_REQUIRED_SOURCE_PATHS or not policy.implementation_sources:
+    _source_layout(set(policy.source_inputs))
+    if not policy.implementation_sources:
         raise Pc020EvidenceError("trusted policy does not distinguish the fixed PC020 sources from a non-empty post-freeze implementation set")
     root, migration_id = _bundle_root(path, "pc020-migration", "migration.json")
     document = _json_bytes(path.read_bytes(), "migration")
