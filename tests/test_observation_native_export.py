@@ -62,6 +62,8 @@ class NativeExportModels(unittest.TestCase):
     def setup_export(self):
         self.fixture=attempts.LedgerModels();self.addCleanup(self.fixture.doCleanups)
         l,fs,c=self.fixture.ledger();limits=model_budgets();limits['max_export_bytes']=224870400
+        configure=getattr(self,'configure_limits',None)
+        if configure is not None:configure(limits)
         e=install(self,l,fs,c,limits)
         return l,fs,c,e
 

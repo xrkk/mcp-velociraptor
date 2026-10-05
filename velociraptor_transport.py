@@ -312,6 +312,7 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
             finally:controller._lifespan_exited()
         routes=[Route(config.path,_HTTPIngress(controller),methods=['GET','POST','DELETE'])]
         service=getattr(server,'_guest_transfer_tools',None)
+        controller._transfer_service=service
         if service is not None:routes.append(Route('/chunkbin',_BinaryIngress(controller,service),methods=['POST']))
         app=Starlette(routes=routes,lifespan=lifespan)
         app.state.transfer_bindings=bindings

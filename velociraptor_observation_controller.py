@@ -158,6 +158,7 @@ class _Work:
     pending_creation: bool = False
     request_sha256: str | None = None
     response_pending: object = None
+    maintenance_exchange: object = None
     request_bytes: int = 0
     response_bytes: int = 0
     receive_waiter: object = None
@@ -379,6 +380,7 @@ class SessionController:
         self._exporter = None
         self._closed_cuts = {}
         self._maintenance = {}
+        self._transfer_service = None
         self._temporary_reserved = 0
         self._temporary_peak = 0
 
@@ -398,12 +400,10 @@ class SessionController:
                 row.input_storage.release()
 
     def _reserve_maintenance(self, original, session, owner, *, calls, bytes, attempts, binary, sdk_work):
-        """Private future B2 seam; reserves capacity, never download authority.
+        """Atomically reserve internal capacity after native source authorization.
 
-        Requires an actual closed export and a different real initialized SDK
-        session. No protocol/config input can select this mode or mint a receipt.
-        Totals reserve future exchanges; actual prior SDK initialization bytes
-        and calls are added to the instance quota. Physical capture is still B2.
+        History includes the initial live SDK GET; its later bytes are charged
+        by that ingress owner. Reservation is permanent, including failures.
         """
         values=dict(calls=calls,bytes=bytes,attempts=attempts,binary=binary,sdk_work=sdk_work)
         if any(type(n) is not int or n<0 for n in values.values()) or not calls or not bytes or not sdk_work:
@@ -417,7 +417,8 @@ class SessionController:
                 raise ControllerError('maintenance_source_invalid')
             if session in self._maintenance:raise ControllerError('maintenance_reentered')
             history=[r for r in self._work.values() if r.session==session]
-            if any(not r.http_exited for r in history):raise ControllerError('maintenance_initialization_pending')
+            if any(not r.http_exited and r.message.get('method')!='HTTP_GET_SSE' for r in history):
+                raise ControllerError('maintenance_initialization_pending')
             planned=dict(values,calls=calls+len(history),
                 bytes=bytes+sum(r.request_bytes+r.response_bytes for r in history))
             used_calls=sum(r['plan']['calls'] for r in self._maintenance.values())
@@ -432,6 +433,77 @@ class SessionController:
             self._maintenance[session]=dict(original=original,owner=owner,plan=planned,initial_calls=len(history),
                 initial_bytes=planned['bytes']-bytes,
                 remaining=dict(values),exchanges=[])
+            for r in history:
+                if not r.http_exited:
+                    exchange=dict(method='HTTP_GET',request_bytes=r.request_bytes,response_bytes=r.response_bytes,finished=False,error=None)
+                    r.maintenance_exchange=exchange
+                    self._maintenance[session]['exchanges'].append(exchange)
+
+    def _activate_maintenance(self, session, owner, message, body_size):
+        if message.get('method')!='tools/call' or message.get('params',{}).get('name')!='transfer_begin':return None
+        request=message['params'].get('arguments',{}).get('request')
+        if type(request) is not dict or request.get('direction')!='pull' or self._exporter is None:return None
+        sources=request.get('sources')
+        if type(sources) is not list:return None
+        candidates=[]
+        for item in sources:
+            if type(item) is not dict or type(item.get('absolute_path')) is not str:continue
+            if self._exporter._namespace_source(item['absolute_path']):candidates.append(item['absolute_path'])
+        if not candidates:return None  # Ordinary transfer retains its existing policy.
+        with self._lock:
+            matches=[original for original,descriptor in self._closed_cuts.items()
+                if candidates==[str(self._exporter._source_path(original))] and len(sources)==1]
+            if len(matches)!=1:raise ControllerError('maintenance_source_invalid')
+            original=matches[0]
+            first=self._sessions.get(original);target=self._sessions.get(session)
+            if (first is None or target is None or original==session or first['owner']!=owner
+                    or target['owner']!=owner or first['state']!='CLOSED' or target['state']!='OPEN'
+                    or not target['initialized'] or not self._exporter.receipt(original,self._closed_cuts[original])):
+                raise ControllerError('maintenance_source_invalid')
+            if session in self._maintenance:
+                binding=self._maintenance[session].get('transfer_binding')
+                if binding!=(request.get('transfer_id'),request.get('request_digest')):
+                    raise ControllerError('maintenance_reentered')
+                return None  # Same immutable transfer resume uses already reserved capacity.
+            if self._transfer_service is None:raise ControllerError('maintenance_transfer_unavailable')
+            service=self._transfer_service._get()
+            service._validate_request(request)  # Read-only identity/policy/schema/producer gate.
+            path=service.policy.resolve_local(sources[0]['absolute_path'],'read')
+            if str(path)!=sources[0]['absolute_path']:raise ControllerError('maintenance_path')
+            from velociraptor_observation_maintenance_plan import acquisition_plan
+            # Reserve temporary native read storage before native source readback.
+            reservation=self._reserve_temporary(2*self._exporter._plan['pending'],'maintenance-source-read')
+            try:
+                facts=self._exporter._maintenance_source(original)
+                plan=acquisition_plan(facts,service.policy.limits,request['budget'],self._limits['max_request_body_bytes'])
+                self._reserve_maintenance(original,session,owner,**plan)
+            finally:reservation.release()
+            self._maintenance[session]['transfer_binding']=(request['transfer_id'],request['request_digest'])
+            exchange=self._maintenance_exchange(session,owner,'HTTP_POST')
+            self._maintenance_bytes(session,exchange,body_size)
+            return exchange
+
+    async def _prepare_maintenance(self, session, owner, message, body_size):
+        params=message.get('params',{})
+        request=params.get('arguments',{}).get('request')
+        if (message.get('method')!='tools/call' or params.get('name')!='transfer_begin'
+                or type(request) is not dict or request.get('direction')!='pull' or self._exporter is None):return None
+        sources=request.get('sources')
+        if type(sources) is not list or not any(type(r) is dict and type(r.get('absolute_path')) is str
+                and self._exporter._namespace_source(r['absolute_path']) for r in sources):return None
+        with self._lock:
+            if session in self._maintenance:
+                return self._activate_maintenance(session,owner,message,body_size)
+        deadline=time.monotonic_ns()+self._limits['close_timeout_ns']
+        try:
+            return await self._owned_close_io(session,
+                lambda:self._activate_maintenance(session,owner,message,body_size),deadline,'maintenance_activation')
+        except BaseException:
+            # A failed validation can safely refuse, but a live native task may
+            # still own resources. Never claim that timeout/cancellation stops it.
+            io=self._close_io.get((session,'maintenance_activation'))
+            if io is not None and not io.joined:self._unknown(session)
+            raise
 
     def _reserved_capacity(self, kind, except_session=None):
         return sum(r['remaining'][kind] for session,r in self._maintenance.items() if session!=except_session)
@@ -743,6 +815,16 @@ class SessionController:
                 if not current['initialized'] and message.get('method') != 'notifications/initialized':
                     raise ControllerError('session_not_initialized',409)
             if message.get('method')=='tools/call':
+                maintenance=self._maintenance.get(session)
+                if maintenance is not None:
+                    params=message.get('params',{});args=params.get('arguments',{})
+                    from velo_transfer.mcp_tools import TRANSFER_TOOL_NAMES
+                    name=params.get('name')
+                    if name not in TRANSFER_TOOL_NAMES:raise ControllerError('maintenance_tool')
+                    if name!='transfer_capabilities':
+                        details=args.get('request',args)
+                        if (details.get('transfer_id'),details.get('request_digest'))!=maintenance['transfer_binding']:
+                            raise ControllerError('maintenance_transfer_binding')
                 self._capacity_for(session,'attempts',self._ledger._attempt_count,self._ledger._limits['max_attempts'])
             self._pending_gate(response)
             copied=_json_copy(message)
@@ -1147,7 +1229,7 @@ class _BinaryIngress:
         async def maintenance_send(message):
             if message['type']=='http.response.body':
                 if row is not None:row.response_bytes+=len(message.get('body',b''))
-                c._maintenance_bytes(session,maintenance,len(message.get('body',b'')),True)
+                c._maintenance_bytes(session,maintenance if maintenance is not None else (row.maintenance_exchange if row is not None else None),len(message.get('body',b'')),True)
             await original_send(message)
         send=maintenance_send
         try:
@@ -1162,6 +1244,10 @@ class _BinaryIngress:
                 raise ControllerError('instance',400)
             if one_header(headers,'content-type')!='application/octet-stream':
                 raise ControllerError('content_type',415)
+            with c._lock:
+                bound=c._maintenance.get(session)
+                if bound is not None and (one_header(headers,'x-velo-transfer-id'),one_header(headers,'x-velo-request-digest'))!=bound['transfer_binding']:
+                    raise ControllerError('maintenance_transfer_binding')
             if hasattr(c,'_bindings'):
                 rejected=c._bindings.check(headers,owner,instance_required=True)
                 if rejected is not None:return await rejected(scope,receive,send)
@@ -1217,6 +1303,7 @@ class _BinaryIngress:
             if buffer is not None:buffer.close()
             if input_storage is not None and row is None:input_storage.release()
             if maintenance is not None:maintenance['finished']=True
+            if row is not None and row.maintenance_exchange is not None:row.maintenance_exchange['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
                     try:
@@ -1243,7 +1330,7 @@ class _HTTPIngress:
                 if transfer and row is not None and row.response_bytes+len(message.get('body',b''))>wire.BODY_LIMIT:
                     raise ControllerError('response_body_budget',413)
                 if row is not None:row.response_bytes+=len(message.get('body',b''))
-                c._maintenance_bytes(session,maintenance,len(message.get('body',b'')),True)
+                c._maintenance_bytes(session,maintenance if maintenance is not None else (row.maintenance_exchange if row is not None else None),len(message.get('body',b'')),True)
             await original_send(message)
         send=maintenance_send
         try:
@@ -1304,6 +1391,8 @@ class _HTTPIngress:
                         raise ControllerError('tool_parent',400)
             if not transfer and len(body)>4<<20:raise ControllerError('body_budget',413)
             await c._await_initialized(session,owner,message)
+            if maintenance is None:
+                maintenance=await c._prepare_maintenance(session,owner,message,len(body))
             with c._lock:
                 # Recheck and reserve the actual outgoing waiter atomically.
                 if response_pending is not None:response_pending=c._response_pending(session,message)
@@ -1375,6 +1464,7 @@ class _HTTPIngress:
             if buffer is not None:buffer.close()
             if input_storage is not None and row is None:input_storage.release()
             if maintenance is not None:maintenance['finished']=True
+            if row is not None and row.maintenance_exchange is not None:row.maintenance_exchange['finished']=True
             if row is not None:
                 with anyio.CancelScope(shield=True):
                     try:c._settle_unclaimed(row)

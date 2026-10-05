@@ -237,6 +237,11 @@ ENTRIES = ENTRIES | frozenset({'velociraptor_observation_export.py',
     'tests/test_observation_startup_cleanup.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+# Closed-export maintenance source activation, with actual SDK verification.
+ENTRIES = ENTRIES | frozenset({'velociraptor_observation_maintenance_plan.py',
+    'tests/test_observation_maintenance.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 

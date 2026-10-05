@@ -95,6 +95,7 @@ class NativeExporter:
         self._lock = threading.RLock()
         self._receipt_lock = threading.Lock()
         self._reservations, self.completed = {}, {}
+        self._sources = {}
         self._pending_reserved = 0
         self._allocator = None
         self._instance_dir = None
@@ -143,6 +144,58 @@ class NativeExporter:
 
     def receipt(self, session, descriptor):
         with self._receipt_lock:return self.completed.get(session)==descriptor
+
+    def _namespace_source(self, path):
+        from pathlib import PureWindowsPath
+        return PureWindowsPath(path).is_relative_to(self._allocator.root.path)
+
+    def _source_path(self, session):
+        # Derived only from our actual published receipt; no caller root.
+        with self._receipt_lock:
+            source=self._sources.get(session)
+            _require(source is not None and session in self.completed,'maintenance_receipt_missing')
+            return source[0].path
+
+    def _maintenance_source(self, session):
+        """No-follow full identity/SD/hash/closure readback before transfer writer.
+
+        The immutable snapshot comes from the actual final native readback.
+        Return sizes only; transfer still reads the real files through its own
+        authorized policy, worker and source stability protocol.
+        """
+        with self._lock:
+            with self._receipt_lock:source=self._sources.get(session)
+            _require(source is not None,'maintenance_receipt_missing')
+            base,leases,snapshot=source
+            expected=json.loads(snapshot)
+            reader=WindowsSession();primary=None
+            try:
+                _require(reader.sid==self._allocator.root.identity['principal_sid'],'maintenance_principal')
+                names={name:set() for name in leases}
+                for name in leases:
+                    if name:
+                        parent,child=name.rsplit('/',1) if '/' in name else ('',name)
+                        names[parent].add(child)
+                for member in expected['members']:
+                    name=member['path'];parent,child=name.rsplit('/',1) if '/' in name else ('',name)
+                    names[parent].add(child)
+                def check():
+                    for name,lease in leases.items():
+                        self._check(lease)
+                        _require(reader._directory_names(lease.path,len(names[name])+1,directories=True)==frozenset(names[name]),'maintenance_source_closure')
+                check()
+                for member in expected['members']:
+                    name=member['path']
+                    raw,_,identity=reader._read_original(base.path/name.replace('/','\\'),member['size'])
+                    _require(identity==expected['identities'][name] and ref(name,raw)==member,'maintenance_source_drift')
+                check()
+                return dict(files=len(expected['members']),bytes=sum(r['size'] for r in expected['members']))
+            except BaseException as error:primary=error;raise
+            finally:
+                try:reader.close()
+                except BaseException:
+                    if primary is None:raise
+                    _note(primary,'maintenance_source_close_failed')
 
     def _documents(self, prefix, lifecycle):
         from velociraptor_observation_startup import CONFIG
@@ -287,7 +340,11 @@ class NativeExporter:
                 descriptor=ref(relative+'/cut.json',files['cut.json'])
                 # All per-export publishers/readers have actually closed. The
                 # ledger-owned allocator remains a retained directory lease.
-                with self._receipt_lock:self.completed[session]=dict(descriptor)
+                snapshot=canonical(dict(members=[ref(n,r) for n,r in sorted(observed.items())],identities=identities))
+                retain((files,observed,wrapper,identities,snapshot))
+                with self._receipt_lock:
+                    self._sources[session]=(base,dict(leases),snapshot)
+                    self.completed[session]=dict(descriptor)
                 return descriptor
             except BaseException:
                 self._ledger._poison();raise

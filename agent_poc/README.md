@@ -1220,3 +1220,17 @@ Oversized, invalid or overflowing bounds retain source originals and refuse
 without content reads or export writes. Host tests exercise actual Reader and
 ledger algorithms with MODEL Windows APIs. This content bound does not complete
 reservation of SD/ctypes buffers, parser intermediates or the full snapshot graph.
+
+
+Closed-export maintenance activation now runs through the existing first pull
+`transfer_begin` in the formal HTTP app. The source must be the completed native
+receipt of another CLOSED session in the same controller, instance and bearer
+owner, inside the already approved transfer read root. Native identity, full SD,
+member hashes and directory closure are rechecked before any new transfer writer.
+The private planner derives permanent call, byte, attempt, binary and SDK work
+reserves from that original and the fixed policy. The live initial GET and prior
+SDK control traffic count too. Insufficient capacity, unknown sources and changed
+bindings are rejected before BEGIN. Ordinary transfers retain their existing
+policy; stdio does not create an observation archive. This stage's tests use
+actual SDK sockets, POSIX files and processes with MODEL Win32 authority; they
+provide no Windows qualification or new production approval.
