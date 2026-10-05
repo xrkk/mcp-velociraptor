@@ -260,6 +260,12 @@ ENTRIES = ENTRIES | frozenset({'velociraptor_observation_host.py',
     'tests/test_observation_host.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
+
+# Finite independent failure diagnostics and actual HTTP MODEL source tests.
+ENTRIES = ENTRIES | frozenset({'velociraptor_observation_failure.py',
+    'tests/test_observation_failure.py','tests/test_observation_failure_http.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
 _CONSUMPTION = contextvars.ContextVar("pc026_read_consumption", default=None)
 
 
