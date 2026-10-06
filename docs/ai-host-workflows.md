@@ -84,11 +84,13 @@ Hard limits that the AI caller must respect:
 ## Call accounting
 
 One AI-issued CLI run is **not** one backend request. A single
-`velo_flow` execute performs: 1 `list_tools` metadata read, then N
+`velo_flow` execute performs: M `list_tools` metadata-page reads, then N
 `get_flow_status` polls (backoff 1/2/4/8/10 s), then P `get_flow_results`
-pages, then 1 `list_flow_files` call. The exact numbers are reported in the
-summary's `call_counts`, and every raw request/response lands in the output
-directory's `calls.jsonl` (with size and SHA-256 in `result.json`). Offline
+pages, then 1 `list_flow_files` call on the complete path. Metadata may span
+multiple pages; the offline fixture uses one. The summary's `call_counts`
+counts business calls only. Their raw requests/responses land in
+`calls.jsonl` (with size and SHA-256 in `result.json`); discovered tool
+schemas are retained in `contract.json`. Offline
 adoption evidence with the real execute chain: `tests/test_host_workflow_adoption.py`.
 
 ## Moving files: `velo_transfer`
