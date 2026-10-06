@@ -66,18 +66,31 @@ never an exception repr or credential material.
 by_alias=True)` of the **most recent** call only, in memory, cleared before
 each new call. It is not an archive: persist the full original yourself if
 you need one. `call_tool_payload` never truncates rows or fields, never
-paginates and never retries.
+paginates and never retries. `is_error=True` is checked before every branch
+(fixed, dynamic, transfer, legacy), so an SDK error can never be promoted to
+`ok=True` even when the structured body claims transfer success.
 
 ## Bounded model view (`call_tool`)
 
-`call_tool` now returns a `velo.model.view.v1` JSON string bounded by
+`call_tool` returns a `velo.model.view.v1` JSON string bounded by
 `model_result_max_bytes` (constructor default 16384, integer 1024..65536).
-The view keeps `tool_ok`, `operation`/`status`, the real pagination fields
-(`cursor`/`next_cursor`/`truncated`, `server_truncated` only when the source
-has one), warning counts, error contents, plus row sampling controlled by
-`model_result_sample_rows` (0..10, default 10) and `model_result_fields`
-(None for whole rows, or up to 32 top-level field names). Rules:
+The view is always built from the normalized host payload (`ok`/`data`/
+`error`/`structured_content`), so legacy envelopes, `call_failed` and
+`protocol_error` results keep their real data or error — never an empty view
+claiming completeness. It keeps `tool_ok`, `operation`/`status` (null when
+the source has none), the real pagination fields, `server_truncated` from
+the real pagination `truncated` or the top-level `truncated` (null when
+neither exists), plus explicit completeness flags `warnings_complete` and
+`error_complete` (null when the source has no such field). Row sampling is
+controlled by `model_result_sample_rows` (0..10, default 10) and
+`model_result_fields` (None for whole rows, or up to 32 top-level field
+names). Rules:
 
+- **Row data reaches the model only through `sample_rows`.** A `data` list
+  is always sampled and field-projected regardless of total size; an
+  embedded payload never carries the top-level `data` key, so unselected
+  rows or fields cannot re-enter through the payload or any other JSON
+  field. Only a small **non-row** structure may embed its complete payload.
 - Only top-level fields of real `data` rows are projected; there is no eval,
   VQL or filter expression anywhere.
 - Each sample row is at most 4096 UTF-8 bytes; an oversized row is omitted
@@ -87,16 +100,20 @@ has one), warning counts, error contents, plus row sampling controlled by
   the per-row limit or the total limit each count exactly once.
 - Projection (field selection, or fewer samples than rows) sets
   `view_complete=false` even when the row count fits.
-- Small responses may embed the complete structured payload; it is dropped
-  (marked `payload_omitted`) once it would overflow.
-- If even an empty-sample view overflows, a bounded fallback carries
-  `view_error="model_view_overflow"`, the true `tool_ok`, and the error code
-  only when it fits in 128 UTF-8 bytes (otherwise the stable `tool_error`
-  with `error_code_omitted=true`). A tool success that merely overflows the
-  view is not rewritten as a tool failure — `tool_ok` and `view_error` are
+- Real errors keep their code/message and `error_complete=true`; locally
+  generated failures (`call_failed`, `protocol_error`) also carry their
+  stable `error.code`. If the view still overflows after dropping all
+  samples, a bounded fallback carries `view_error="model_view_overflow"`,
+  the true `tool_ok`, `fields_omitted=true`, and the error code only when
+  it fits in 128 UTF-8 bytes (otherwise the stable `tool_error` with
+  `error_code_omitted=true`). A tool success that merely overflows the view
+  is not rewritten as a tool failure — `tool_ok` and `view_error` are
   separate.
-- The view can report the canonical-JSON SHA-256 and byte size of the raw
-  response (`raw_sha256`/`raw_bytes`) but never fabricates a file path.
+- When a raw original exists, `raw_sha256`/`raw_bytes` report the
+  canonical-JSON facts with an explicit `raw_hash_scope` of
+  `structured_content` or `legacy_envelope`; a locally generated failure has
+  no RPC original and fabricates neither a hash nor a file path. The full
+  raw stays available through `call_tool_payload` and `last_tool_result`.
 
 Model history receives only these bounded views; the full raw payload stays
 available through `call_tool_payload` and `last_tool_result` for host-side

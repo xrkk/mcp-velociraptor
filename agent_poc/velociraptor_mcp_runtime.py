@@ -145,7 +145,8 @@ class VelociraptorMCPClient:
                 raise ValueError(
                     "model_result_fields allows at most 32 non-empty names of "
                     "at most 128 characters each")
-            fields = tuple(names)
+            # An empty field list means "whole rows", matching None semantics.
+            fields = tuple(names) if names else None
         self.model_result_fields = fields
         self.max_tool_rounds = max_tool_rounds
 
@@ -298,17 +299,24 @@ class VelociraptorMCPClient:
         return tool_defs
 
     def _host_payload(self, tool_name: str, result) -> dict:
-        """Adapt a real CallToolResult to the host-side ok/data interface."""
+        """Adapt a real CallToolResult to the host-side ok/data interface.
+
+        ``is_error=True`` is checked before every branch (fixed, dynamic,
+        transfer, legacy): an SDK error can never be promoted to ok even when
+        the structured body claims transfer success.
+        """
         structured = result.structured_content
+        if result.is_error:
+            if isinstance(structured, dict):
+                return {"ok": False, "error": structured,
+                        "structured_content": structured}
+            return {"ok": False, "error": {"code": "protocol_error"}}
         if isinstance(structured, dict):
             if structured.get("schema") == TRANSFER_RESPONSE_SCHEMA:
                 if structured.get("status") == "success":
                     return {"ok": True, "data": structured.get("result"),
                             "structured_content": structured}
                 return {"ok": False, "error": structured.get("error"),
-                        "structured_content": structured}
-            if result.is_error:
-                return {"ok": False, "error": structured,
                         "structured_content": structured}
             if (structured.get("status") == "success"
                     and structured.get("operation") == tool_name):
@@ -318,8 +326,6 @@ class VelociraptorMCPClient:
                 return payload
             return {"ok": False, "error": {"code": "protocol_error"},
                     "structured_content": structured}
-        if result.is_error:
-            return {"ok": False, "error": {"code": "protocol_error"}}
         if not structured and result.content:
             # Legacy compatibility: only a clear old envelope (a dict with a
             # boolean ok field) is accepted from text content.
@@ -332,7 +338,7 @@ class VelociraptorMCPClient:
             except (json.JSONDecodeError, ValueError):
                 return {"ok": False, "error": {"code": "protocol_error"}}
             if isinstance(parsed, dict) and isinstance(parsed.get("ok"), bool):
-                return parsed
+                return dict(parsed, legacy_envelope=True)
             return {"ok": False, "error": {"code": "protocol_error"}}
         return {"ok": False, "error": {"code": "protocol_error"}}
 
@@ -352,7 +358,17 @@ class VelociraptorMCPClient:
         return self._host_payload(tool_name, result)
 
     def _model_view_object(self, payload: dict) -> dict:
+        """Build the view from the normalized host payload (ok/data/error).
+
+        Row data reaches the model only through ``sample_rows``: an embedded
+        payload never carries the top-level ``data`` key. Non-row structures
+        may embed the complete payload when it fits. Errors and legacy
+        envelopes keep their real data/error visible; locally generated
+        failures (call_failed/protocol_error without an RPC original) carry no
+        fabricated raw hash.
+        """
         structured = payload.get("structured_content")
+        legacy = payload.get("legacy_envelope") is True
         ok = payload.get("ok") is True
         view = {"schema": VIEW_SCHEMA, "tool_ok": ok, "view_complete": True}
         if isinstance(structured, dict):
@@ -365,45 +381,90 @@ class VelociraptorMCPClient:
                 view["server_truncated"] = pagination.get("truncated")
             else:
                 view["pagination"] = None
-                view["server_truncated"] = None
+                top_truncated = structured.get("truncated")
+                view["server_truncated"] = (top_truncated
+                                            if isinstance(top_truncated, bool)
+                                            else None)
             warnings = structured.get("warnings")
             if isinstance(warnings, list):
                 view["warnings_count"] = len(warnings)
-            if not ok:
-                error_value = payload.get("error")
-                if isinstance(error_value, dict):
-                    view["error"] = error_value
-            canonical = json.dumps(structured, ensure_ascii=False, sort_keys=True,
+                view["warnings_complete"] = True
+            else:
+                view["warnings_complete"] = None
+        else:
+            view["operation"] = None
+            view["status"] = None
+            view["pagination"] = None
+            view["server_truncated"] = None
+            view["warnings_complete"] = None
+        if not ok:
+            error_value = payload.get("error")
+            if isinstance(error_value, dict):
+                view["error"] = error_value
+            else:
+                view["error"] = {"code": "protocol_error"}
+            view["error_complete"] = True
+        else:
+            view["error"] = None
+            view["error_complete"] = None
+        if isinstance(structured, dict):
+            raw_source = structured
+            view["raw_hash_scope"] = "structured_content"
+        elif legacy:
+            raw_source = {key: value for key, value in payload.items()
+                          if key != "legacy_envelope"}
+            view["raw_hash_scope"] = "legacy_envelope"
+        else:
+            raw_source = None
+        if raw_source is not None:
+            canonical = json.dumps(raw_source, ensure_ascii=False, sort_keys=True,
                                    separators=(",", ":"), allow_nan=False)
             encoded = canonical.encode("utf-8")
             view["raw_bytes"] = len(encoded)
             view["raw_sha256"] = hashlib.sha256(encoded).hexdigest()
-            data = payload.get("data")
-            if isinstance(data, list):
-                view["rows_received"] = len(data)
-                samples = []
-                for row in data:
-                    if len(samples) >= self.model_result_sample_rows:
-                        break
-                    if not isinstance(row, dict):
-                        continue
-                    projected = (
-                        {name: row[name] for name in self.model_result_fields
-                         if name in row}
-                        if self.model_result_fields is not None else row)
-                    try:
-                        line = _bounded_json(projected)
-                    except (TypeError, ValueError):
-                        continue
-                    if len(line.encode("utf-8")) > VIEW_SAMPLE_ROW_LIMIT:
-                        continue
-                    samples.append(projected)
-                view["sample_rows"] = samples
-                view["sample_omitted_count"] = len(data) - len(samples)
-                if (self.model_result_fields is not None
-                        or len(samples) < len(data)):
-                    view["view_complete"] = False
-            view["payload"] = structured
+        data = payload.get("data")
+        if isinstance(data, list):
+            view["rows_received"] = len(data)
+            samples = []
+            for row in data:
+                if len(samples) >= self.model_result_sample_rows:
+                    break
+                if not isinstance(row, dict):
+                    continue
+                projected = (
+                    {name: row[name] for name in self.model_result_fields
+                     if name in row}
+                    if self.model_result_fields is not None else row)
+                try:
+                    line = _bounded_json(projected)
+                except (TypeError, ValueError):
+                    continue
+                if len(line.encode("utf-8")) > VIEW_SAMPLE_ROW_LIMIT:
+                    continue
+                samples.append(projected)
+            view["sample_rows"] = samples
+            view["sample_omitted_count"] = len(data) - len(samples)
+            if (self.model_result_fields is not None
+                    or len(samples) < len(data)):
+                view["view_complete"] = False
+            # Row data never bypasses sampling: an embedded payload keeps
+            # only the non-data control metadata.
+            view["payload"] = ({key: value for key, value in structured.items()
+                                if key != "data"}
+                               if isinstance(structured, dict)
+                               else {"ok": True})
+            view["payload_data_omitted"] = True
+        else:
+            view["sample_rows"] = []
+            view["sample_omitted_count"] = 0
+            if data is not None:
+                # Non-row structure: the small response may embed the full
+                # payload (structured body, or the legacy envelope itself).
+                view["payload"] = (structured if isinstance(structured, dict)
+                                   else {key: value for key, value in payload.items()
+                                         if key != "legacy_envelope"})
+            elif isinstance(structured, dict):
+                view["payload"] = structured
         return view
 
     def _model_view(self, payload: dict) -> str:
