@@ -83,7 +83,7 @@ the real pagination `truncated` or the top-level `truncated` (null when
 neither exists), plus explicit completeness flags `warnings_complete` and
 `error_complete` (null when the source has no such field). Row sampling is
 controlled by `model_result_sample_rows` (0..10, default 10) and
-`model_result_fields` (None for whole rows, or up to 32 top-level field
+`model_result_fields` (None or an empty list for whole rows, or up to 32 top-level field
 names). Rules:
 
 - **Row data reaches the model only through `sample_rows`.** A `data` list
@@ -109,6 +109,11 @@ names). Rules:
   `error_code_omitted=true`). A tool success that merely overflows the view
   is not rewritten as a tool failure — `tool_ok` and `view_error` are
   separate.
+- Warning bodies live in the embedded payload. If that payload is omitted,
+  a non-empty warning list has `warnings_complete=false`, even if its count
+  remains visible. The overflow fallback marks omitted warning/error contents
+  incomplete; a retained error code alone does not make the error complete.
+  Legacy string errors retain their original value when they fit.
 - When a raw original exists, `raw_sha256`/`raw_bytes` report the
   canonical-JSON facts with an explicit `raw_hash_scope` of
   `structured_content` or `legacy_envelope`; a locally generated failure has

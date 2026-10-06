@@ -398,12 +398,14 @@ class VelociraptorMCPClient:
             view["server_truncated"] = None
             view["warnings_complete"] = None
         if not ok:
-            error_value = payload.get("error")
-            if isinstance(error_value, dict):
-                view["error"] = error_value
+            if "error" in payload:
+                # Legacy envelopes may carry a string, list or null error.
+                # Keep the real value rather than inventing protocol_error.
+                view["error"] = payload["error"]
+                view["error_complete"] = True
             else:
                 view["error"] = {"code": "protocol_error"}
-            view["error_complete"] = True
+                view["error_complete"] = False
         else:
             view["error"] = None
             view["error_complete"] = None
@@ -479,6 +481,10 @@ class VelociraptorMCPClient:
             view.pop("payload", None)
             view["payload_omitted"] = True
             view["view_complete"] = False
+            if view.get("warnings_complete") is not None:
+                # Warning bodies live in payload; the count alone cannot
+                # represent them. An empty warning list is still complete.
+                view["warnings_complete"] = view.get("warnings_count") == 0
         while len(encoded(view)) > limit:
             if not view.get("sample_rows"):
                 break
@@ -496,6 +502,10 @@ class VelociraptorMCPClient:
             "rows_received": view.get("rows_received"),
             "sample_rows": [],
             "sample_omitted_count": view.get("rows_received", 0),
+            "warnings_complete": (False if view.get("warnings_complete")
+                                  is not None else None),
+            "error_complete": (False if view.get("error_complete")
+                               is not None else None),
         }
         error = view.get("error")
         if isinstance(error, dict):
@@ -506,12 +516,17 @@ class VelociraptorMCPClient:
             else:
                 fallback["error"] = {"code": "tool_error"}
                 fallback["error_code_omitted"] = True
+        elif error is not None:
+            fallback["error"] = {"code": "tool_error"}
+            fallback["error_code_omitted"] = True
         if len(encoded(fallback)) <= limit:
             return _bounded_json(fallback)
         return _bounded_json({
             "schema": VIEW_SCHEMA, "tool_ok": fallback["tool_ok"],
             "view_error": "model_view_overflow", "view_complete": False,
             "fields_omitted": True,
+            "warnings_complete": fallback["warnings_complete"],
+            "error_complete": fallback["error_complete"],
         })
 
     async def call_tool(self, tool_name: str, arguments: dict) -> str:
