@@ -1,6 +1,6 @@
 # Host request grammar (internal API)
 
-`velo_transfer.request.load_request(absolute_path)` reads one strict UTF-8 JSON spec (at most 1 MiB) and returns a `HostRequest`. This module only checks input syntax and constructs the existing guest `transfer_begin` contract. The host coordinator and `python -m velo_transfer --spec ...` command are separate work. Parsing does not open sources, destination, profile, evidence references or any MCP connection, and does not create the derived `work_root`.
+`velo_transfer.request.load_request(absolute_path)` reads one strict UTF-8 JSON spec (at most 1 MiB) and returns a `HostRequest`. This module only checks input syntax and constructs the existing guest `transfer_begin` contract. The existing host coordinator and the `python -m velo_transfer --spec ...` command consume these requests; their behavior is documented in [host coordinator](transfer-host-coordinator.md). Parsing does not open sources, destination, profile, evidence references or any MCP connection, and does not create the derived `work_root`.
 
 ## Push example
 
@@ -28,7 +28,7 @@
 }
 ```
 
-For a pull, set `direction` to `pull`, use local Windows drive paths for source `absolute_path` (for example `E:\\Exports\\report.bin`), and a POSIX `destination_directory` such as `/evidence/incoming/batch-1`. An optional explicit `transfer_id` uses the guest identifier grammar. Set `resume: true` only with an explicit ID; the future coordinator must prove the previous journal and source, VM, package and channel bindings before resuming. A missing ID is generated once. The parser normalizes a canonical UUID and defaults `resume` to false.
+For a pull, set `direction` to `pull`, use local Windows drive paths for source `absolute_path` (for example `E:\\Exports\\report.bin`), and a POSIX `destination_directory` such as `/evidence/incoming/batch-1`. An optional explicit `transfer_id` uses the guest identifier grammar. Set `resume: true` only with an explicit ID; the host coordinator proves the previous journal and the source, VM, package and channel bindings before resuming, and reuses the original fixed deadline. A missing ID is generated once. The parser normalizes a canonical UUID and defaults `resume` to false.
 
 The exact eight budget keys are the guest's seven request limits plus `request_timeout_seconds`. All guest limits are integers other than booleans; logical bytes and free reserve may be zero. The per-request timeout is finite, positive, no more than 300 seconds and no more than the requested total duration. Limits do not assert actual free space or policy approval. The coordinator supplies its already fixed monotonic deadline to `HostRequest.content_budget(deadline)`; this method does not refresh it. `guest_budget` contains only the seven guest fields. Source count and the canonical JSON byte size of the explicit sources and evidence metadata are checked before source entries are processed. Evidence references are limited to 4096 entries, each a nonempty string of at most 512 characters. Actual directory enumeration remains the content layer's bounded work.
 

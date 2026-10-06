@@ -75,6 +75,19 @@ Start-Service -Name mcp-velociraptor
 
 没有受保护的 `VELOCIRAPTOR_TRANSFER_POLICY` 时，7 个传输工具仍列出，但 `transfer_capabilities` 报 disabled；原 130 个工具不依赖该 policy。先使用已有 DFIR 能力，有文件传输需求时再配置实际受保护的传输 policy。
 
+### 日常 AI 路径：宿主 CLI
+
+AI 轮次中的机械循环（轮询状态、逐页读结果、列文件、跨机取文件）默认不逐个调用 MCP 工具，而是启动既有宿主命令一次完成：
+
+- 读取一个已存在的 Flow（等待完成、读全部页、列文件、完整原件落盘、stdout 只给一条有界摘要）：`.venv/bin/python -m velo_flow --spec /绝对路径/flow-request.json`。宿主不启动/重放/取消采集，不换 source，不重试调用；文件清单不是下载证明。
+- 跨宿主移动文件：`.venv/bin/python -m velo_transfer --spec /绝对路径/transfer-request.json`，沿用原 transfer ID 恢复与固定预算/身份/批准语义。
+
+请求示例、预算与恢复限制见 [AI 宿主工作流](ai-host-workflows.md)。一次 CLI 运行不等于一次后端请求；实际调用数见摘要 `call_counts` 与输出目录 `calls.jsonl`。
+
+### 直接 MCP 工具（交互与高级操作）
+
+下表是逐工具直接调用，适用于交互式查询、启动采集和主动控制这类需要 AI 判断的操作；把”查进度→读结果→列文件”的机械链条留给上面的宿主 CLI。
+
 | 操作 | 工具及注意事项 |
 |---|---|
 | 执行查询 | `run_vql` 接受 `query`，结果有上限；使用明确的查询范围。 |
@@ -86,7 +99,7 @@ Start-Service -Name mcp-velociraptor
 | 单文件或基础 triage | `collect_file` 或 `collect_forensic_triage` 返回 Flow 引用，再沿上述进度、结果和文件流程读取。 |
 | 主动结束工作 | 按实际需要调用 `cancel_flow`、`stop_hunt`；`stop_hunt` 不取消关联 Flow。`kill_process` 会结束目标进程。 |
 
-例如可以向 MCP 客户端说明：“查询这台 Windows client 的网络连接，返回相关进程与连接信息。”先核对实际目标与返回结果，再开展更重的采集。注册数量、调用返回和实际业务结果分别记录，不把一次返回成功当作所有工具已验证。
+例如可以向 MCP 客户端说明：”查询这台 Windows client 的网络连接，返回相关进程与连接信息。”先核对实际目标与返回结果，再开展更重的采集。注册数量、调用返回和实际业务结果分别记录，不把一次返回成功当作所有工具已验证。
 
 ## 问题处理
 
