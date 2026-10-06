@@ -227,6 +227,7 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import AsyncMock
         from tests import p06_pc026_binding, p06_resource_gate
         import mcp.client.streamable_http as transport
+        import velociraptor_observation_maintenance as maintenance
         import httpx2
         for mode in ('exception','cancel','cancel-preserve','exception-preserve','clock','headers'):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory(dir=os.environ.get('PC020_TEST_TEMP_ROOT')) as tmp:
@@ -247,12 +248,13 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     'executable_sha256':'a'*64}
                 class Header:
                     def __init__(self,*args,**kwargs):
+                        self.request_headers=[];self.response_headers=[];self.original_close=None
                         self.responses=[{'method':'POST','mcp_session_id':'model-session',
                                          'server_instance_id':'local-model'}]
                 class SDK(Session):
                     async def __aenter__(self):return self
                     async def __aexit__(self,*args):pass
-                    async def initialize(self):pass
+                    async def initialize(self):return SimpleNamespace(protocol_version="2025-11-25")
                     async def list_tools(self):
                         tools=[SimpleNamespace(name=n,input_schema={},output_schema=None)
                                for n in ['ok','cleanup',*[f'local{i}' for i in range(135)]]]
@@ -280,8 +282,12 @@ class RunnerLifecycleTests(unittest.IsolatedAsyncioTestCase):
                         (runner,'_p06_coverage',lambda *a:[{}]*129),
                         (runner,'_verify_terminal_flow_classification',lambda *a:None),
                         (runner,'_finalize_report',finalize),
+                        # Failed lifecycle/clock MODEL; public package gates are
+                        # exercised separately against complete source originals.
+                        (runner,'_seal_report',lambda *args:None),
                         (p06_pc026_binding,'load',lambda:admission),
                         (transport,'streamable_http_client',streams),
+                        (maintenance,'_settled_sdk',streams),
                         (httpx2,'AsyncClient',lambda **kw:SimpleNamespace(aclose=AsyncMock())),
                         (p06_resource_gate,'ScenarioResourceGate',lambda *a,**kw:SimpleNamespace(before=AsyncMock(return_value={}))),
                         (p06_resource_gate,'GuestResourceSampler',lambda *a:None),

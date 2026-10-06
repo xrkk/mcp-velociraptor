@@ -1062,7 +1062,7 @@ async def run_scenario(
     else:
         report_root = P06_REPORT_ROOT / scenario_id if scenario_id.startswith("p06-") else P05_REPORT_ROOT
     run_dir = report_root / run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
+    _new_current_run(run_dir) if admission is not None else run_dir.mkdir(parents=True, exist_ok=False)
     fixture_path = (Path(fixture_instance) if baseline_mode
                     else (Path(evidence_root) / 'fixture-instance.json'
                           if transport == 'streamable-http' and evidence_root else FIXTURE_INSTANCE_PATH))
@@ -1127,6 +1127,7 @@ async def run_scenario(
     stderr_path = Path(stderr_file.name)
     capture: HttpHeaderCapture | None = None
     body_capture = None
+    negotiated_protocol = None
     resource_gate = None
     run_clock = None
     pending_base_error = None
@@ -1166,14 +1167,25 @@ async def run_scenario(
                 timeout=60.0,
                 transport=capture,
             )
-            session_context = streamable_http_client(endpoint, http_client=http_client)
+            if admission is not None:
+                from velociraptor_observation_maintenance import _settled_sdk
+                def close_identity():
+                    sid=report['mcp_session']['id']
+                    if sid is None:
+                        sid=next((r['mcp_session_id'] for r in capture.responses
+                            if r['method']=='POST' and r['mcp_session_id']),None)
+                    return sid,negotiated_protocol
+                session_context=_settled_sdk(endpoint,http_client,close_identity,_capture=body_capture)
+            else:
+                session_context = streamable_http_client(endpoint, http_client=http_client)
         from tests.p05_pc026_governance import before_effect
         before_effect()
         async with session_context as (read, write):
             async with ClientSession(read, write) as session:
                 report["mcp_session"]["initialized_at"] = utc_now()
                 before_effect()
-                await session.initialize()
+                initialized = await session.initialize()
+                negotiated_protocol = initialized.protocol_version
                 if transport == "stdio":
                     spawned = direct_child_pids(os.getpid()) - children_before
                     if len(spawned) != 1:
@@ -1412,8 +1424,11 @@ async def run_scenario(
         if admission is not None:
             admission.finish_report(report)
         try:
-            _finalize_report(report, run_dir, evidence_root, run_clock,
-                seal=scenario_id.startswith('p06-') and transport == 'streamable-http', _admission=admission)
+            seal=scenario_id.startswith('p06-') and transport=='streamable-http'
+            if admission is not None:
+                await _finalize_current(report,run_dir,evidence_root,run_clock,capture,admission,seal=seal)
+            else:
+                _finalize_report(report,run_dir,evidence_root,run_clock,seal=seal)
         except BaseException as preservation_error:
             primary = (pending_base_error or pending_primary_error) if admission is not None else None
             if primary is not None:
