@@ -13356,6 +13356,14 @@ versions of this content might address this gap.
 
 ## 7b. 七个传输工具详细接口（2026-10-01 增量，取自 .232 live 快照）
 
+> 历史资料边界（2026-10-06 注）：本节嵌入的是 2026-10-01 `.232` live tools/list 快照的原文，
+> 例如其 `error.code` 当时是宽松 `pattern`、`result` 为宽泛 object，这不是当前产品的 strict 输出。
+> 当前权威合同是 `velo_transfer/transfer_tools_schema.json`：自 2026-10-06 起该文件以紧凑表示保存，
+> 333 项错误码枚举在每个工具 `oneOf/1/properties/error/properties/code` 处保留字面量，其余 64 处相同
+> 节点用 local `$ref` 指回该锚点；展开后与本节之前的完整旧结构逐项等价。本节历史原文未随产品演进
+> 更新，也不冒称与当前 strict 合同等价；调用前以目标实例 tools/list 实际返回为准。本文不再复制一份
+> 巨型展开 schema。
+
 ### transfer_abort
 
 Local guest transfer abort

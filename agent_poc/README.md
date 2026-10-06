@@ -43,7 +43,13 @@ actual application cause. Transfer shutdown still runs on bridge exit.
 
 The formal app uses one actual pinned SDK manager, controller/ledger instance
 and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
-gates. All 137 schemas and seven transfer protocols remain unchanged. Host
+gates. All 137 schemas and seven transfer protocols remain unchanged. The
+seven transfer schemas are now stored compactly in
+`velo_transfer/transfer_tools_schema.json` (2026-10-06): identical repeated
+error-code enums use a local `$ref` back to each tool's own literal anchor, and
+the file expands to the exact previous schema, so SDK registration and
+jsonschema validation see the same full contract while the schema payload sent
+to AI clients shrinks. Host
 verification exercises the production native algorithm with MODEL Windows
 permissions/identities, actual SDK loopback and limited real POSIX file I/O.
 The admitted maintenance API below now exercises complete original acquisition
