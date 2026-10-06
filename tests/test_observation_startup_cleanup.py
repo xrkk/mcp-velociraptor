@@ -26,7 +26,7 @@ class StartupCleanup(unittest.TestCase):
         self.fixture=ApprovedNativeStartup('test_full_fixed_loader_preflight_construct_and_transport_share_one_group_instance')
         self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
         self.fs=self.fixture.fs;self.controller=None;self.group_closes=[]
-        self.config=transport.TransportConfig('http',host='127.0.0.1',port=0,bearer_token='MODEL')
+        self.config=transport.TransportConfig('http',host='127.0.0.1',port=0,bearer_token='MODEL',observation_enabled=True)
         self.server=MCPServer('MODEL-startup-cleanup')
         from velociraptor_observation_config import load_approved
         def load():

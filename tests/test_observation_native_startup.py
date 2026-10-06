@@ -56,7 +56,7 @@ class ApprovedNativeStartup(unittest.TestCase):
         self.assertFalse(controller._exporter._instance_dir)
         server=MCPServer('MODEL-native-entry');server._observation_controller=controller
         with patch.object(gov,'load',side_effect=AssertionError('second group')):
-            app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',bearer_token='MODEL'))
+            app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',bearer_token='MODEL',observation_enabled=True))
         self.assertIs(app.state.observation_controller,controller)
         self.assertIs(app.state.transfer_bindings.manager,controller._manager)
         self.assertEqual(app.state.transfer_bindings.instance,INSTANCE)
@@ -80,7 +80,7 @@ class ApprovedNativeStartup(unittest.TestCase):
                 self.fixture.doc['implementation_freeze_ref']=self.f.refs[gov.FREEZE]
                 self.fixture.doc['archive_config_ref']=self.f.refs[CONFIG];self.fixture.bind()
             before=inventory(self.root)
-            with self.subTest(mode=mode),patch.object(bridge,'resolve_transport_config',return_value=SimpleNamespace(mode='http')),patch.object(bridge,'create_server') as backend,redirect_stderr(StringIO()):
+            with self.subTest(mode=mode),patch.object(bridge,'resolve_transport_config',return_value=SimpleNamespace(mode='http',observation_enabled=True)),patch.object(bridge,'create_server') as backend,redirect_stderr(StringIO()):
                 self.assertEqual(bridge.main(),2);backend.assert_not_called()
             self.assertEqual(inventory(self.root),before);self.assertFalse(self.fs.created);self.assertFalse(self.fs.handles)
             if mode in ('missing','drift'):path.write_bytes(saved)

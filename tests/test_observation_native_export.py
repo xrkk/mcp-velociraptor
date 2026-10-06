@@ -424,7 +424,7 @@ class FormalNativeHTTP(unittest.IsolatedAsyncioTestCase):
         server._observation_controller=controller
         sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen();sock.setblocking(False)
         port=sock.getsockname()[1];url=f'http://127.0.0.1:{port}/mcp'
-        app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',port=port,bearer_token='MODEL'))
+        app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',port=port,bearer_token='MODEL',observation_enabled=True))
         http_server=uvicorn.Server(uvicorn.Config(app,log_level='critical'))
         thread=threading.Thread(target=lambda:http_server.run(sockets=[sock]),daemon=False)
         thread.start()

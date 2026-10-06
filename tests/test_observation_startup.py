@@ -126,7 +126,7 @@ class LifecyclePreflightTests(unittest.TestCase):
 
     def test_production_refuses_model_approval_without_native_platform_and_never_calls_backend_or_sdk_constructor(self):
         from velociraptor_transport import build_formal_http_app, TransportConfig
-        config = TransportConfig('http', host='127.0.0.1', bearer_token='MODEL')
+        config = TransportConfig('http', host='127.0.0.1', bearer_token='MODEL',observation_enabled=True)
         server = Mock()
         before = inventory(self.root)
         with patch.object(gov, 'REPOSITORY', self.root), \
@@ -157,7 +157,7 @@ class LifecyclePreflightTests(unittest.TestCase):
                 self.fixture.bind()
             before = inventory(self.root)
             with patch.object(gov, 'REPOSITORY', self.root), \
-                    patch.object(bridge, 'resolve_transport_config', return_value=SimpleNamespace(mode='http')), \
+                    patch.object(bridge, 'resolve_transport_config', return_value=SimpleNamespace(mode='http',observation_enabled=True)), \
                     patch.object(bridge, 'create_server') as create, \
                     redirect_stderr(StringIO()), self.subTest(failure=failure):
                 self.assertEqual(bridge.main(), 2)

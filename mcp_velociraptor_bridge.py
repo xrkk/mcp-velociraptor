@@ -1,8 +1,8 @@
-"""Velociraptor MCP bridge: single server, dual transport, 136 tools.
+"""Velociraptor MCP bridge: single server, dual transport, 137 tools.
 
 The bridge constructs exactly one MCPServer instance and registers the
-complete 136-tool face (118 dynamic Windows artifacts + 12 fixed lifecycle
-tools + 6 local transfer tools) through it. Both the formal Streamable HTTP entry and the internal
+complete 137-tool face (118 dynamic Windows artifacts + 12 fixed lifecycle
+tools + 7 local transfer tools) through it. Both the formal Streamable HTTP entry and the internal
 testing stdio adapter share this one registration and business implementation.
 """
 
@@ -86,7 +86,7 @@ def main(*, on_ready=None, stop_requested=None, on_failure=None) -> int:
         return 2
 
     controller = None
-    if config.mode == FORMAL_TRANSPORT:
+    if config.mode == FORMAL_TRANSPORT and getattr(config, 'observation_enabled', False):
         try:
             from velociraptor_observation_controller import SessionController
             from velociraptor_transport import new_server_instance_id

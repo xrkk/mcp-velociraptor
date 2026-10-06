@@ -207,18 +207,21 @@ def _service_main(argc: int, argv) -> None:
         # The host can be launched by SCM from System32, where a third-party
         # ``tests`` package must never decide which local observer is loaded.
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        # This wraps only the already-registered SDK POST dispatch after the
-        # SDK's Host/Origin validation.  It adds no endpoint, server, or auth
-        # bypass, and it is installed only after protected-env validation.
-        failure_reason = "SERVICE_OBSERVATION_INVALID"
-        from p05_service_observation import observe_dispatch
+        # The deployment dispatch counter belongs to strict auditing too.
+        # Daily operation does not install a pinned SDK wrapper or write a
+        # synchronous observation file on every POST.
+        import contextlib
+        observation = contextlib.nullcontext()
+        if os.environ.get("VELOCIRAPTOR_MCP_OBSERVATION", "off").strip().lower() == "approved":
+            failure_reason = "SERVICE_OBSERVATION_INVALID"
+            from p05_service_observation import observe_dispatch
+            observation = observe_dispatch(REPO_ROOT / "Logs")
         # Do not persist deployment environment values, including partial
         # credentials. Configuration validation belongs to the shared entry.
-        import contextlib
         # The bridge's diagnostic stream may contain third-party exception
         # text. Do not retain it in memory for the service lifetime or persist
         # it on failure: it is not a credential-safe logging interface.
-        with observe_dispatch(REPO_ROOT / "Logs"):
+        with observation:
             with open(os.devnull, "w", encoding="utf-8") as diagnostic_sink, contextlib.redirect_stderr(diagnostic_sink):
                 failure_reason = "BRIDGE_IMPORT_FAILED"
                 import mcp_velociraptor_bridge as bridge

@@ -1,8 +1,23 @@
 # Velociraptor Agent POC
 
-## Current native archive entry
+## Current HTTP runtime modes
 
-Formal HTTP now constructs `SessionController.open_approved(instance_id)` before
+Daily HTTP defaults to `VELOCIRAPTOR_MCP_OBSERVATION=off`; leaving the variable
+unset has the same effect. The stateful official SDK serves all 137 tools with
+bearer authentication, exact Host/Origin checks, session ownership and binary
+transfer protection. Daily operation does not load archival approval inputs or
+publish observation cuts/archival receipts.
+
+Strict auditing is explicitly selected with
+`VELOCIRAPTOR_MCP_OBSERVATION=approved` in the protected service environment,
+followed by a restart. This selects the original approval checks; it does not
+issue approval or bypass the approved Python/SDK/source/storage requirements.
+Invalid values and `approved` with stdio reject configuration. See
+[runtime mode details](../docs/observation-runtime-mode.md).
+
+## Approved native archive entry
+
+When strict auditing is selected, HTTP constructs `SessionController.open_approved(instance_id)` before
 backend RPCs or listening. The fixed governance loader must approve the current
 source/resources, SDK pin, archive/lifecycle inputs and actual private Windows
 root identity plus full SD. Read-only preflight checks every generated absolute
@@ -62,7 +77,7 @@ proof is outside the calibrated acceptance scope. No RSS claim is made.
 
 Component progress notes below preserve earlier implementation stages. Their
 unavailable-exporter and unconditional-startup-refusal statements describe those
-earlier stages; the current fixed construction and remaining gates are above.
+earlier stages; the current opt-in construction and remaining gates are above.
 
 
 TargetContext now emits an exact internal whitelist when a request scope is

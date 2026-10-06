@@ -77,7 +77,7 @@ class MaintenanceHTTP(unittest.IsolatedAsyncioTestCase):
         self.service=service
         self.socket=socket.socket();self.socket.bind(('127.0.0.1',0));self.socket.listen();self.socket.setblocking(False)
         port=self.socket.getsockname()[1];self.url=f'http://127.0.0.1:{port}/mcp'
-        app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',port=port,bearer_token='MODEL'))
+        app=build_formal_http_app(server,TransportConfig('http',host='127.0.0.1',port=port,bearer_token='MODEL',observation_enabled=True))
         self.server=uvicorn.Server(uvicorn.Config(app,log_level='critical'))
         self.thread=threading.Thread(target=lambda:self.server.run(sockets=[self.socket]),daemon=False)
         self.thread.start()

@@ -27,6 +27,7 @@ PORT_ENV = "VELOCIRAPTOR_MCP_PORT"
 PATH_ENV = "VELOCIRAPTOR_MCP_PATH"
 TOKEN_ENV = "VELOCIRAPTOR_MCP_BEARER_TOKEN"
 ALLOWED_ORIGINS_ENV = "VELOCIRAPTOR_MCP_ALLOWED_ORIGINS"
+OBSERVATION_ENV = "VELOCIRAPTOR_MCP_OBSERVATION"
 
 INSTANCE_HEADER = b"x-mcp-server-instance"
 
@@ -43,6 +44,7 @@ class TransportConfig:
     path: str = FORMAL_PATH
     bearer_token: str | None = None
     allowed_origins: tuple[str, ...] = ()
+    observation_enabled: bool = False
 
 
 def resolve_transport_config(
@@ -58,7 +60,12 @@ def resolve_transport_config(
     """
     source = os.environ if env is None else env
     mode = source.get(TRANSPORT_ENV, TEST_TRANSPORT).strip().lower() or TEST_TRANSPORT
+    observation = source.get(OBSERVATION_ENV, "off").strip().lower()
+    if observation not in {"off", "approved"}:
+        raise TransportConfigError(f"{OBSERVATION_ENV} must be 'off' or 'approved'")
     if mode == TEST_TRANSPORT:
+        if observation == "approved":
+            raise TransportConfigError(f"{OBSERVATION_ENV}=approved requires HTTP transport")
         return TransportConfig(mode=TEST_TRANSPORT)
     if mode != FORMAL_TRANSPORT:
         raise TransportConfigError(
@@ -110,6 +117,7 @@ def resolve_transport_config(
         path=path,
         bearer_token=token,
         allowed_origins=origins,
+        observation_enabled=observation == "approved",
     )
 
 
@@ -264,7 +272,9 @@ class ServerInstanceHeader:
 
 
 def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
-    """One approved ledger/controller and actual pinned SDK manager."""
+    """Stateful HTTP; approved archive construction is explicitly selected."""
+    if not config.observation_enabled:
+        return _build_standard_http_app(server, config)
     from contextlib import asynccontextmanager
     import anyio
     from mcp.server.transport_security import TransportSecuritySettings
@@ -326,8 +336,8 @@ def build_formal_http_app(server: Any, config: TransportConfig) -> Any:
         raise
 
 
-def _build_protocol_http_app(server: Any, config: TransportConfig) -> Any:
-    """Internal protocol-test composition; grants no formal archive authority.
+def _build_standard_http_app(server: Any, config: TransportConfig) -> Any:
+    """Daily HTTP composition; grants no formal archive authority.
 
     The SDK app keeps stateful sessions (``stateless_http=False``) and DNS
     rebinding protection enabled with the exact allowed Host generated from
@@ -371,6 +381,11 @@ def _build_protocol_http_app(server: Any, config: TransportConfig) -> Any:
     return app
 
 
+def _build_protocol_http_app(server: Any, config: TransportConfig) -> Any:
+    """Compatibility entry for protocol fixtures without archive authority."""
+    return _build_standard_http_app(server, config)
+
+
 # Compatibility names for Python tests; production uses context-selected codec.
 from velo_transfer.wire import MAGIC as _VBT_MAGIC, parse as _vbt_parse
 from velo_transfer.http_wire import chunk_endpoint as _chunkbin_endpoint
@@ -390,9 +405,11 @@ def run_formal_http(
     stop_requested: Callable[[], bool] | None = None,
 ) -> None:
     """Serve the formal entry with one process and one worker."""
-    from velociraptor_observation_controller import _approved_controller
-    controller=getattr(server,'_observation_controller',None)
-    if not _approved_controller(controller):controller=None
+    controller=None
+    if config.observation_enabled:
+        from velociraptor_observation_controller import _approved_controller
+        controller=getattr(server,'_observation_controller',None)
+        if not _approved_controller(controller):controller=None
     http_server=None
     try:
         import uvicorn
@@ -409,7 +426,8 @@ def run_formal_http(
                 return await super().on_tick(counter)
 
         app = build_formal_http_app(server, config)
-        controller=app.state.observation_controller
+        if config.observation_enabled:
+            controller=app.state.observation_controller
         http_server = LifecycleServer(
             uvicorn.Config(
                 app,
@@ -422,9 +440,12 @@ def run_formal_http(
         http_server.run()
         # uvicorn reports ASGI startup/shutdown failures and may return without
         # raising them. Preserve the actual error recorded by our lifespan.
-        if controller._startup_error is not None:raise controller._startup_error
+        if controller is not None and controller._startup_error is not None:
+            raise controller._startup_error
         if not http_server.started:
             raise RuntimeError('Formal HTTP startup did not reach readiness')
+        if getattr(getattr(http_server,'lifespan',None),'shutdown_failed',False):
+            raise RuntimeError('Formal HTTP shutdown failed')
     except BaseException as error:
         primary=error
         # Current uvicorn converts a recorded ASGI startup failure into
