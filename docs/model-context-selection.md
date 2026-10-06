@@ -71,11 +71,24 @@ body keeps the original `flow_id` and state, and any other non-empty state is
 reported as `error.code="unknown_flow_state"` with the flow identity instead
 of being promoted. A missing/invalid operation, an empty or non-string
 `flow_id`, or a missing/invalid status stays `protocol_error`; the SDK
-`is_error` flag still wins over any body. The client only applies this
-contract to tools it actually discovered with the matching
-`FlowReferenceResult` output schema (free-form `status`, no `state` field);
-before discovery ran, the body contract alone decides, and fixed tools keep
-their strict envelope under every condition.
+`is_error` flag still wins over any body. Only a tool actually discovered
+(by real SDK `list_tools` pagination) with the matching `FlowReferenceResult`
+output schema — free-form `status`, no `state` field — is ever parsed by this
+contract: before discovery ran, or for a tool outside the discovered set, a
+dynamic-shaped body is a `protocol_error`. Conversely, a discovered dynamic
+tool is bound to its contract alone: fixed success envelopes, transfer
+shapes and legacy text envelopes sent to it are `protocol_error` too, so no
+disguise can bypass the flow identity. Fixed tools keep their strict
+envelope under every condition.
+
+The bounded model view additionally carries the dynamic contract's flow
+identity as budget-protected control metadata (`flow.flow_id` /
+`flow.flow_state`, separate from `tool_ok` and any completion judgement), so
+a recovery reference stays locatable even when the payload is cut for the
+byte budget. An identity field that cannot fit the budget is omitted with an
+explicit `flow_id_omitted`/`flow_state_omitted` marker and
+`view_complete=false` — never string-truncated into another possibly valid
+identity — while the host-side `last_tool_result` keeps the full original.
 
 `client.last_tool_result` holds the full `model_dump(mode="json",
 by_alias=True)` of the **most recent** call only, in memory, cleared before

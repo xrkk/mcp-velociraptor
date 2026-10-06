@@ -158,7 +158,8 @@ class VelociraptorMCPClient:
         # must persist the full original themselves if they need an archive.
         self.last_tool_result: Optional[dict] = None
         # Tool names whose discovered output schema is the dynamic artifact
-        # flow-reference contract; None until real tool discovery ran.
+        # flow-reference contract. None until real tool discovery ran; only
+        # a discovered name is ever parsed by the dynamic contract.
         self.dynamic_flow_tools: Optional[frozenset] = None
         if (not isinstance(model_result_max_bytes, int)
                 or isinstance(model_result_max_bytes, bool)
@@ -346,7 +347,11 @@ class VelociraptorMCPClient:
 
         ``is_error=True`` is checked before every branch (fixed, dynamic,
         transfer, legacy): an SDK error can never be promoted to ok even when
-        the structured body claims transfer success.
+        the structured body claims transfer success. A tool actually
+        discovered as a dynamic artifact tool is then bound to its real
+        contract alone — fixed, transfer and legacy envelopes no longer
+        apply to it, and a dynamic-shaped body is never accepted for a tool
+        that discovery did not classify as dynamic.
         """
         structured = result.structured_content
         if result.is_error:
@@ -354,30 +359,31 @@ class VelociraptorMCPClient:
                 return {"ok": False, "error": structured,
                         "structured_content": structured}
             return {"ok": False, "error": {"code": "protocol_error"}}
+        dynamic_tools = getattr(self, "dynamic_flow_tools", None)
+        discovered_dynamic = (isinstance(dynamic_tools, frozenset)
+                              and tool_name in dynamic_tools)
         if isinstance(structured, dict):
-            if structured.get("schema") == TRANSFER_RESPONSE_SCHEMA:
+            if (not discovered_dynamic
+                    and structured.get("schema") == TRANSFER_RESPONSE_SCHEMA):
                 if structured.get("status") == "success":
                     return {"ok": True, "data": structured.get("result"),
                             "structured_content": structured}
                 return {"ok": False, "error": structured.get("error"),
                         "structured_content": structured}
-            if (structured.get("status") == "success"
+            if (not discovered_dynamic
+                    and structured.get("status") == "success"
                     and structured.get("operation") == tool_name):
                 payload = {"ok": True, "structured_content": structured}
                 payload["data"] = (structured["data"] if "data" in structured
                                    else structured)
                 return payload
-            # Dynamic artifact flow contract, only for tools whose discovered
-            # contract matches (or before discovery ran): the fixed success
-            # envelope above stays authoritative for every fixed tool.
-            dynamic_tools = getattr(self, "dynamic_flow_tools", None)
-            if dynamic_tools is None or tool_name in dynamic_tools:
+            if discovered_dynamic:
                 dynamic_payload = self._dynamic_flow_payload(structured)
                 if dynamic_payload is not None:
                     return dynamic_payload
             return {"ok": False, "error": {"code": "protocol_error"},
                     "structured_content": structured}
-        if not structured and result.content:
+        if not discovered_dynamic and not structured and result.content:
             # Legacy compatibility: only a clear old envelope (a dict with a
             # boolean ok field) is accepted from text content.
             raw_text = "\n".join(
@@ -431,6 +437,47 @@ class VelociraptorMCPClient:
             },
             "structured_content": structured,
         }
+
+    @staticmethod
+    def _flow_reference(structured) -> Optional[dict]:
+        """Extract the dynamic contract's flow identity for the model view.
+
+        Mirrors the dynamic contract entry checks: the same body that
+        ``_dynamic_flow_payload`` would parse yields its real flow_id and
+        original state as view-level control metadata.
+        """
+        if (not isinstance(structured, dict)
+                or structured.get("operation") != DYNAMIC_FLOW_OPERATION):
+            return None
+        flow_id = structured.get("flow_id")
+        status = structured.get("status")
+        if not isinstance(flow_id, str) or not flow_id:
+            return None
+        if not isinstance(status, str) or not status:
+            return None
+        return {"flow_id": flow_id, "flow_state": status}
+
+    @staticmethod
+    def _budgeted_flow(flow, container: dict, limit: int, encoded) -> Optional[dict]:
+        """Fit the flow reference into a bounded view without faking it.
+
+        Oversized identity fields are omitted with explicit markers, never
+        string-truncated into another potentially valid identity; a fitting
+        reference is kept verbatim so recovery stays possible.
+        """
+        if not isinstance(flow, dict):
+            return None
+        flow = dict(flow)
+
+        def fits(candidate) -> bool:
+            return len(encoded(dict(container, flow=candidate))) <= limit
+
+        if fits(flow):
+            return flow
+        reduced = dict(flow, flow_state=None, flow_state_omitted=True)
+        if fits(reduced):
+            return reduced
+        return dict(reduced, flow_id=None, flow_id_omitted=True)
 
     async def call_tool_payload(self, tool_name: str, arguments: dict) -> dict:
         """Execute a tool via MCP and return the structured host payload.
@@ -499,6 +546,12 @@ class VelociraptorMCPClient:
         else:
             view["error"] = None
             view["error_complete"] = None
+        # Budget-protected control metadata, separate from success or
+        # completion judgement: the dynamic contract's real flow identity
+        # stays locatable in the view even when the payload is cut.
+        flow_reference = self._flow_reference(structured)
+        if flow_reference is not None:
+            view["flow"] = flow_reference
         if isinstance(structured, dict):
             raw_source = structured
             view["raw_hash_scope"] = "structured_content"
@@ -609,6 +662,10 @@ class VelociraptorMCPClient:
         elif error is not None:
             fallback["error"] = {"code": "tool_error"}
             fallback["error_code_omitted"] = True
+        # The flow identity is recovery metadata: keep it in the bounded
+        # fallback (omission markers when it alone cannot fit).
+        fallback["flow"] = self._budgeted_flow(
+            view.get("flow"), fallback, limit, encoded)
         if len(encoded(fallback)) <= limit:
             return _bounded_json(fallback)
         return _bounded_json({
