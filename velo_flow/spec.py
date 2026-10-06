@@ -15,6 +15,7 @@ from pathlib import Path
 
 SPEC_SCHEMA = "velo.flow.request.v1"
 SPEC_MAX_BYTES = 65536
+OUTPUT_DIR_MAX_BYTES = 512
 MAX_PATH_CHARS = 4096
 
 REQUIRED_FIELDS = ("schema", "flow_id", "connection_profile", "output_dir", "budget")
@@ -141,10 +142,14 @@ def parse_spec(raw: bytes) -> SpecData:
     if not isinstance(sample_rows, int) or isinstance(sample_rows, bool) or not 0 <= sample_rows <= 10:
         raise SpecError("invalid_sample_rows")
 
+    output_dir = _absolute_path(data["output_dir"], "output_dir")
+    if len(str(output_dir).encode("utf-8")) > OUTPUT_DIR_MAX_BYTES:
+        raise SpecError("invalid_output_dir")
+
     return SpecData(
         flow_id=_text_id(data["flow_id"], "flow_id"),
         connection_profile=_absolute_path(data["connection_profile"], "connection_profile"),
-        output_dir=_absolute_path(data["output_dir"], "output_dir"),
+        output_dir=output_dir,
         source=source,
         page_size=page_size,
         sample_fields=tuple(sample_fields),
@@ -159,8 +164,10 @@ def parse_spec(raw: bytes) -> SpecData:
 
 
 def load_spec(path: str | Path) -> SpecData:
+    """Read at most SPEC_MAX_BYTES+1 bytes; never load an oversized spec fully."""
     try:
-        raw = Path(path).read_bytes()
+        with open(path, "rb") as fh:
+            raw = fh.read(SPEC_MAX_BYTES + 1)
     except OSError:
         raise SpecError("spec_unreadable") from None
     return parse_spec(raw)

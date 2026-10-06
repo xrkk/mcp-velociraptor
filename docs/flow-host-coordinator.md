@@ -62,21 +62,27 @@ before any connection is made. Example with placeholder values:
   `velo.transfer.connection.v1` profile; only its `velo` endpoint is used and
   the bearer token never appears in spec output or logs.
 - `output_dir` (required): absolute path of a directory that does not yet
-  exist; the parent must exist, no ancestor may be a symlink. The directory is
-  created with mode 0700 and every file is written exclusively (never
-  overwritten).
+  exist, encoded in at most 512 UTF-8 bytes; the parent must exist, no
+  ancestor may be a symlink. The directory is created with mode 0700 and every
+  file is written exclusively (never overwritten).
 - `source` (optional): one result source, or `null` for the merged default.
 - `page_size` (optional, default 250, 1..250), `sample_fields` (optional,
   up to 32 field names for the summary projection), `sample_rows` (optional,
   default 10, 0..10).
-- `budget` (optional; every key has the default shown): one monotonic deadline
-  covers connect, initialize, metadata listing, status polling, pages and the
-  file list; each call is additionally bounded by `request_timeout_seconds`.
-  Status polling backs off 1/2/4/8/10 s and stops at `max_status_calls`.
-  `max_result_bytes` bounds `rows.jsonl` (a page that does not fit whole is
-  not partially written), and `max_log_bytes` bounds `calls.jsonl` (a 1 MiB
-  slot is reserved before each call; when no slot is free the run stops
-  instead of calling).
+- `budget` (required as a field; every key inside it has the default shown
+  above): one monotonic deadline covers connect, initialize, metadata
+  listing, status polling, pages and the file list; every await — entry and
+  initialize included — is bounded by exactly
+  `min(remaining_deadline, request_timeout_seconds)` with no grace, and a
+  result arriving after that binding limit is classified as a timeout, never
+  a late success. Status polling backs off 1/2/4/8/10 s and stops at
+  `max_status_calls`. `max_result_bytes` bounds `rows.jsonl` (a page that
+  does not fit whole is not partially written), and `max_log_bytes` bounds
+  `calls.jsonl` (a 1 MiB slot is reserved before each call; when no slot is
+  free the run stops instead of calling).
+
+The spec file itself is read with a bounded 65537-byte read and rejected if
+larger than 65536 bytes; the spec path passed to `--spec` must be absolute.
 
 ## Output directory contents
 
@@ -84,15 +90,24 @@ before any connection is made. Example with placeholder values:
   by the live endpoint, each validated with `Draft202012Validator.check_schema`.
 - `calls.jsonl` — one record per business call: tool name, exact arguments and
   the complete `CallToolResult` (`model_dump(mode="json", by_alias=True)`).
-  Error responses are kept here for diagnosis.
+  Error responses are kept here for diagnosis. If a single record would exceed
+  1 MiB, a bounded omission marker is written stating that raw completeness is
+  unknown and the run stops immediately as `failed`/`raw_record_too_large` —
+  no further business call is made.
 - `rows.jsonl` — the complete result rows, one compact JSON object per line,
   never trimmed by the summary projection.
 - `result.json` — the bounded summary (`velo.flow.result.v1`, at most 16384
   bytes): outcome (`complete`/`partial`/`failed`) and reason, last observed
   state, pages fetched/saved, rows saved, next unread cursor when the run
   stopped early, files count/completeness, call counts, sample rows with an
-  honest omission count, warning counts, file sizes and SHA-256 digests, and a
-  stable error code (never an exception repr).
+  omission count defined as `rows_saved` minus the final sample length (rows
+  kept out by the sample quota, the per-row 4096-byte limit or the total
+  summary limit are each counted exactly once), warning counts, file sizes
+  and SHA-256 digests, and a stable error code (never an exception repr; a
+  server tool error code is quoted verbatim only when non-empty and at most
+  128 UTF-8 bytes, otherwise the stable `tool_error` is used and the full raw
+  value stays in `calls.jsonl`). If the summary cannot fit even after dropping
+  all samples, it is rejected — never returned oversized.
 
 stdout carries exactly one compact summary JSON (at most 4096 bytes); progress
 diagnostics go to stderr with `--debug`. Exit codes: `0` complete, `2`

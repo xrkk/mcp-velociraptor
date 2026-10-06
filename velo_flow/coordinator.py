@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from mcp.types import PaginatedRequestParams
 
 from .spec import SpecData, open_exclusive
 
@@ -29,6 +30,7 @@ LOG_SLOT_RESERVE = 1048576
 RESULT_JSON_LIMIT = 16384
 SAMPLE_ROW_LIMIT = 4096
 STDOUT_LIMIT = 4096
+SUMMARY_CODE_LIMIT = 128
 RESULT_SCHEMA = "velo.flow.result.v1"
 
 
@@ -79,17 +81,22 @@ class OutputSink:
                   "response": response.model_dump(mode="json", by_alias=True)}
         raw = (json.dumps(record, ensure_ascii=False, separators=(",", ":"),
                           allow_nan=False) + "\n").encode("utf-8")
-        if len(raw) > LOG_RECORD_LIMIT:
+        oversized = len(raw) > LOG_RECORD_LIMIT
+        if oversized:
+            # Keep a bounded marker stating the raw completeness is unknown,
+            # then stop the whole run: no further business call may happen.
             marker = {"name": name, "args": args, "response_omitted": True,
-                      "raw_completeness": "unknown", "reason": "record_exceeds_limit"}
+                      "raw_completeness": "unknown", "reason": "raw_record_too_large"}
             raw = (json.dumps(marker, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-            self.calls_complete = False
         try:
             self._calls.write(raw)
         except OSError:
             raise RunStop("failed", "io_error") from None
         self.calls_bytes += len(raw)
         self._calls_sha.update(raw)
+        if oversized:
+            self.calls_complete = False
+            raise RunStop("failed", "raw_record_too_large")
 
     def append_rows_page(self, lines: list[bytes]) -> None:
         try:
@@ -136,7 +143,6 @@ class FlowHostCoordinator:
         self.files_count: int | None = None
         self.files_complete: bool | None = None
         self.sample_rows: list[dict] = []
-        self.sample_omitted_count = 0
         self.last_state: str | None = None
         self._deadline = 0.0
         self._downgrade: tuple[str, str] | None = None
@@ -147,17 +153,21 @@ class FlowHostCoordinator:
         return self._deadline - time.monotonic()
 
     async def _bounded(self, starter):
-        """Await one SDK call under the total deadline and per-request timeout."""
+        """Await one SDK call under exactly min(remaining, request_timeout).
+
+        No grace is added: a result arriving after the binding limit is a
+        timeout, never a late success. Classification compares the original
+        binding limit that was in force when the call started.
+        """
         before = self._remaining()
         if before <= 0:
             raise RunStop("partial", "deadline_exceeded")
         timeout = min(before, self.spec.request_timeout_seconds)
+        deadline_bound = before <= self.spec.request_timeout_seconds
         try:
-            return await asyncio.wait_for(starter(), timeout=timeout + 1.0)
+            return await asyncio.wait_for(starter(), timeout=timeout)
         except asyncio.TimeoutError:
-            # The deadline was the binding limit only when it was at or below
-            # the per-request timeout at call start.
-            if before <= self.spec.request_timeout_seconds + 1.0:
+            if deadline_bound:
                 raise RunStop("partial", "deadline_exceeded") from None
             raise RunStop("failed", "request_timeout") from None
         except RunStop:
@@ -184,7 +194,12 @@ class FlowHostCoordinator:
         if result.is_error:
             payload = result.structured_content
             code = payload.get("code") if isinstance(payload, dict) else None
-            raise RunStop("failed", code if isinstance(code, str) and code else "tool_error")
+            if (isinstance(code, str) and code and
+                    len(code.encode("utf-8")) <= SUMMARY_CODE_LIMIT):
+                raise RunStop("failed", code)
+            # Overlong or missing codes stay stable and bounded here; the full
+            # raw value is preserved in the saved CallToolResult.
+            raise RunStop("failed", "tool_error")
         payload = result.structured_content
         if not isinstance(payload, dict):
             raise RunStop("failed", "protocol_error")
@@ -198,19 +213,29 @@ class FlowHostCoordinator:
     # ---------- phases ----------
 
     async def _load_contract(self, session) -> None:
+        """List tool metadata through the real SDK pagination protocol.
+
+        mcp 2.1.1: ``list_tools(*, params: PaginatedRequestParams | None = None)``
+        with continuation cursors carried in ``params.cursor`` and the next page
+        token read from ``ListToolsResult.next_cursor``.
+        """
         found: dict[str, object] = {}
         cursor = None
         seen_cursors = set()
         for _ in range(LIST_TOOLS_MAX_PAGES):
-            response = await self._bounded(lambda cursor=cursor: session.list_tools(cursor=cursor))
-            tools = getattr(response, "tools", response)
-            for tool in tools:
+            if cursor is None:
+                starter = lambda: session.list_tools()  # noqa: E731
+            else:
+                starter = lambda cursor=cursor: session.list_tools(
+                    params=PaginatedRequestParams(cursor=cursor))
+            response = await self._bounded(starter)
+            for tool in response.tools:
                 if tool.name in found:
                     raise RunStop("failed", "duplicate_tool")
                 found[tool.name] = tool
             if all(name in found for name in REQUIRED_TOOLS):
                 break
-            cursor = getattr(response, "nextCursor", None)
+            cursor = response.next_cursor
             if cursor is None:
                 break
             if cursor in seen_cursors:
@@ -328,10 +353,8 @@ class FlowHostCoordinator:
                 line = json.dumps(projected, ensure_ascii=False, separators=(",", ":"),
                                   allow_nan=False)
             except (TypeError, ValueError):
-                self.sample_omitted_count += 1
                 continue
             if len(line.encode("utf-8")) > SAMPLE_ROW_LIMIT:
-                self.sample_omitted_count += 1
                 continue
             self.sample_rows.append(projected)
 
@@ -351,6 +374,14 @@ class FlowHostCoordinator:
         return RunResult(outcome, reason, outcome == "complete")
 
     def build_summary(self, result: RunResult, file_facts: dict) -> dict:
+        """Assemble the bounded summary or fail closed with a stable code.
+
+        The omission count is always rows_saved minus the final sample length,
+        so rows kept out by the quota, the per-row byte limit or the total
+        summary limit are all counted exactly once. If the summary still
+        exceeds the limit with no sample left, it is rejected — never returned
+        oversized.
+        """
         summary = {
             "schema": RESULT_SCHEMA,
             "outcome": result.outcome,
@@ -368,7 +399,6 @@ class FlowHostCoordinator:
             "call_counts": dict(self.call_counts),
             "complete": result.complete,
             "sample_rows": list(self.sample_rows),
-            "sample_omitted_count": self.sample_omitted_count,
             "warnings_count": self.warnings_count,
             "warnings_source": str(self.sink.calls_path),
             "calls_complete": self.sink.calls_complete,
@@ -376,14 +406,15 @@ class FlowHostCoordinator:
             if result.error_code or result.secondary_code else None,
         }
         summary.update(file_facts)
-        # Keep the summary bounded: drop sample rows first and count them honestly.
-        while len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"),
-                             allow_nan=False).encode("utf-8")) > RESULT_JSON_LIMIT:
+        while True:
+            summary["sample_omitted_count"] = self.rows_saved - len(summary["sample_rows"])
+            encoded = len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"),
+                                     allow_nan=False).encode("utf-8"))
+            if encoded <= RESULT_JSON_LIMIT:
+                return summary
             if not summary["sample_rows"]:
-                break
+                raise RunStop("failed", "summary_overflow")
             summary["sample_rows"].pop()
-            summary["sample_omitted_count"] += 1
-        return summary
 
     def stdout_summary(self, summary: dict, exit_code: int, result_path: str | None) -> dict:
         payload = {

@@ -39,6 +39,10 @@ def _debug(message: str, enabled: bool) -> None:
 
 
 async def execute(spec_path: Path, *, session_factory=None, debug: bool = False) -> int:
+    if not spec_path.is_absolute():
+        _emit({"schema": RESULT_SCHEMA, "outcome": "failed", "reason": "invalid_spec_path",
+               "error": {"code": "invalid_spec_path"}, "exit_code": EXIT_INPUT})
+        return EXIT_INPUT
     try:
         spec = load_spec(spec_path)
     except SpecError as exc:
@@ -68,15 +72,24 @@ async def execute(spec_path: Path, *, session_factory=None, debug: bool = False)
     core = FlowHostCoordinator(spec, sink)
     factory = session_factory or (lambda: transport.open_session(
         endpoint.url, token, spec.request_timeout_seconds))
-    deadline = time.monotonic() + spec.deadline_seconds
+    start = time.monotonic()
+    deadline = start + spec.deadline_seconds
     run_result: RunResult | None = None
     close_error = None
     _debug("connecting", debug)
     try:
         context = factory()
-        session = await asyncio.wait_for(context.__aenter__(), timeout=spec.deadline_seconds)
+        connect_budget = min(deadline - time.monotonic(), spec.request_timeout_seconds)
+        deadline_bound = deadline - time.monotonic() <= spec.request_timeout_seconds
+        session = await asyncio.wait_for(context.__aenter__(), timeout=connect_budget)
     except asyncio.TimeoutError:
-        run_result = RunResult("partial", "deadline_exceeded", False, "deadline_exceeded")
+        # Entry (connect + initialize) follows the same exact minimum of the
+        # remaining deadline and the per-request timeout; classification
+        # compares the original binding limit, with no grace added.
+        if deadline_bound:
+            run_result = RunResult("partial", "deadline_exceeded", False, "deadline_exceeded")
+        else:
+            run_result = RunResult("failed", "request_timeout", False, "request_timeout")
     except RunStop as stop:
         run_result = RunResult(stop.outcome, stop.reason, False, stop.reason)
     except Exception:
@@ -119,7 +132,29 @@ async def execute(spec_path: Path, *, session_factory=None, debug: bool = False)
         with open(sink.result_path, "xb") as fh:
             fh.write(json.dumps(summary, ensure_ascii=False, separators=(",", ":"),
                                 allow_nan=False).encode("utf-8"))
-    except (OSError, RunStop):
+    except RunStop as stop:
+        # A summary that cannot fit even without samples fails closed; the
+        # bounded fallback keeps identity and paths (<=512 UTF8 bytes) and a
+        # stable code (<=128 bytes) instead of returning an oversized document.
+        run_result = RunResult("failed", stop.reason, False, stop.reason)
+        summary = {
+            "schema": RESULT_SCHEMA, "outcome": "failed", "reason": stop.reason,
+            "flow_id": spec.flow_id, "rows_saved": core.rows_saved,
+            "complete": False, "calls_complete": sink.calls_complete,
+            "call_counts": dict(core.call_counts),
+            "calls_path": str(sink.calls_path), "rows_path": str(sink.rows_path),
+        }
+        if len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"),
+                          allow_nan=False).encode("utf-8")) > 16384:
+            summary = {"schema": RESULT_SCHEMA, "outcome": "failed", "reason": stop.reason,
+                       "flow_id": spec.flow_id, "complete": False}
+        try:
+            with open(sink.result_path, "xb") as fh:
+                fh.write(json.dumps(summary, ensure_ascii=False, separators=(",", ":"),
+                                    allow_nan=False).encode("utf-8"))
+        except OSError:
+            result_path = None
+    except OSError:
         run_result = RunResult("failed", "io_error", False, "io_error")
         result_path = None
         try:
