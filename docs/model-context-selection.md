@@ -51,7 +51,7 @@ Chats with no tools still produce plain summaries.
 
 The legacy host interface (`ok`/`data`/`error`) is preserved but now adapts
 the real SDK `CallToolResult`: `structured_content` is authoritative,
-`is_error=True` is never `ok`, fixed/dynamic results require
+`is_error=True` is never `ok`, fixed results require
 `operation == tool_name` and `status == "success"`, and transfer responses
 follow their own `schema`/`status` envelope with `result`/`error` kept whole.
 `data` carries the response's `data` when present, otherwise the full
@@ -61,6 +61,21 @@ accepts a genuine old envelope (a dict with a boolean `ok`); any other text,
 JSON without `ok`, or an operation/status mismatch is `protocol_error`, never
 an implicit success. SDK exceptions surface as the stable `call_failed` code,
 never an exception repr or credential material.
+
+Dynamic Windows artifact tools are parsed by their real contract instead of
+the fixed envelope: they answer with `operation="start_artifact_collection"`
+and the initial Flow state in `status`. `WAITING`/`RUNNING` are accepted
+control outcomes (`ok=true`, the state kept verbatim — never a completion),
+`FINISHED` is the terminal state, `ERROR` is a business failure whose error
+body keeps the original `flow_id` and state, and any other non-empty state is
+reported as `error.code="unknown_flow_state"` with the flow identity instead
+of being promoted. A missing/invalid operation, an empty or non-string
+`flow_id`, or a missing/invalid status stays `protocol_error`; the SDK
+`is_error` flag still wins over any body. The client only applies this
+contract to tools it actually discovered with the matching
+`FlowReferenceResult` output schema (free-form `status`, no `state` field);
+before discovery ran, the body contract alone decides, and fixed tools keep
+their strict envelope under every condition.
 
 `client.last_tool_result` holds the full `model_dump(mode="json",
 by_alias=True)` of the **most recent** call only, in memory, cleared before

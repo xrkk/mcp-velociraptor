@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from mcp.types import CallToolResult, TextContent
+
 from agent_poc.velociraptor_mcp_runtime import (
     VelociraptorMCPClient,
     _azure_openai_base_url,
@@ -17,12 +19,12 @@ class VelociraptorMCPClientRuntimeTests(unittest.TestCase):
             SimpleNamespace(
                 name="windows_pslist",
                 description="processes",
-                inputSchema={"properties": {"client_id": {"type": "string"}}, "required": ["client_id"]},
+                input_schema={"properties": {"client_id": {"type": "string"}}, "required": ["client_id"]},
             ),
             SimpleNamespace(
                 name="windows_netstat_enriched",
                 description="network",
-                inputSchema={"properties": {"client_id": {"type": "string"}}, "required": ["client_id"]},
+                input_schema={"properties": {"client_id": {"type": "string"}}, "required": ["client_id"]},
             ),
         ]
 
@@ -31,11 +33,22 @@ class VelociraptorMCPClientRuntimeTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["function"]["name"], "windows_pslist")
 
-    def test_decode_tool_payload_preserves_bridge_envelope(self):
-        payload = VelociraptorMCPClient._decode_tool_payload(
-            '{"ok": true, "data": {"client_id": "C.1234"}}'
+    def test_legacy_text_envelope_preserved_by_host_payload(self):
+        # The old bridge text envelope (a JSON dict with a boolean ok) still
+        # reaches callers through the legacy branch of _host_payload.
+        result = CallToolResult(
+            content=[TextContent(
+                type="text",
+                text='{"ok": true, "data": {"client_id": "C.1234"}}',
+            )],
+            structuredContent=None,
+            isError=False,
         )
-        self.assertEqual(payload, {"ok": True, "data": {"client_id": "C.1234"}})
+        payload = VelociraptorMCPClient(model="fake-model")._host_payload(
+            "legacy_tool", result)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["legacy_envelope"])
+        self.assertEqual(payload["data"], {"client_id": "C.1234"})
 
     def test_model_provider_defaults_to_ollama(self):
         with patch.dict("os.environ", {}, clear=True):

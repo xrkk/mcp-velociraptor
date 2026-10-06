@@ -54,6 +54,42 @@ VIEW_SAMPLE_ROW_LIMIT = 4096
 VIEW_ERROR_CODE_LIMIT = 128
 PAGINATION_KEYS = ("cursor", "next_cursor", "page_size", "returned", "truncated")
 
+# The dynamic Windows artifact tools answer with the fixed operation constant
+# and the real initial Flow state in ``status`` (WAITING/RUNNING/FINISHED/
+# ERROR), not the fixed-tool success envelope.
+DYNAMIC_FLOW_OPERATION = "start_artifact_collection"
+DYNAMIC_FLOW_PENDING_STATES = frozenset({"WAITING", "RUNNING"})
+DYNAMIC_FLOW_FINISHED_STATES = frozenset({"FINISHED"})
+DYNAMIC_FLOW_ERROR_STATES = frozenset({"ERROR"})
+DYNAMIC_FLOW_TOOL_TITLE = "FlowReferenceResult"
+DYNAMIC_FLOW_TOOL_FIELDS = frozenset({"flow_id", "operation", "status", "warnings"})
+
+
+def _is_dynamic_flow_tool_schema(schema) -> bool:
+    """True when a discovered tool's real output schema is the dynamic
+    artifact flow-reference contract.
+
+    The dynamic ``FlowReferenceResult`` output has exactly the four identity
+    fields with a free-form ``status``; every fixed envelope pins
+    ``status`` to ``success`` and carries the initial Flow state in a
+    separate ``state``/``flow_state`` field instead.
+    """
+    if (not isinstance(schema, dict)
+            or schema.get("title") != DYNAMIC_FLOW_TOOL_TITLE):
+        return False
+    properties = schema.get("properties")
+    required = schema.get("required")
+    if (not isinstance(properties, dict)
+            or set(properties) != DYNAMIC_FLOW_TOOL_FIELDS):
+        return False
+    if (not isinstance(required, list)
+            or not {"flow_id", "operation", "status"} <= set(required)):
+        return False
+    status = properties.get("status")
+    if isinstance(status, dict) and ("const" in status or "enum" in status):
+        return False
+    return True
+
 
 def _model_provider() -> str:
     return (
@@ -121,6 +157,9 @@ class VelociraptorMCPClient:
         # Only the most recent CallToolResult is kept here, in memory; callers
         # must persist the full original themselves if they need an archive.
         self.last_tool_result: Optional[dict] = None
+        # Tool names whose discovered output schema is the dynamic artifact
+        # flow-reference contract; None until real tool discovery ran.
+        self.dynamic_flow_tools: Optional[frozenset] = None
         if (not isinstance(model_result_max_bytes, int)
                 or isinstance(model_result_max_bytes, bool)
                 or not 1024 <= model_result_max_bytes <= 65536):
@@ -221,6 +260,10 @@ class VelociraptorMCPClient:
         else:
             raise RuntimeError("tool listing exceeded the bounded page count")
         self.tools = list(tools.values())
+        self.dynamic_flow_tools = frozenset(
+            tool.name for tool in self.tools
+            if _is_dynamic_flow_tool_schema(getattr(tool, "output_schema", None))
+        )
 
     async def disconnect(self):
         """Disconnect from the MCP server."""
@@ -324,6 +367,14 @@ class VelociraptorMCPClient:
                 payload["data"] = (structured["data"] if "data" in structured
                                    else structured)
                 return payload
+            # Dynamic artifact flow contract, only for tools whose discovered
+            # contract matches (or before discovery ran): the fixed success
+            # envelope above stays authoritative for every fixed tool.
+            dynamic_tools = getattr(self, "dynamic_flow_tools", None)
+            if dynamic_tools is None or tool_name in dynamic_tools:
+                dynamic_payload = self._dynamic_flow_payload(structured)
+                if dynamic_payload is not None:
+                    return dynamic_payload
             return {"ok": False, "error": {"code": "protocol_error"},
                     "structured_content": structured}
         if not structured and result.content:
@@ -341,6 +392,45 @@ class VelociraptorMCPClient:
                 return dict(parsed, legacy_envelope=True)
             return {"ok": False, "error": {"code": "protocol_error"}}
         return {"ok": False, "error": {"code": "protocol_error"}}
+
+    @staticmethod
+    def _dynamic_flow_payload(structured: dict) -> Optional[dict]:
+        """Parse the dynamic artifact flow contract; None when not applicable.
+
+        Dynamic Windows artifact tools answer with the fixed operation
+        constant and the real initial Flow state in ``status``. WAITING and
+        RUNNING mean the collection was accepted and is not finished yet;
+        FINISHED is the terminal success state; ERROR is a business failure
+        keeping the original body as the error. Any other non-empty state
+        stays explicitly unknown instead of being promoted. A missing or
+        invalid operation, flow_id or status is not this contract and falls
+        back to the caller's protocol error.
+        """
+        if structured.get("operation") != DYNAMIC_FLOW_OPERATION:
+            return None
+        flow_id = structured.get("flow_id")
+        status = structured.get("status")
+        if not isinstance(flow_id, str) or not flow_id:
+            return None
+        if not isinstance(status, str) or not status:
+            return None
+        if (status in DYNAMIC_FLOW_PENDING_STATES
+                or status in DYNAMIC_FLOW_FINISHED_STATES):
+            return {"ok": True, "data": structured,
+                    "structured_content": structured}
+        if status in DYNAMIC_FLOW_ERROR_STATES:
+            return {"ok": False, "error": structured,
+                    "structured_content": structured}
+        return {
+            "ok": False,
+            "error": {
+                "code": "unknown_flow_state",
+                "operation": DYNAMIC_FLOW_OPERATION,
+                "flow_id": flow_id,
+                "state": status,
+            },
+            "structured_content": structured,
+        }
 
     async def call_tool_payload(self, tool_name: str, arguments: dict) -> dict:
         """Execute a tool via MCP and return the structured host payload.
