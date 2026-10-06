@@ -131,6 +131,9 @@ class ActualIndividual(CurrentHostHTTP):
         self.entry_report=json.loads((self.run/'report.json').read_bytes())
         (evidence/'controller-close-outcomes.json').write_bytes(canonical(dict(
             state=self.controller._state,
+            retained_high_water=self.controller._retained,
+            retained_measured_peak=self.controller._retained_measured_peak,
+            retained_limit=self.controller._limits['max_retained_state_bytes'],
             sessions={sid:row['state'] for sid,row in self.controller._sessions.items()},
             errors={sid:runner._exception_chain(error) for sid,error in self.controller._close_errors.items()})))
         expected=0 if getattr(self,'ENTRY_SUCCESS',True) else 1

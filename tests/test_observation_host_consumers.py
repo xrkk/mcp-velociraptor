@@ -50,7 +50,9 @@ class CurrentHostHTTP(HostHTTP):
         def server_factory(*args,**kwargs):
             server,specs=dynamic_candidate();backend=getattr(self,'backend_factory',FakeBackend)()
             configure=getattr(self,'configure_model_server',None)
-            if configure is not None:configure(server,backend)
+            if configure is not None:
+                configured=configure(server,backend)
+                if configured is not None:specs=configured
             download=None
             if getattr(self,'MODEL_DOWNLOAD_ROOT',False):
                 download=self.root/'fixed-downloads';download.mkdir(mode=0o700)
