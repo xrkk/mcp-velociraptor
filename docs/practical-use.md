@@ -14,7 +14,34 @@ http://<guest-host-only-ip>:28790/mcp
 
 通过客户端的秘密配置提供 `Authorization: Bearer <token>`。使用实际部署时的地址和 token；客户端配置格式以该客户端支持的字段为准。API 凭据留在桥接服务侧，无需交给远端 MCP 客户端。
 
-记录服务实际部署版本，不能把仓库最新提交当作服务当前版本。当前源码的 HTTP 启动在连接后端或监听前检查固定批准来源、SDK 和私有 Windows 归档根；缺失或过期批准会报 `OBSERVATION_STARTUP_REJECTED`。这个错误需要处理实际部署输入，不能通过删除门禁或使用 MODEL 配置解决。
+记录服务实际部署版本，不能把仓库最新提交当作服务当前版本。日常 HTTP 默认 `VELOCIRAPTOR_MCP_OBSERVATION=off`；显式选择 `approved` 严格审计模式时，启动在连接后端或监听前检查固定批准来源、SDK 和私有 Windows 归档根，缺失或过期批准会报 `OBSERVATION_STARTUP_REJECTED`。这个错误需要处理实际部署输入，不能通过删除门禁或使用 MODEL 配置解决。
+
+### Windows 服务启动与保活
+
+正式服务启动文件是仓库根目录的 `velociraptor_windows_service.py`，它沿用已有 `tests/p05_service_host.py` 的 SCM 适配器，再调用同进程的 `mcp_velociraptor_bridge.main`。历史入口放在 `tests` 中是部署验收阶段的文件组织遗留。
+
+已部署服务可在仓库根目录的管理员 PowerShell 中配置和核对：
+
+```powershell
+.\configure_windows_service.ps1 -Mode configure
+.\configure_windows_service.ps1 -Mode verify
+```
+
+配置脚本只修改身份匹配的已有 `mcp-velociraptor` 服务，不安装新服务，也不重启正在运行的服务。正式入口变更后需重启一次使其生效。服务保持专用虚拟账户；启动类型为自动，进程崩溃的 SCM 恢复间隔为 10 秒，所有后续故障继续重启，故障计数 24 小时重置，非零退出恢复标志也开启。正常手动停止由 `mcp-velociraptor-keepalive` 任务在下一次每分钟检查时重新启动；任务也在系统启动时检查，执行者为 SYSTEM。保活仅在服务为自动且已停止时启动它，不处理正在启动、停止中的状态。
+
+计划维护时先关闭保活，再正常停止服务：
+
+```powershell
+Disable-ScheduledTask -TaskName mcp-velociraptor-keepalive
+Stop-Service -Name mcp-velociraptor
+# 完成维护后
+Enable-ScheduledTask -TaskName mcp-velociraptor-keepalive
+Start-Service -Name mcp-velociraptor
+```
+
+把服务启动类型改为手动或禁用也会抑制保活；故障恢复设置独立保留。自动重启会结束当前 MCP 连接，客户端需要建立新会话。SCM 自动启动和任务的开机触发配置不等于已经完成实际整机重启验证。
+
+目前停止命令可能返回 SCM 1061，但服务已正常停止；维护时应检查 `Get-Service mcp-velociraptor` 的实际状态。`.149` 的配置回读、崩溃恢复、正常停止保活及鉴权连接结果见 [服务核验记录](windows-service-verification.md)。
 
 ### 本机进程入口
 

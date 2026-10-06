@@ -1,5 +1,38 @@
 # Velociraptor MCP
 
+## Daily Windows service entry and restart
+
+The formal SCM launch file is `velociraptor_windows_service.py`. It delegates
+to the established `tests/p05_service_host.py` adapter, which runs
+`mcp_velociraptor_bridge.main` in the same process. The historical P05 installer
+still references that adapter directly; the `tests` location came from the
+deployment/acceptance phase, not from a separate test MCP server.
+
+For an already deployed dedicated-account service, run elevated:
+
+```powershell
+.\configure_windows_service.ps1 -Mode configure
+.\configure_windows_service.ps1 -Mode verify
+```
+
+Configuration selects the formal entry and automatic startup, restarts failed
+processes after 10 seconds (all failures; counter reset after 24 hours), and
+enables recovery for nonzero service exits. A SYSTEM scheduled task named
+`mcp-velociraptor-keepalive` checks once per minute and at boot, starting the
+existing service when stopped and still automatic. This also covers a normal
+manual stop, which SCM failure recovery alone does not restart. The bridge
+continues to run as `NT SERVICE\mcp-velociraptor`.
+
+The script verifies existing service identity and protected configuration
+reference without reading secrets, and does not restart an already running
+bridge. Restart the service once to activate a changed launch file. For planned
+maintenance, disable the keepalive task before stopping the service; re-enable
+it and start the service afterward. Alternatively, selecting Manual or Disabled
+startup suppresses keepalive. Current daily settings are separate from the
+historical P05 acceptance procedure below. See
+[operating commands](docs/practical-use.md#windows-服务启动与保活) and the
+[scoped Windows verification record](docs/windows-service-verification.md).
+
 ## Current HTTP runtime modes
 
 Daily HTTP defaults to `VELOCIRAPTOR_MCP_OBSERVATION=off`; leaving the variable
