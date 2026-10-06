@@ -1,0 +1,15 @@
+{
+  "moved_files_verified": 127,
+  "frozen_markdown_verified_unchanged": 17,
+  "handoff_links_verified": 9,
+  "misdated_primary_files": [],
+  "updated_source_paths": [
+    "tests/p05_baseline_adoption.py",
+    "tests/p05_pc020_evidence.py",
+    "tests/p05_pc026_governance.py",
+    "tests/p06_evidence.py",
+    "velociraptor_observation_config.py",
+    "velociraptor_observation_startup.py",
+    "tests/test_p05_pc026_governance.py"
+  ]
+}

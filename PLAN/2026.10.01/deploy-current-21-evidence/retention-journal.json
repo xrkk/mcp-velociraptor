@@ -1,0 +1,54 @@
+{
+  "initialize": {
+    "_meta": null,
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "experimental": {},
+      "logging": {},
+      "prompts": {
+        "listChanged": true
+      },
+      "resources": {
+        "subscribe": false,
+        "listChanged": true
+      },
+      "tools": {
+        "listChanged": true
+      },
+      "completions": null,
+      "extensions": {
+        "io.modelcontextprotocol/ui": {}
+      },
+      "tasks": null
+    },
+    "serverInfo": {
+      "name": "windows-mcp",
+      "title": null,
+      "version": "3.4.7",
+      "description": null,
+      "websiteUrl": null,
+      "icons": null
+    },
+    "instructions": "\nWindows MCP server provides tools to interact directly with the Windows desktop,\nthus enabling to operate the desktop on the user's behalf.\n"
+  },
+  "call": {
+    "_meta": {
+      "fastmcp": {
+        "wrap_result": true
+      }
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Response: {\"phase\": \"ACCEPTED\", \"retention\": {\"reason\": \"User explicitly requested retaining new version and removing our scheduled tasks before snapshot\", \"full_windows_acceptance\": \"FAILED: 644 tests,16 failures,69 errors,25 skipped\", \"scoped_windows_acceptance\": \"78 tests OK\", \"at_guest_utc\": \"2026-09-11T05:21:32.788305+00:00\"}, \"verified_files\": 212}\r\n\nStatus Code: 0",
+        "annotations": null,
+        "_meta": null
+      }
+    ],
+    "structuredContent": {
+      "result": "Response: {\"phase\": \"ACCEPTED\", \"retention\": {\"reason\": \"User explicitly requested retaining new version and removing our scheduled tasks before snapshot\", \"full_windows_acceptance\": \"FAILED: 644 tests,16 failures,69 errors,25 skipped\", \"scoped_windows_acceptance\": \"78 tests OK\", \"at_guest_utc\": \"2026-09-11T05:21:32.788305+00:00\"}, \"verified_files\": 212}\r\n\nStatus Code: 0"
+    },
+    "isError": false,
+    "resultType": "complete"
+  }
+}

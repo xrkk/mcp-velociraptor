@@ -1,0 +1,54 @@
+{
+  "initialize": {
+    "_meta": null,
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "experimental": {},
+      "logging": {},
+      "prompts": {
+        "listChanged": true
+      },
+      "resources": {
+        "subscribe": false,
+        "listChanged": true
+      },
+      "tools": {
+        "listChanged": true
+      },
+      "completions": null,
+      "extensions": {
+        "io.modelcontextprotocol/ui": {}
+      },
+      "tasks": null
+    },
+    "serverInfo": {
+      "name": "windows-mcp",
+      "title": null,
+      "version": "3.4.7",
+      "description": null,
+      "websiteUrl": null,
+      "icons": null
+    },
+    "instructions": "\nWindows MCP server provides tools to interact directly with the Windows desktop,\nthus enabling to operate the desktop on the user's behalf.\n"
+  },
+  "call": {
+    "_meta": {
+      "fastmcp": {
+        "wrap_result": true
+      }
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Response: {\"uuid\":\"55804D56-262E-33B0-9E8F-FA0BB583B865\",\"guest_time\":\"2026-10-01T16:38:58.9741501+08:00\",\"service\":\"Running\",\"own_tasks\":[],\"transfer_policy_present\":true,\"deployment_phase\":\"ACCEPTED\"}\r\n\nStatus Code: 0",
+        "annotations": null,
+        "_meta": null
+      }
+    ],
+    "structuredContent": {
+      "result": "Response: {\"uuid\":\"55804D56-262E-33B0-9E8F-FA0BB583B865\",\"guest_time\":\"2026-10-01T16:38:58.9741501+08:00\",\"service\":\"Running\",\"own_tasks\":[],\"transfer_policy_present\":true,\"deployment_phase\":\"ACCEPTED\"}\r\n\nStatus Code: 0"
+    },
+    "isError": false,
+    "resultType": "complete"
+  }
+}

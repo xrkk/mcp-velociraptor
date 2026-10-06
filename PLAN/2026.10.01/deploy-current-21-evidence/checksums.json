@@ -1,0 +1,9 @@
+{
+  "retain-start.json": "29f99f9c8f1cff152c4c4d3a0d951899ab7a6416e02825616eea4c503ec7f376",
+  "retained-smoke.json": "bcd1600ad9f9e5976c5d2a9c58301e1d67caf8f4af7b7da7c344159c286cefa6",
+  "retention-journal.json": "a82dbe4952f9ff2c93d50089642c127da998d2c96590eee6f385d923214a85e1",
+  "snapshot-completion.log": "e89a500703950ac91c441c13f3a430ae305d4d6ae640e6385d0cf8c14eb65cf7",
+  "snapshot-metadata.vmsd.txt": "91d6afe7527c3d0c51cfa103366e3edd0a01c98590debd4fc28bcd8b0a4e2927",
+  "snapshot-smoke.json": "bcd1600ad9f9e5976c5d2a9c58301e1d67caf8f4af7b7da7c344159c286cefa6",
+  "snapshot-status.json": "c12157d4927a85a1013cc66373602aa143b348a78821fe8ec688622476685c54"
+}

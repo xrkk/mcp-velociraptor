@@ -1,0 +1,116 @@
+{
+  "security": [
+    {
+      "path": "/mcp",
+      "case": "missing_bearer",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "path": "/mcp",
+      "case": "bad_bearer",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "path": "/mcp",
+      "case": "wrong_host",
+      "status": 421,
+      "expected": 421
+    },
+    {
+      "path": "/mcp",
+      "case": "bad_origin",
+      "status": 403,
+      "expected": 403
+    },
+    {
+      "path": "/chunkbin",
+      "case": "missing_bearer",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "path": "/chunkbin",
+      "case": "bad_bearer",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "path": "/chunkbin",
+      "case": "wrong_host",
+      "status": 421,
+      "expected": 421
+    },
+    {
+      "path": "/chunkbin",
+      "case": "bad_origin",
+      "status": 403,
+      "expected": 403
+    }
+  ],
+  "tool_count": 137,
+  "server": {
+    "name": "velociraptor-mcp",
+    "title": null,
+    "version": "",
+    "description": null,
+    "website_url": null,
+    "icons": null
+  },
+  "capabilities": {
+    "_meta": null,
+    "content": [],
+    "structuredContent": {
+      "schema": "velo.transfer.mcp.response.v1",
+      "status": "success",
+      "result": {
+        "schema": "velo.transfer.guest.response.v1",
+        "enabled": true,
+        "protocol_version": "velo.transfer.v1",
+        "build": "guest-engine-v1",
+        "vm_uuid": "55804d56-262e-33b0-9e8f-fa0bb583b865",
+        "boot_identity": "winboot-ddd8b5b7f884a6cf3ba5c8756edd408449157068825a4187121ca70060c0bc8e",
+        "policy_id": "codex-eroot-20261001-a1",
+        "can_read": true,
+        "can_write": true,
+        "read_root_ids": [
+          "d5d9eb8b5ed4109a7b7a52b3ac38cc9b5d6ff85920cfcf5abc2ca8cbc7049a2e"
+        ],
+        "write_root_ids": [
+          "30f1068c55eaaef7f9c670f19fb3876900a825e49b6f38225ea534eb6fe72cb8"
+        ],
+        "default_chunk_bytes": 4096,
+        "limits": {
+          "max_files": 2,
+          "max_package_bytes": 2097152,
+          "max_chunk_bytes": 4096,
+          "min_free_bytes": 0,
+          "max_logical_bytes": 1048576,
+          "max_metadata_bytes": 65536,
+          "max_duration_seconds": 120,
+          "max_state_bytes": 1048576
+        }
+      }
+    },
+    "isError": false,
+    "resultType": "complete"
+  },
+  "vql": {
+    "_meta": null,
+    "content": [],
+    "structuredContent": {
+      "operation": "run_vql",
+      "status": "success",
+      "warnings": [],
+      "data": [
+        {
+          "Acceptance": 1
+        }
+      ],
+      "truncated": false
+    },
+    "isError": false,
+    "resultType": "complete"
+  }
+}

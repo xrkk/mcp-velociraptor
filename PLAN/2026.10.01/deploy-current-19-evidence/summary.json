@@ -1,0 +1,139 @@
+{
+  "head": "18fce616e841bf73b1247607c4e5cf8386d8789a",
+  "role": "deployment-and-acceptance-executor",
+  "authorization": "user explicitly requested current-version VM deployment and Windows acceptance rerun",
+  "vm_ip": "192.168.204.232",
+  "vm_uuid": "55804d56-262e-33b0-9e8f-fa0bb583b865",
+  "windows_mcp": "http://192.168.204.232:28787/mcp",
+  "source_files": 231,
+  "changed_files_including_env": 212,
+  "dependency_lock": "all pinned versions matched",
+  "tools": 137,
+  "security": {
+    "passed": 8,
+    "paths": [
+      "/mcp",
+      "/chunkbin"
+    ]
+  },
+  "transfers": {
+    "push": {
+      "phase": "COMPLETE",
+      "outcome": "complete",
+      "published_ever": true,
+      "destination_verified": true,
+      "cleanup": {
+        "guest": true,
+        "host": true
+      },
+      "channel": "velo",
+      "fallback_reason": null,
+      "result_sha256": "a930d27a23260e92abeee4a92ddd62468cdf12636ae35d97b99a90a0d032127a"
+    },
+    "pull": {
+      "phase": "COMPLETE",
+      "outcome": "complete",
+      "published_ever": true,
+      "destination_verified": true,
+      "cleanup": {
+        "guest": true,
+        "host": true
+      },
+      "channel": "velo",
+      "fallback_reason": null,
+      "result_sha256": "24bde7c63df3c4cf1ae3fdf6e2cc849a069a8ba0ce117bd0a0766b50d073f65a"
+    }
+  },
+  "live_flow": {
+    "vql": {
+      "operation": "run_vql",
+      "status": "success",
+      "warnings": [],
+      "data": [
+        {
+          "Acceptance": 1
+        }
+      ],
+      "truncated": false
+    },
+    "pslist": {
+      "flow_id": "F.DAHO04SOJJRJ2",
+      "state": "FINISHED",
+      "result_rows": 2
+    },
+    "file": {
+      "flow_id": "F.DAHO05T184MHO",
+      "state": "FINISHED",
+      "result_rows": 2
+    },
+    "download": {
+      "size": 47,
+      "local_path": "E:\\VelociraptorMCP\\downloads\\9b63cb042ca974b17b191fd87e86c13ad1ccdc13ae4924af4fb7d0ff3fd04566\\7ca915e5f9bf0ae2710d36564dddda7882bf4968c33a4b3d0461821d32056596\\content.bin",
+      "sha256": "f964f06a95873656cb67476ff6154f7da4949d1f6424a7eaac61cb734fade314"
+    }
+  },
+  "windows_full": {
+    "tests_run": 644,
+    "failures": 16,
+    "errors": 69,
+    "skipped": 25,
+    "seconds": 83.758,
+    "exit_code": 1
+  },
+  "windows_scoped": {
+    "tests_run": 78,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 8.986,
+    "exit_code": 0
+  },
+  "deployment_status": "running-pending-user-retention-decision",
+  "full_acceptance": "not_passed",
+  "auto_review": "Rejected removing 45-minute rollback without explicit user approval; action not executed",
+  "raw_evidence": {
+    "manifest.json": {
+      "path": ".tmp/deploy-current-20261001/manifest.json",
+      "sha256": "ce583be961b8d986b18e92793758d0af3273c21a719fb5d5655b6cc0a85e75d8"
+    },
+    "status1.json": {
+      "path": ".tmp/deploy-current-20261001/status1.json",
+      "sha256": "6ef9d92ea27ca226079905dbb2b5fbc5a7541432d0c01f0a72088a95c26aaa36"
+    },
+    "smoke.json": {
+      "path": ".tmp/deploy-current-20261001/smoke.json",
+      "sha256": "41ccfa41586001d55fccd50faf63e02bab3981d67787961f744ab1bb045e6e26"
+    },
+    "product-tools.json": {
+      "path": ".tmp/deploy-current-20261001/product-tools.json",
+      "sha256": "dbe267d2e6a079987c700f22ad0124c44dd83435b1cda913e4e911b6e5cb7ed4"
+    },
+    "live-flow.json": {
+      "path": ".tmp/deploy-current-20261001/live-flow.json",
+      "sha256": "8c940c33c41ff0be45e7a4f0865babdf698903846b573d15e0fac0330883c4de"
+    },
+    "windows-unittest-log.json": {
+      "path": ".tmp/deploy-current-20261001/windows-unittest-log.json",
+      "sha256": "c51a6e8678e7894f7fa154d01f10b25ab5fcfa33a63cc733a315f6599a8d4a14"
+    },
+    "windows-unittest.log": {
+      "path": ".tmp/deploy-current-20261001/windows-unittest.log",
+      "sha256": "8662e2e29dda68cf63b5b597ff977dd12c8fbad4f850311aadb6b4ae41527cbb"
+    },
+    "scoped-status.json": {
+      "path": ".tmp/deploy-current-20261001/scoped-status.json",
+      "sha256": "431f09d42001ce871409cf655758a98bb19e0bade5b9895149b1f2035f21f92a"
+    },
+    "decision-status.json": {
+      "path": ".tmp/deploy-current-20261001/decision-status.json",
+      "sha256": "6403c0b63d2d3f0825cab0862a5d714e909296f0b2a5d22c7234c2a696d2bb23"
+    },
+    "deploy.py": {
+      "path": ".tmp/deploy-current-20261001/deploy.py",
+      "sha256": "bb7a0f86e4510f3aa8401ad6821a20c864bc46ce98416a663ef7282e0a5a9e2f"
+    },
+    "prepare.ps1": {
+      "path": ".tmp/deploy-current-20261001/prepare.ps1",
+      "sha256": "dcb1e12ddd4765163717fb2c7a8810406be0407592297c15a4ad40d7ae3bf94f"
+    }
+  }
+}

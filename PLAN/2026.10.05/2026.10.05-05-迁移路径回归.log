@@ -1,0 +1,19 @@
+test_actual_installed_sources_versions_signatures_and_protocols (tests.test_observation_startup.InstalledSDKTests.test_actual_installed_sources_versions_signatures_and_protocols) ... ok
+test_actual_version_comparison_rejects_before_source_read (tests.test_observation_startup.InstalledSDKTests.test_actual_version_comparison_rejects_before_source_read) ... ok
+test_changed_pin_never_reads_dependency_sources (tests.test_observation_startup.InstalledSDKTests.test_changed_pin_never_reads_dependency_sources) ... ok
+test_each_actual_source_byte_drift_rejects_with_same_versions (tests.test_observation_startup.InstalledSDKTests.test_each_actual_source_byte_drift_rejects_with_same_versions) ... ok
+test_actual_reader_sd_bound_and_exact_export_reserve_before_sdk_reads (tests.test_observation_startup.LifecyclePreflightTests.test_actual_reader_sd_bound_and_exact_export_reserve_before_sdk_reads) ... ok
+test_config_exact_bindings_and_reserve_boundary (tests.test_observation_startup.LifecyclePreflightTests.test_config_exact_bindings_and_reserve_boundary) ... ok
+test_fixed_production_entry_has_no_override_parameters (tests.test_observation_startup.LifecyclePreflightTests.test_fixed_production_entry_has_no_override_parameters) ... ok
+test_missing_approval_and_illegal_archive_root_reject_before_rpc (tests.test_observation_startup.LifecyclePreflightTests.test_missing_approval_and_illegal_archive_root_reject_before_rpc) ... ok
+test_production_refuses_even_valid_model_graph_and_never_calls_backend_or_sdk_constructor (tests.test_observation_startup.LifecyclePreflightTests.test_production_refuses_even_valid_model_graph_and_never_calls_backend_or_sdk_constructor) ... ok
+test_real_complete_loader_reads_actual_sdk_and_rechecks_without_writer (tests.test_observation_startup.LifecyclePreflightTests.test_real_complete_loader_reads_actual_sdk_and_rechecks_without_writer) ... ok
+test_rebound_omissions_and_cyclic_lifecycle_input_refuse (tests.test_observation_startup.LifecyclePreflightTests.test_rebound_omissions_and_cyclic_lifecycle_input_refuse) ... ok
+test_primary_is_preserved_when_read_only_governance_close_fails (tests.test_observation_startup.StdioAndCloseTests.test_primary_is_preserved_when_read_only_governance_close_fails) ... ok
+test_stdio_never_loads_lifecycle_or_archive (tests.test_observation_startup.StdioAndCloseTests.test_stdio_never_loads_lifecycle_or_archive) ... ok
+test_isolated_actual_imports_and_governance_loading (tests.test_observation_config.ConfigurationGraphTests.test_isolated_actual_imports_and_governance_loading) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 66.842s
+
+OK

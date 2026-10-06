@@ -1,0 +1,2 @@
+2026-10-01T08:40:06.912Z -INFO vmware-vmx 180381 [ws@4413 threadName="vmx"] SnapshotVMXTakeSnapshotComplete: Done with snapshot 'Snapshot 190-velo-mcp-18fce616-新版保留-验收未全通过': 6
+2026-10-01T08:40:06.912Z -INFO vmware-vmx 180381 [ws@4413 threadName="vmx"] Vix: [vmxCommands.c:2882]: VMAutomationCreateSnapshotCallback: Got CreateSnapshot callback, snapshotErr = The operation completed successfully (0:0), UID = 6

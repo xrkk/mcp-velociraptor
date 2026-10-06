@@ -46,12 +46,47 @@ P06/P07
 把要实现 "全部工具或总纲验收通过" 需要做的任务列个单子出来, 写入到目录
 
 
+> 2026.09.24:
 
+写入剩余任务清单: `/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.24/2026.09.24-01-剩余任务清单-实施步骤与验收通过条件.md`
+
+> 2026.09.26:
+
+继续执行
+
+> 2026.09.28:
+
+写入剩余任务清单: `/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.28/2026.09.28-01-任务清单-剩余实施步骤与验收条件.md`
+
+> 2026.09.30:
+
+GLM 执行此清单.
+
+> 2026.10.01:
 
 需求文档路径: `/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-01-需求提炼-mcp-velociraptor全阶段设计.md`
 总纲方案路径: `/home/adminn/projects/mcp-velociraptor/PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发.md`
 
-总纲验收之后要再开一遍需求文档, 找被压缩项
+> 2026.10.05:
+
+剩余任务清单: `/home/adminn/projects/mcp-velociraptor/PLAN/2026.10.05/2026.10.05-01-剩余任务清单与实施验收接续.md`
+
+> 2026.10.06:
+
+根目录下的 velociraptor_observation_xxx.py 是做什么的?
+
+当前工具功能是不是已全部完成只差验收?
+
+发现最近的提交都没有修改核心代码, 而是在围绕着 "测试系统". 评估: 不再处理测试, 对工具进行收尾并投入实际使用, 在实际使用中发现问题再改.
+
+1. `/home/adminn/projects/MalTrace/AI辅助逆向/提示词/工具知识/Velo` 目录下的文件和 `/home/adminn/projects/MalTrace/AI辅助逆向/提示词/样本分析任务` 目录下关于 velo 的说明内容, 是否需要更新?
+2. velo-mcp 的功能和 Windows-MCP 是否有重叠?
+
+执行提示词更新.
+然后评估: 节省 AI 调用次数和节省 token 消耗的优化
+
+按功能点、修复点提交所有修改;
+在 .149 上部署当前版本
 
 
 

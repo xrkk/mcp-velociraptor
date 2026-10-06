@@ -1,0 +1,54 @@
+{
+  "initialize": {
+    "_meta": null,
+    "protocolVersion": "2025-11-25",
+    "capabilities": {
+      "experimental": {},
+      "logging": {},
+      "prompts": {
+        "listChanged": true
+      },
+      "resources": {
+        "subscribe": false,
+        "listChanged": true
+      },
+      "tools": {
+        "listChanged": true
+      },
+      "completions": null,
+      "extensions": {
+        "io.modelcontextprotocol/ui": {}
+      },
+      "tasks": null
+    },
+    "serverInfo": {
+      "name": "windows-mcp",
+      "title": null,
+      "version": "3.4.7",
+      "description": null,
+      "websiteUrl": null,
+      "icons": null
+    },
+    "instructions": "\nWindows MCP server provides tools to interact directly with the Windows desktop,\nthus enabling to operate the desktop on the user's behalf.\n"
+  },
+  "call": {
+    "_meta": {
+      "fastmcp": {
+        "wrap_result": true
+      }
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Response: frozen deployment verified\r\n{\"removed\":[\"VeloCodexRollback20261001A1\",\"VeloCodexDeploy20261001A1\",\"VeloCodexTests20261001A1\",\"VeloCodexTests20261001A2\",\"VeloCodexScoped20261001A1\"],\"service\":\"Running\",\"at\":\"2026-09-11T05:17:10.1171206+00:00\"}\r\n\nStatus Code: 0",
+        "annotations": null,
+        "_meta": null
+      }
+    ],
+    "structuredContent": {
+      "result": "Response: frozen deployment verified\r\n{\"removed\":[\"VeloCodexRollback20261001A1\",\"VeloCodexDeploy20261001A1\",\"VeloCodexTests20261001A1\",\"VeloCodexTests20261001A2\",\"VeloCodexScoped20261001A1\"],\"service\":\"Running\",\"at\":\"2026-09-11T05:17:10.1171206+00:00\"}\r\n\nStatus Code: 0"
+    },
+    "isError": false,
+    "resultType": "complete"
+  }
+}
