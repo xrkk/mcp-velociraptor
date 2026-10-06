@@ -39,18 +39,18 @@ HANDOFF_CONTRACT = BASE + "2026.10.02-06-PC026-P07固定交接读取契约.md"
 HANDOFF_CONTRACT_SHA = "dc3b548d8e2741c5773df669962fdab51af41ca7db204655a3a2302bcf12676c"
 CALL_CLOCK_CONTRACT = BASE + "2026.10.02-07-PC026-P06调用单调钟原件补充.md"
 CALL_CLOCK_CONTRACT_SHA = "b55e5faee6b5b01f7a0d556a131dc77f73fe911c3df0d5042f57bc9a3ccb1f76"
-BODY_CONTRACT = 'PLAN/2026.10.03-01-PC026-原始HTTP消息体捕获接口.md'
+BODY_CONTRACT = 'PLAN/2026.10.03/2026.10.03-01-PC026-原始HTTP消息体捕获接口.md'
 BODY_CONTRACT_SHA = '69349f4a18530ee1bbd32dabcb0a051287442c56fee26968134ba3258fa1790b'
-JOIN_CONTRACT = 'PLAN/2026.10.03-02-PC026-原始MCP调用关联接口.md'
+JOIN_CONTRACT = 'PLAN/2026.10.03/2026.10.03-02-PC026-原始MCP调用关联接口.md'
 JOIN_CONTRACT_SHA = 'b3a8dd1a6e69b838d164a07807e9747e8996bccbe882db55ac7c893af42f0a0a'
-HTTP_BINDING_CONTRACT = 'PLAN/2026.10.03-03-PC026-P06原始消息正式消费接口.md'
+HTTP_BINDING_CONTRACT = 'PLAN/2026.10.03/2026.10.03-03-PC026-P06原始消息正式消费接口.md'
 HTTP_BINDING_CONTRACT_SHA = '15f7ebaf2c2fa552ad91f4baabc69c00d54da308183a09d7d7086cb2c4315cc0'
 RAW_CONTRACTS = ((BODY_CONTRACT,6354,BODY_CONTRACT_SHA),
                  (JOIN_CONTRACT,7359,JOIN_CONTRACT_SHA),
                  (HTTP_BINDING_CONTRACT,7999,HTTP_BINDING_CONTRACT_SHA))
-ARCHIVE_CONTRACT = 'PLAN/2026.10.04-01-PC026-正式归档attempt账契约.md'
+ARCHIVE_CONTRACT = 'PLAN/2026.10.04/2026.10.04-01-PC026-正式归档attempt账契约.md'
 ARCHIVE_CONTRACT_SHA = 'd9ba3b368bc70e300fbead2f4e3ffe7af354158659d450bdae4f485000365ceb'
-LIFECYCLE_CONTRACT = 'PLAN/2026.10.04-02-PC026-归档生命周期与结束消费契约.md'
+LIFECYCLE_CONTRACT = 'PLAN/2026.10.04/2026.10.04-02-PC026-归档生命周期与结束消费契约.md'
 LIFECYCLE_CONTRACT_SHA = 'b739f989632d86fe71084cdbcb2c0291b49198330b69b1595cd171d6e5f5a1d8'
 NORMATIVE = BASE + "pc026-r01/current-normative-inputs-pc026-r01.json"
 NORMATIVE_SHA = "47cbe9278b252b396d7f69a31bec2b4e29c72f2933a7410142735909877484fb"
@@ -101,15 +101,15 @@ RESOURCES = RESOURCES | frozenset({"tests/data/p06_scenario_index.json",
 RESOURCES = RESOURCES | frozenset({ARCHIVE_CONTRACT, LIFECYCLE_CONTRACT,
     'docs/observation-sdk-pin.json', 'docs/observation-sdk-source-map.json',
     'docs/observation-sdk-LICENSE.txt', 'README.md', 'agent_poc/README.md',
-    'PLAN/2026.10.03-08-PC026-观察归档记录格式契约.md',
-    'PLAN/2026.10.03-09-PC026-Windows观察记录发布原语.md',
-    'PLAN/2026.10.03-10-PC026-请求归档写入接缝契约.md',
-    'PLAN/2026.10.03-11-PC026-Windows私有目录分配原语.md'})
+    'PLAN/2026.10.03/2026.10.03-08-PC026-观察归档记录格式契约.md',
+    'PLAN/2026.10.03/2026.10.03-09-PC026-Windows观察记录发布原语.md',
+    'PLAN/2026.10.03/2026.10.03-10-PC026-请求归档写入接缝契约.md',
+    'PLAN/2026.10.03/2026.10.03-11-PC026-Windows私有目录分配原语.md'})
 SOURCE_RESOURCES = frozenset(path for path in RESOURCES
     if path in {LIFECYCLE_CONTRACT, 'docs/observation-sdk-pin.json',
         'docs/observation-sdk-source-map.json', 'docs/observation-sdk-LICENSE.txt',
-        ARCHIVE_CONTRACT, BODY_CONTRACT, JOIN_CONTRACT, HTTP_BINDING_CONTRACT, NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(('PLAN/2026.10.03-08-', 'PLAN/2026.10.03-09-',
-        'PLAN/2026.10.03-10-', 'PLAN/2026.10.03-11-', 'tests/data/', 'tests/scenarios/')))
+        ARCHIVE_CONTRACT, BODY_CONTRACT, JOIN_CONTRACT, HTTP_BINDING_CONTRACT, NATIVE_CONTRACT, HANDOFF_CONTRACT, CALL_CLOCK_CONTRACT} or path.startswith(('PLAN/2026.10.03/2026.10.03-08-', 'PLAN/2026.10.03/2026.10.03-09-',
+        'PLAN/2026.10.03/2026.10.03-10-', 'PLAN/2026.10.03/2026.10.03-11-', 'tests/data/', 'tests/scenarios/')))
 
 # Reviewed local module catalog: omissions cannot be mistaken for installed
 # third-party imports when this reader itself runs in an incomplete tree.

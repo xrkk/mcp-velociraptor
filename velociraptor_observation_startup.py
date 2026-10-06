@@ -10,7 +10,7 @@ from tests import p05_pc026_governance as gov
 from velociraptor_observation_config import load_approved, _close_note
 from velociraptor_observation_sdk import _verify_approved_sdk
 
-CONTRACT = 'PLAN/2026.10.04-02-PC026-归档生命周期与结束消费契约.md'
+CONTRACT = 'PLAN/2026.10.04/2026.10.04-02-PC026-归档生命周期与结束消费契约.md'
 CONTRACT_REF = dict(path=CONTRACT, size=57074,
     sha256='b739f989632d86fe71084cdbcb2c0291b49198330b69b1595cd171d6e5f5a1d8')
 CONFIG = gov.BASE + 'observation-lifecycle-configuration.json'

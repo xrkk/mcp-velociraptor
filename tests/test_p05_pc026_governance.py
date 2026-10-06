@@ -57,8 +57,21 @@ class ApprovalFixture:
             self.copy(gov.REPOSITORY / path, path)
         normative = json.loads((root / gov.NORMATIVE).read_bytes())
         self.normative = {row["path"]: row for row in gov.nested_refs(normative)}
-        for path in self.normative:
-            self.copy(gov.REPOSITORY / path, path)
+        # Historical normative refs keep their original coordinates in the
+        # isolated fixture. Resolve moved source files only through the reviewed
+        # migration inventory and verify the original pinned bytes; production
+        # validators do not gain path aliases.
+        migration = json.loads((gov.REPOSITORY / "PLAN/2026.10.05/2026.10.05-02-PLAN日期迁移映射.json").read_bytes())
+        moved = {row["old_path"]: row for row in migration["moves"]}
+        for path, ref in self.normative.items():
+            source = gov.REPOSITORY / path
+            if not source.exists() and path in moved:
+                row = moved[path]
+                source = gov.REPOSITORY / row["new_path"]
+                data = source.read_bytes()
+                if len(data) != ref["size"] or ev._sha(data) != ref["sha256"]:
+                    raise ValueError("migrated normative source differs from pinned original")
+            self.copy(source, path)
         bootstrap_doc = json.loads((root / gov.BOOTSTRAP).read_bytes())
         self.bootstrap = {row["relative_path"]: {"path": row["relative_path"],
             "size": row["size"], "sha256": row["sha256"]} for row in bootstrap_doc["members"]}

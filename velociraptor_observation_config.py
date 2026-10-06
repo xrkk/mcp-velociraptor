@@ -13,7 +13,7 @@ from velociraptor_observation_archive import ArchiveCodec
 from velociraptor_observation_catalog import CatalogCodec, _exact, _identity, _int
 from velociraptor_observation_namespace import _path
 
-CONTRACT = 'PLAN/2026.10.04-01-PC026-正式归档attempt账契约.md'
+CONTRACT = 'PLAN/2026.10.04/2026.10.04-01-PC026-正式归档attempt账契约.md'
 CONTRACT_REF = dict(path=CONTRACT, size=23088,
     sha256='d9ba3b368bc70e300fbead2f4e3ffe7af354158659d450bdae4f485000365ceb')
 CONFIG = gov.BASE + 'observation-archive-configuration.json'

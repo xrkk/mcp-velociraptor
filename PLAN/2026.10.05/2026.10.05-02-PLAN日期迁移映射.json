@@ -1,0 +1,779 @@
+{
+  "created_at": "2026-10-05T10:29:50.348360+08:00",
+  "rule": "Primary dated Markdown files go to PLAN/YYYY.MM.DD by basename; preserve bytes; frozen pc026-r01 copies stay immutable.",
+  "moves": [
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.02-02-总纲-mcp-velociraptor-Windows-DFIR二次开发-长程执行/2026.09.04-01-自动决策记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-01-自动决策记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 47839,
+      "sha256": "5aef50d71e578748b30edbc1fcc9b131fe54a21e78c84841f6c34672c76b993e"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.03-01-审核处理-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.03/2026.09.03-01-审核处理-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 15166,
+      "sha256": "04b11df43b1fb9e590f593ceaaf5b1e899865cb179be745e1216ebfc579faa75"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-01-实施子方案-P01阶段0真实基线.md",
+      "size": 46989,
+      "sha256": "ed6d9b60148462766df57cdf35ed3ed86ca38c30de6474e67ea001f5b5f3f6cb"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-02-自评-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-02-自评-P01阶段0真实基线.md",
+      "size": 7774,
+      "sha256": "996bef45483b391587c47bb83b350d58c04e0811a23274c2a8ec6b8ab29d816f"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-03-审核-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-03-审核-P01阶段0真实基线.md",
+      "size": 24202,
+      "sha256": "e83bda5b107ab1b11e582789ff6980ab8f1acb732982282358358f61b2c0eb93"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-04-审核处理-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-04-审核处理-P01阶段0真实基线.md",
+      "size": 8788,
+      "sha256": "8abb8983a86f048a5e6f047b0b0c804a0af7d0744f2aa27e6f4df9f0c26badfd"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-05-实施记录-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-05-实施记录-P01阶段0真实基线.md",
+      "size": 22163,
+      "sha256": "219273814caf88947962a0c931039e9607e27c54d082ea60cf122deea3aaba2f"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-06-自评-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-06-自评-P01阶段0真实基线.md",
+      "size": 10098,
+      "sha256": "68ebba66a1634d265dcc2cf549c4c1a9e4ef2e11f95e7a2315c065da76ec058c"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-07-复审-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-07-复审-P01阶段0真实基线.md",
+      "size": 24992,
+      "sha256": "958dc89f56840d1d7d09f654992a7626d0847bb53813460d80718569f3b9642d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.04-08-复审处理-P01阶段0真实基线.md",
+      "new_path": "PLAN/2026.09.04/2026.09.04-08-复审处理-P01阶段0真实基线.md",
+      "size": 8926,
+      "sha256": "2167ec230e1f4a3918acfc659a7d99ea15b3a38f0f72ec4ab2f56da89236fc1e"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-01-阶段0基线报告-mcp-velociraptor-Windows-DFIR.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-01-阶段0基线报告-mcp-velociraptor-Windows-DFIR.md",
+      "size": 16932,
+      "sha256": "9bacb33c1b5e44342f9428402292f2ff03003cfa61d4afd1235e3bed30bef0d2"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-02-实施子方案-P02公共基础与最小测试骨架.md",
+      "size": 48669,
+      "sha256": "bc9dcb0af136d3e762dc114509720f15a1fc9a6102129e877c74fe49842cd90d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-03-自评-P02公共基础与最小测试骨架.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-03-自评-P02公共基础与最小测试骨架.md",
+      "size": 7252,
+      "sha256": "da5db54744753a1da5850b7198c5375130796a662b6f81046a03ee9add417c69"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-04-审核-P02公共基础与最小测试骨架.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-04-审核-P02公共基础与最小测试骨架.md",
+      "size": 25044,
+      "sha256": "8d5a0e8047163c4f003baf64b5eeec8dc05257ec3aeb364c217264d59d0768f2"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-05-审核处理-P02公共基础与最小测试骨架.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-05-审核处理-P02公共基础与最小测试骨架.md",
+      "size": 9423,
+      "sha256": "7cbe77148ea6faaff5b371519a74b922866416baeddcc132a3b7ede53b403f0a"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-06-实施记录-P02公共基础与最小测试骨架.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-06-实施记录-P02公共基础与最小测试骨架.md",
+      "size": 11588,
+      "sha256": "71ef0b409feb279e36579164653a6f1f624ea421f2b95d207b1b8bd9a16d21d9"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-07-实施子方案-P03动态artifact工具.md",
+      "size": 37607,
+      "sha256": "942fcfe69600155dafc5cb706160df97043902ba13a18568fcbd973c8dd6cc13"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-08-自评-P03动态artifact工具.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-08-自评-P03动态artifact工具.md",
+      "size": 7790,
+      "sha256": "212029d481113308d2cf7b0b1d4358312ad56f9e00dfe0eb7ff5de98eebd9199"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-09-审核-P03动态artifact工具.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-09-审核-P03动态artifact工具.md",
+      "size": 16729,
+      "sha256": "5ac0d27e4a391f6bba9b75ba11c0d0063be626d982b341b63a81e631b95bda68"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-10-审核处理-P03动态artifact工具.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-10-审核处理-P03动态artifact工具.md",
+      "size": 8562,
+      "sha256": "8afd3e2a540795fd12af8a9b4b259c15314b6b25b79cf495fa52cadeff43b696"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-11-实施记录-P03动态artifact工具.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-11-实施记录-P03动态artifact工具.md",
+      "size": 11085,
+      "sha256": "b4722c1b366a667f237afd4d8e91722872b2d3c2902998227f3688215a001532"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-12-自评-mcp-velociraptor-Windows-DFIR二次开发-v3.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-12-自评-mcp-velociraptor-Windows-DFIR二次开发-v3.md",
+      "size": 3873,
+      "sha256": "5756496bce90bbf56ef59b4e050ac30538f231126559164c8283f6c81b92ad20"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-13-自评-P03动态artifact工具-v3.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-13-自评-P03动态artifact工具-v3.md",
+      "size": 2334,
+      "sha256": "8dfe050ac96781bf23af609279dc4d63b5099011412d075462831ce77c53a924"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-14-自评-mcp-velociraptor-Windows-DFIR二次开发-v4.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-14-自评-mcp-velociraptor-Windows-DFIR二次开发-v4.md",
+      "size": 4199,
+      "sha256": "3139b295facf0b037e779aa5d5726633f9ec9ecb5ee7c4edc2750f7a81b43151"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-15-实施子方案-P04固定工具与生命周期.md",
+      "size": 47723,
+      "sha256": "7a0fa5cbe9fdd6c5efd497729d146a846e6a621f5893bf6c318cd7652e42f5b1"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-16-自评-P04固定工具与生命周期.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-16-自评-P04固定工具与生命周期.md",
+      "size": 3926,
+      "sha256": "4bacad2e8afb359d03373c8377f6ee721fc4b3506b6b5086478e2e8a7c58160c"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-17-审核-P04固定工具与生命周期.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-17-审核-P04固定工具与生命周期.md",
+      "size": 7347,
+      "sha256": "1371e7ddc41e5382540ba6d3634c3a228ff6ccb36315e570704b845b89248738"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-18-审核处理-P04固定工具与生命周期.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-18-审核处理-P04固定工具与生命周期.md",
+      "size": 7916,
+      "sha256": "61b2ef7de9e133ca926268cca0c3d251f0983e86124feba7c2413741b1e1dd37"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-19-自评-P04固定工具与生命周期-v2.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-19-自评-P04固定工具与生命周期-v2.md",
+      "size": 2626,
+      "sha256": "5cf46b6bb7457aaaa3853a3341be70db1c46d0a4ce8e356ded177a02271fab59"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-20-自评-P04固定工具与生命周期-v3.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-20-自评-P04固定工具与生命周期-v3.md",
+      "size": 3227,
+      "sha256": "cba311e440954800cea06f1f2ec00ea2bb8270afd8b26a61a0c3e8d780036d99"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-21-实施记录-P04固定工具与生命周期.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-21-实施记录-P04固定工具与生命周期.md",
+      "size": 6016,
+      "sha256": "a84df43acc0d4637064d135c3860fe54e4978369ac33f994df7c05465a00ae49"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-22-实施子方案-P05测试数据与情景基础设施.md",
+      "size": 187878,
+      "sha256": "1ec8921dbd03688c07dac3a7b993861f5433c98fd45b2dde3fdb277e5b0b5b54"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-23-自评-P05测试数据与情景基础设施.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-23-自评-P05测试数据与情景基础设施.md",
+      "size": 6130,
+      "sha256": "ce31d619b1d38ac171f2c735e447ce8292ab368e425cc3949bc68a8eb2b95527"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-24-审核-P05测试数据与情景基础设施.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-24-审核-P05测试数据与情景基础设施.md",
+      "size": 27451,
+      "sha256": "17a79fdadcf546bd60d0aeddd30db4aa07becea4d7637ec648ce74177fbb638f"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-25-审核处理-P05测试数据与情景基础设施.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-25-审核处理-P05测试数据与情景基础设施.md",
+      "size": 9697,
+      "sha256": "a54dc74c1f0e6c3e1866bd9b7fddd15da571a0d84203ed6460f186deb804f94a"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-26-自评-P05测试数据与情景基础设施-v1.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-26-自评-P05测试数据与情景基础设施-v1.md",
+      "size": 4279,
+      "sha256": "3e92c02bcbf34402066ff5bbfbde407c82b9d6c9a8accb459fda68c69d19a837"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-27-实施记录-P05测试数据与情景基础设施.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-27-实施记录-P05测试数据与情景基础设施.md",
+      "size": 14706,
+      "sha256": "432c57e59d95974152837f06a05b0d74c087a37c24193704f488ade6784e3fe6"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-28-自评-P05测试数据与情景基础设施-v2.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-28-自评-P05测试数据与情景基础设施-v2.md",
+      "size": 4395,
+      "sha256": "bdea15bdaf968a6d1405e8ae508b87bd2a743f9be549ed20e876fdde14d2b87d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-29-实施子方案-P06逐工具与连续情景全量执行.md",
+      "size": 81029,
+      "sha256": "6f5db453529d3d8b424e9f4d31bbd0b0c7fcd18590ec2aa37c9ef80992bce347"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-30-自评-P06逐工具与连续情景全量执行.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-30-自评-P06逐工具与连续情景全量执行.md",
+      "size": 8727,
+      "sha256": "d70c8a7d12594940f1a2019f413e243c7573397b844004eec09bb5c48b9bb46b"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-31-审核-P06逐工具与连续情景全量执行.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-31-审核-P06逐工具与连续情景全量执行.md",
+      "size": 26675,
+      "sha256": "f5b9355f3047c46ad9a383c9cdcfc28e20685fba18464ad5a74f56382f34445b"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-32-审核处理-P06逐工具与连续情景全量执行.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-32-审核处理-P06逐工具与连续情景全量执行.md",
+      "size": 9739,
+      "sha256": "b98da6adb424967625a9956e8ab3e695ce185cf8e28fe7cafc27f24a8a10c3c0"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-33-自评-P06逐工具与连续情景全量执行-v1.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-33-自评-P06逐工具与连续情景全量执行-v1.md",
+      "size": 6458,
+      "sha256": "98a838970bfb56871367757240ad0a4001ad891110447433c8a94a2e6d869e4f"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-34-自评-P06逐工具与连续情景全量执行-v2.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-34-自评-P06逐工具与连续情景全量执行-v2.md",
+      "size": 4731,
+      "sha256": "0d5d5f042fbb0108958d64da7f0534e7fc30b532193e34a655edc30462ce26b6"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-35-自评-总纲正式28790网络入口回流.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-35-自评-总纲正式28790网络入口回流.md",
+      "size": 8029,
+      "sha256": "d16fc980723ca0bcf84b6f1702669746803de17d6807b2d35a13d357ea053f84"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-36-审核-总纲正式28790网络入口回流.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-36-审核-总纲正式28790网络入口回流.md",
+      "size": 19440,
+      "sha256": "e48baf4f34493b7679b9a591c361fcf45e9debeb7a487ddf4573b0afb4f8b502"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-37-复审处理-总纲正式28790网络入口回流.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-37-复审处理-总纲正式28790网络入口回流.md",
+      "size": 15525,
+      "sha256": "719bb28d7b41e34d3ea42d8327bd07c334df10faaa9cb0db04473f76a7a5ac83"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-38-自评-总纲正式28790网络入口回流-v6.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-38-自评-总纲正式28790网络入口回流-v6.md",
+      "size": 6314,
+      "sha256": "5911333d09806c15ac2bfbcb9e430f3d7de49b8632c7c1a31ee1c74a76a99792"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-39-复审-总纲正式28790网络入口回流-v6.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-39-复审-总纲正式28790网络入口回流-v6.md",
+      "size": 18063,
+      "sha256": "242ed9f152f7d57ba71a33e63e191b64f65a51d8d822bc33ae830853c6167717"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-40-复审处理-总纲网络入口根因修正.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-40-复审处理-总纲网络入口根因修正.md",
+      "size": 8510,
+      "sha256": "5a42624dabfbcff918bf37e14d0636a96d8cd9018362f85a1005a6fc42c4fd4d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-41-自评-总纲网络入口根因修正.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-41-自评-总纲网络入口根因修正.md",
+      "size": 6395,
+      "sha256": "5075951e6a4e1640038c93b04e9d617b9480a7f0eedd3d0305e26ba4f2dc432d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-42-复审-总纲网络入口根因修正.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-42-复审-总纲网络入口根因修正.md",
+      "size": 16818,
+      "sha256": "c22ac31d28bc2c02e9db18bb7849374d9516468bd93e7b356bdde1177a2f6fe3"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.05-43-复审处理-正式28790入口文档回流闭环.md",
+      "new_path": "PLAN/2026.09.05/2026.09.05-43-复审处理-正式28790入口文档回流闭环.md",
+      "size": 14592,
+      "sha256": "29d20ebc5ac62aa71ace2ad8dfd617d9c89bae1c337f26a148d5688c6aa6af6a"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.11-01-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.11/2026.09.11-01-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 13540,
+      "sha256": "b0a880a5d7310f1d0ebc93ea41e9ce2563482460b119bbe5f1f0812d9d1ead0a"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 28764,
+      "sha256": "f0df206a986f3788648833edb74d66e785db4703ecdf74594565522c0004e43f"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-02-实施记录-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-02-实施记录-P07清理与终检.md",
+      "size": 1729,
+      "sha256": "359a5d0e4bb1f96a0436447775827311919cad75d0a73efe8effec82d23d7e99"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-03-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-03-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 4087,
+      "sha256": "3f51393ac0dbd6e928ea9dba80c9e8ac532418ca11e6e84ad942095c3812730d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-04-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-04-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 17310,
+      "sha256": "f29b46fd636357b396dbd2d1e0850d1188e48b60335dd26b145a78350b793339"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-06-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-06-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 4258,
+      "sha256": "68bec78975b73101cc088ab05b9ad5a3368f9b5dc581c504063344646bcbf5e4"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-13-实施子方案-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-13-实施子方案-P07清理与终检.md",
+      "size": 2317,
+      "sha256": "4824e3b0f1daf81c7ade731a3b13f65cebc7f1e013d32fe3200faaf701bb1e3d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-14-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-14-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 16628,
+      "sha256": "1fce48d029b7f2c8d7ec6c81e838e51d552a09184fbf836c92c76c2611c2d8aa"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-15-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-15-总体验收记录-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 3189,
+      "sha256": "046381164c7e9f125519cf32dfd16ed289dd1ac10655b69ac07ab5515d29a570"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-16-总体验收记录-P06正式整场重跑通过.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-16-总体验收记录-P06正式整场重跑通过.md",
+      "size": 6755,
+      "sha256": "4efb2568ee5dce66f9f5c379216479249ea91f89a3d4e177182098745b0f47ed"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-17-定向核验-P06重跑证据-通过.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-17-定向核验-P06重跑证据-通过.md",
+      "size": 2569,
+      "sha256": "c68f84eadd16206fa64e546aa273d7f5eff881655959b2c072573da72c7ac6d2"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-18-实施子方案-P07清理与终检.md",
+      "size": 40223,
+      "sha256": "71e4bf65e9c4223116fa2012fcba5601389e1038e510f2827d0e8fe71bf1cd61"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-19-自评-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-19-自评-P07清理与终检.md",
+      "size": 3114,
+      "sha256": "87bdb5c45fb32301bda74b9cee857274190d84016969a2ddad9a4e51d64e9777"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-20-审核-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-20-审核-P07清理与终检.md",
+      "size": 12558,
+      "sha256": "c7b272e902cc10666c3130101e7f6dd0035f8bd387414a706046141e0b5dd8d4"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-21-总体验收记录-P06差异化五场重跑通过.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-21-总体验收记录-P06差异化五场重跑通过.md",
+      "size": 5321,
+      "sha256": "fb18739e8d7986773bccfc15d3847ff7fac7b8d133f831f9d84d11719366d03d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-22-实施记录-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-22-实施记录-P07清理与终检.md",
+      "size": 3714,
+      "sha256": "3a7d91dbe7a4bece4649ce9305d9c5a5e8fd6bb21e0c1111494ee2fc73c91976"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-23-总体验收记录-最终闭合.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-23-总体验收记录-最终闭合.md",
+      "size": 5173,
+      "sha256": "7049402d49418506cd9c9f0f8d06402ad941eccff695264e3b62e3bd23ee1d9d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.12-24-定向核验-最终闭合-通过.md",
+      "new_path": "PLAN/2026.09.12/2026.09.12-24-定向核验-最终闭合-通过.md",
+      "size": 3231,
+      "sha256": "1debc7698ce37ed3d59c8558ba92613f4478ffd6ec0c3847e90d54d657c32da0"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 16618,
+      "sha256": "ce685c02d79c9c5751225873a9c8bf990d05747d2240a0d02f0eed28e73eeafe"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-02-审核处理-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-02-审核处理-P07清理与终检.md",
+      "size": 4149,
+      "sha256": "3db7b649f380be3ec3a537f2fe9d9b18a17bc9db833f269ab728538e914442f9"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-03-复审-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-03-复审-P07清理与终检.md",
+      "size": 17048,
+      "sha256": "a445493dd2ac397263233759b96a144d82cd69c5d67b5381d755011ae3cbb4c4"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-04-复审-P07清理与终检.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-04-复审-P07清理与终检.md",
+      "size": 9548,
+      "sha256": "c6fa967ea87c4f9c9e9c2c0e0313d4f51b7726b4836054e00340147fdd522778"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-05-总体验收记录-第4轮CHK闭合.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-05-总体验收记录-第4轮CHK闭合.md",
+      "size": 5587,
+      "sha256": "98c5e99501f865791a0fc8db1c89e43474e47eb91902a0ecd446eadb8f8464aa"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-06-定向核验-第4轮CHK闭合-通过.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-06-定向核验-第4轮CHK闭合-通过.md",
+      "size": 3070,
+      "sha256": "d16c854b4e8910d13879535871c78c2b64e71d71c5ba9231e16f7a710f874462"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-07-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-07-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 19809,
+      "sha256": "31db00634ae8276c695cb3bb800486011857bbe7f66f1b1dc2bfb156f524682a"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-08-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-08-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 13369,
+      "sha256": "bbf2a1e791a406e3313dcf90d152a4456131843fe4ccab03c6335049d44b8619"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-09-自评-PLAN-CHANGE-009-010回流.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-09-自评-PLAN-CHANGE-009-010回流.md",
+      "size": 4495,
+      "sha256": "852011157f459292f2e3d6241d507587585f274f103c4f1b23865c25296cc0f5"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-10-技术复核-PLAN-CHANGE-009-010回流.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-10-技术复核-PLAN-CHANGE-009-010回流.md",
+      "size": 9669,
+      "sha256": "cb9ca450faa8309aff6b94d42d33264089fd52ba3c576ef551c7b0294b1e8d51"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-11-自评与复审授权-PLAN-CHANGE-009-010.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-11-自评与复审授权-PLAN-CHANGE-009-010.md",
+      "size": 3318,
+      "sha256": "3cb0b55a39bdba30e882f266c12bbb271f1e8a0668aed5e2f3936f57ef2a7cda"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-12-全面复审-P06-PLAN-CHANGE-009.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-12-全面复审-P06-PLAN-CHANGE-009.md",
+      "size": 7843,
+      "sha256": "3eaaaf12cc239b93a8e6e714ea9c24d0d484ffa1a6fe1688152ef3c59beff320"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-13-全面复审-P07-PLAN-CHANGE-010.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-13-全面复审-P07-PLAN-CHANGE-010.md",
+      "size": 12314,
+      "sha256": "c8b8253e440f85e365314db53ca3289acfa14f24550fd18a03e4481e06d89373"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-14-审核处理与自评-P07-v4及P06封包实现.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-14-审核处理与自评-P07-v4及P06封包实现.md",
+      "size": 3657,
+      "sha256": "3872e0208afab9dc66c5ec3a64ee074710de19678dbc92818b0cff03e1e432da"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-15-定向复审-P07-v4四项修订.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-15-定向复审-P07-v4四项修订.md",
+      "size": 10899,
+      "sha256": "ec128af5d0474a626a45b7fbf590d878a8ceeed90a1007c34c6380b024152dac"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-16-实施进展与阻断-P06-r3及P05恢复前提.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-16-实施进展与阻断-P06-r3及P05恢复前提.md",
+      "size": 8223,
+      "sha256": "50121b4718f30485cb22921fd71718b1dfc480026e87cb44b4a4d5081e166ab7"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-17-PLAN-CHANGE-011-P05恢复基线回流登记.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-17-PLAN-CHANGE-011-P05恢复基线回流登记.md",
+      "size": 5503,
+      "sha256": "12a4f7753df820c8b60b0fe79374ad39088c2b2fea75be863892144e2d9c3400"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-18-实施进展与阻断-P05进程保护及时间同步.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-18-实施进展与阻断-P05进程保护及时间同步.md",
+      "size": 6545,
+      "sha256": "b9f4b2e60ac241f2c85d3015fefeb70751f55cb85aff5e83038104ff5ea61dff"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-19-无人值守职责与自评实施门授权.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-19-无人值守职责与自评实施门授权.md",
+      "size": 3617,
+      "sha256": "e02866908da9eb02ae4cfed673f2b363e1a1ddac77565358acb92b30bb0413eb"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.13-20-主会话自评-PLAN-CHANGE-011及P05至P07承接.md",
+      "new_path": "PLAN/2026.09.13/2026.09.13-20-主会话自评-PLAN-CHANGE-011及P05至P07承接.md",
+      "size": 10888,
+      "sha256": "72ef0dd1f1700ceae2cbc83f23035140b4830114cff38219d164dbef485d6629"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-01-PLAN-CHANGE-012-用户重置唯一187基线.md",
+      "size": 5064,
+      "sha256": "ba6dd213de4e1b892d8a6e8d6e399ac4590a2df03543de3441df6fd691f1a6ee"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-02-实施修复-服务宿主环境日志泄露路径.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-02-实施修复-服务宿主环境日志泄露路径.md",
+      "size": 2565,
+      "sha256": "dab4437ab467c3e558079561c01c46a308ccfb8c393a5b7e379a3d233bb823db"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-03-实施修复候选-P05安装器身份与防火墙.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-03-实施修复候选-P05安装器身份与防火墙.md",
+      "size": 3003,
+      "sha256": "9f9bf3198d51d15a7d1a3cd69a12399047186c0638668433966c30c76d8600ab"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-04-实施修复候选-SCM回调与HTTP生命周期.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-04-实施修复候选-SCM回调与HTTP生命周期.md",
+      "size": 3535,
+      "sha256": "a745a530065427e54f0b3e600f55a4492d71c4da04ab159c2a84dbeb488469fc"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-05-证据更正-Windows隔离测试未派发.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-05-证据更正-Windows隔离测试未派发.md",
+      "size": 2793,
+      "sha256": "88cdbded0de3dc8637e4408fc503a3f9d3e2bb830f41875ac7977e019fdac8da"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-06-实施修复候选-服务错误日志最小化.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-06-实施修复候选-服务错误日志最小化.md",
+      "size": 1962,
+      "sha256": "5b22b562218045d7c89a0714211cf70b9963a7fcdeee1e70573c185415cc11d9"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-07-实施修复候选-服务配置引用失败关闭.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-07-实施修复候选-服务配置引用失败关闭.md",
+      "size": 2090,
+      "sha256": "6c097bf3128ec0b9937ba52f12d9f2315be05962d85e1b36c043d53e687cb482"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-08-执行授权-宿主与目标虚拟机文件互传.md",
+      "size": 2370,
+      "sha256": "f54d5315b13dc1f28d01fafd06c0f4fb5aadfa1bb8f089ca7e934ed6d9055769"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-09-执行调整-分批源码传输与旧基线门禁.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-09-执行调整-分批源码传输与旧基线门禁.md",
+      "size": 2284,
+      "sha256": "1e5d9c8a930f2d2d6a994ec088c37fb5890be003c1e628558c216ab114f1c87e"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-10-方案自评-PLAN-CHANGE-012新基线契约.md",
+      "size": 9011,
+      "sha256": "04529183b2e3be0d9879a8182ed5a37b1330265e5bd93ab141744aa23a96ab4b"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-11-实施自评补充-P05原件解析与Windows首轮纠偏.md",
+      "size": 6130,
+      "sha256": "f63d36bd87680f28edab4a9a3938dc7f50f95f08b06b77cdfdee7ea9dda907c2"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-12-执行交接-velo-mcp剩余七步与验收门.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-12-执行交接-velo-mcp剩余七步与验收门.md",
+      "size": 46766,
+      "sha256": "d0fba7a614f18a7cbf3419fd56e7a888ac87f507df97ceadba076387627a81dc"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-13-实施自评补充-接手执行静态修复与allowlist登记.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-13-实施自评补充-接手执行静态修复与allowlist登记.md",
+      "size": 10963,
+      "sha256": "671cc5ff66a8ce5dacc9f4f58fcb9d3eda55cbb3000e34825763f157939ea3ba"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-14-G0保护门评估-恢复前置证据闭合.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-14-G0保护门评估-恢复前置证据闭合.md",
+      "size": 5918,
+      "sha256": "8de5d8af7e6b420a9e6940371094934a029092421ed3d5bd356d776559465545"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-15-PLAN-CHANGE-013裁决-依赖前驱行恢复可达基线.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-15-PLAN-CHANGE-013裁决-依赖前驱行恢复可达基线.md",
+      "size": 4856,
+      "sha256": "1a29984239a7b9e4617e29ee93776cc9ea74e3e84931b57400c9e7ce101226d8"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.14-16-PLAN-CHANGE-014裁决-移除Velo方案中FakeNetNG撞车网络机制.md",
+      "new_path": "PLAN/2026.09.14/2026.09.14-16-PLAN-CHANGE-014裁决-移除Velo方案中FakeNetNG撞车网络机制.md",
+      "size": 4012,
+      "sha256": "c7230a51871507a29b10184c8a255660bb6798bbc2099ef435e03b6b78b9736e"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.15-01-PLAN-CHANGE-015裁决-PC006防火墙执行-mcpbridge-EXECVE-Origin值.md",
+      "new_path": "PLAN/2026.09.15/2026.09.15-01-PLAN-CHANGE-015裁决-PC006防火墙执行-mcpbridge-EXECVE-Origin值.md",
+      "size": 2316,
+      "sha256": "2f7f9df3585991c1b85eaebf4833bdc87f4e8625b19570543fc16f87256fccf5"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.15-02-PLAN-CHANGE-016候选-188创建原件缺失与激活证据契约裁决.md",
+      "new_path": "PLAN/2026.09.15/2026.09.15-02-PLAN-CHANGE-016候选-188创建原件缺失与激活证据契约裁决.md",
+      "size": 5465,
+      "sha256": "ed35e7c6e98cf44baec0a465839b7b41d42102b0d6e2f35ba6b30b2c892e24bf"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.16-01-实施记录-P06正式全量五场通过.md",
+      "new_path": "PLAN/2026.09.16/2026.09.16-01-实施记录-P06正式全量五场通过.md",
+      "size": 4058,
+      "sha256": "f5658bdca3ea2e9ff330ac7df316302f188632d8e9aa9de9d9d8b58f1a024475"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.16-02-P06-P07-hand-off.md",
+      "new_path": "PLAN/2026.09.16/2026.09.16-02-P06-P07-hand-off.md",
+      "size": 4001,
+      "sha256": "03c2a05ded24503092cc852eb3f0b84546c99dc240a3af27eba36f6cd3ae2568"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.16-03-总体验收记录-mcp-velociraptor全阶段G0-G7.md",
+      "new_path": "PLAN/2026.09.16/2026.09.16-03-总体验收记录-mcp-velociraptor全阶段G0-G7.md",
+      "size": 4477,
+      "sha256": "6a2adf7161588505c2902163682a765b3ebd3a7e575944053df22bded3d20c1d"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.09.16-04-核查-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.09.16/2026.09.16-04-核查-总纲-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 32015,
+      "sha256": "8e4051fb163d8aba78b9580f63991d3190278b076e54be259d0cece3ea1fefa6"
+    },
+    {
+      "old_path": "PLAN/2026.09.02/2026.10.01-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "new_path": "PLAN/2026.10.01/2026.10.01-01-独立核验-mcp-velociraptor-Windows-DFIR二次开发.md",
+      "size": 10496,
+      "sha256": "f010e74b0c956ddea3715ab7f2ee18e2f248ff29143a34472d311ea9ae56cc2e"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-01-PC026-原始HTTP消息体捕获接口.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-01-PC026-原始HTTP消息体捕获接口.md",
+      "size": 6354,
+      "sha256": "69349f4a18530ee1bbd32dabcb0a051287442c56fee26968134ba3258fa1790b"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-02-PC026-原始MCP调用关联接口.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-02-PC026-原始MCP调用关联接口.md",
+      "size": 7359,
+      "sha256": "b3a8dd1a6e69b838d164a07807e9747e8996bccbe882db55ac7c893af42f0a0a"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-03-PC026-P06原始消息正式消费接口.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-03-PC026-P06原始消息正式消费接口.md",
+      "size": 7999,
+      "sha256": "15f7ebaf2c2fa552ad91f4baabc69c00d54da308183a09d7d7086cb2c4315cc0"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-04-PC026-被动观察请求上下文契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-04-PC026-被动观察请求上下文契约.md",
+      "size": 5914,
+      "sha256": "eec377510751341c0764ae7ab4099b3d9c88f38335b5f7751f470aa0d6e88608"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-05-PC026-目标选择被动事实契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-05-PC026-目标选择被动事实契约.md",
+      "size": 4658,
+      "sha256": "8a858aafca20844e9b87bb81d979de2bb6315998ffc176ccb2513f869c8e9226"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-06-PC026-Flow创建被动事实契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-06-PC026-Flow创建被动事实契约.md",
+      "size": 4915,
+      "sha256": "53d568bac46f68e97b79fbe5e67613bdd311642aa1b3b29d021f7441a0ddcec4"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-07-PC026-结果与文件被动事实契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-07-PC026-结果与文件被动事实契约.md",
+      "size": 6043,
+      "sha256": "1f7aac6036db8124c402a158cb0ab8db62f29358d39616218c280b7cc5a355df"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-08-PC026-观察归档记录格式契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-08-PC026-观察归档记录格式契约.md",
+      "size": 5630,
+      "sha256": "460d72887f5bef21889c4d93774f4f627bc844403e86c7a2f046b90a81ea1bb5"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-09-PC026-Windows观察记录发布原语.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-09-PC026-Windows观察记录发布原语.md",
+      "size": 5837,
+      "sha256": "9e80583a025c7048fa5a36ef69768d16516630f166dfbd0974618ed9420fc3fe"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-10-PC026-请求归档写入接缝契约.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-10-PC026-请求归档写入接缝契约.md",
+      "size": 5494,
+      "sha256": "f5dd39c9c40214d92b93e4c3b4dfe73a4d193193c369d235eb3a6694bfabddfe"
+    },
+    {
+      "old_path": "PLAN/2026.10.03-11-PC026-Windows私有目录分配原语.md",
+      "new_path": "PLAN/2026.10.03/2026.10.03-11-PC026-Windows私有目录分配原语.md",
+      "size": 5567,
+      "sha256": "1473da5bd12e66c73239e5dcff4964d2bbe27e7e7315e8821d4d963cc2a913d9"
+    },
+    {
+      "old_path": "PLAN/2026.10.04-01-PC026-正式归档attempt账契约.md",
+      "new_path": "PLAN/2026.10.04/2026.10.04-01-PC026-正式归档attempt账契约.md",
+      "size": 23088,
+      "sha256": "d9ba3b368bc70e300fbead2f4e3ffe7af354158659d450bdae4f485000365ceb"
+    },
+    {
+      "old_path": "PLAN/2026.10.04-02-PC026-归档生命周期与结束消费契约.md",
+      "new_path": "PLAN/2026.10.04/2026.10.04-02-PC026-归档生命周期与结束消费契约.md",
+      "size": 57074,
+      "sha256": "b739f989632d86fe71084cdbcb2c0291b49198330b69b1595cd171d6e5f5a1d8"
+    }
+  ],
+  "updated_source_paths": [
+    "tests/p05_baseline_adoption.py",
+    "tests/p05_pc020_evidence.py",
+    "tests/p05_pc026_governance.py",
+    "tests/p06_evidence.py",
+    "velociraptor_observation_config.py",
+    "velociraptor_observation_startup.py",
+    "tests/test_p05_pc026_governance.py"
+  ],
+  "immutable_copy_root": "PLAN/2026.10.02/pc026-r01",
+  "undated_policy": "Undated overview and provenance files keep existing location; no inferred creation dates."
+}
