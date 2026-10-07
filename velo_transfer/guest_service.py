@@ -27,7 +27,7 @@ from .manifest import (Budget, _no_link, canonical_json, capture_sources, check_
 from .policy import load_policy
 from .protocol import (PROTOCOL_VERSION, GuestTerminal, prepare_receipt, publish_intent,
                        recover_publication, receipt_digest, validate_destination)
-from .storage import TaskStore, _validate_json
+from .storage import TaskStore, _sync_directory, _validate_json
 from .windows_platform import WindowsAclVerifier, observe_windows
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
@@ -311,8 +311,68 @@ class GuestTransferService:
                 "vm_uuid": self.observation.vm_uuid,
                 "boot_identity": self.observation.boot_identity, "vm_epoch": "internal"}
 
-    def _lease(self, store):
-        return store.create(_LEASE_ID, self._lease_binding(), {"active": None})
+    def _check_lease_lock(self, guard):
+        held = os.fstat(guard.fd)
+        info = _no_link(guard.path)
+        if (not stat.S_ISREG(held.st_mode) or info.st_nlink != 1 or
+                (info.st_dev, info.st_ino) != (held.st_dev, held.st_ino)):
+            raise Error("worker_lock_unavailable")
+        if os.name == "nt":
+            if self.acl(guard.path, "lock") is not True:
+                raise Error("windows_acl_not_verified")
+        elif info.st_mode & 0o077:
+            raise Error("insecure_permissions")
+
+    def _lease(self, store, *, root_lease=None):
+        store._require_writer()
+        binding = self._lease_binding()
+        try:
+            return store.load(_LEASE_ID, binding)
+        except Error as exc:
+            if exc.code not in ("task_not_found", "task_binding_conflict"):
+                raise
+        guard = root_lease or RootLease(self.policy.work_root)
+        if root_lease is None:
+            guard.acquire()
+        try:
+            self._check_lease_lock(guard)
+            self._identity()
+            store._require_writer()
+            try:
+                previous = store._read(store._state_path(_LEASE_ID))
+            except Error as exc:
+                if exc.code != "task_not_found":
+                    raise
+                self._check_lease_lock(guard)
+                return store.create(_LEASE_ID, binding, {"active": None})
+            previous = store.load(_LEASE_ID, previous["binding"])
+            old_binding = previous["binding"]
+            expected = {**binding, "boot_identity": old_binding["boot_identity"]}
+            if old_binding != expected:
+                raise Error("task_binding_conflict")
+            _dict(previous["state"], ("active",), "invalid_state")
+            if old_binding == binding:
+                return previous
+            if previous["state"]["active"] is not None:
+                raise Error("worker_result_unknown")
+            path = store._state_path(_LEASE_ID)
+            archive = path.parent / (
+                f"previous-{previous['revision']}-{previous['sha256']}.json")
+            if os.path.lexists(archive):
+                if store._read(archive) != previous:
+                    raise Error("task_binding_conflict")
+            else:
+                self._atomic_sidecar(archive, canonical_json(previous),
+                                     self.policy.limits["max_state_bytes"])
+            _sync_directory(path.parent)
+            envelope, raw = store._encode(_LEASE_ID, binding,
+                previous["revision"] + 1, {"active": None})
+            self._check_lease_lock(guard)
+            store._commit(path, raw, envelope["revision"])
+            return store.load(_LEASE_ID, binding)
+        finally:
+            if root_lease is None:
+                guard.release()
 
     def _check_idle(self, store):
         lease = self._lease(store)
@@ -334,8 +394,10 @@ class GuestTransferService:
                 if exc.code == "worker_busy":
                     raise Error("worker_busy") from None
                 raise
-            probe.release()
-            return store.save(_LEASE_ID, lease["binding"], lease["revision"], {"active": None})
+            try:
+                return store.save(_LEASE_ID, lease["binding"], lease["revision"], {"active": None})
+            finally:
+                probe.release()
         return lease
 
     def transfer_begin(self, request: dict):
@@ -490,7 +552,7 @@ class GuestTransferService:
                 saved = current["owner"]
                 if saved is None or saved["nonce"] != owner["nonce"] or same_process(saved["pid"], saved["birth"]):
                     return
-                lease = self._lease(store)
+                lease = self._lease(store, root_lease=probe)
                 active = lease["state"]["active"]
                 if active is not None:
                     if active["nonce"] != saved["nonce"] or active["transfer_id"] != transfer_id:

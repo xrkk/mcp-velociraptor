@@ -66,6 +66,47 @@ An existing pull manifest can be revalidated and packaged after an interrupted b
 
 Older push `DEST_RELEASED` tombstones written before this field existed return `destination_verification:null`; status cannot manufacture a retroactive post-cleanup observation. A host coordinator must not use such a legacy tombstone as proof of U5 completion. No existing task is migrated or rewritten by this change.
 
+### Internal lease after a guest reboot
+
+Only the reserved `guest-internal-lease` envelope may move to the freshly
+observed boot. Recovery holds both the short store writer lock and the real
+exclusive `.guest-worker.lock` continuously through the fresh identity/binding
+checks, archival, and atomic replacement. The previous envelope must pass the
+ordinary checksum, canonical JSON, permissions/ACL and binding checks, retain
+the same VM UUID and policy ID, and have the exact internal digest/epoch and
+`state={"active":null}`. A different policy/VM, malformed or incomplete state,
+an occupied root lock, or any non-null old active owner is refused. In
+particular, a recycled PID never authorizes killing a process or clearing an
+occupied old-boot lease; such a lease requires separately authorized operational
+reconciliation. No process is terminated by migration.
+
+Before replacement, the exact previous envelope is fsynced to the private
+`tasks/guest-internal-lease/previous-<revision>-<envelope-sha256>.json` file and
+its directory is synced where supported. The new envelope advances the revision
+and changes only the internal binding and empty coordination state. A retry
+after archival but before replacement verifies and reuses that exact archive;
+corrupt or conflicting archives fail closed. Store durability uncertainty stays
+an explicit storage error, never permission to replay business work. Archives
+are evidence and are not automatically removed by transfer cleanup.
+
+Business task envelopes, package bytes, receipts and original boot/epoch/request
+bindings are not migrated. Calls targeting old-boot tasks still fail identity
+checks, including reuse of an old transfer ID with a new request. A new transfer
+requires fresh capabilities, a new transfer ID, and the current boot/epoch.
+Same-boot restart and dead-worker reconciliation keep their existing semantics.
+
+For subsequent native acceptance, deploy this source without clearing tasks,
+complete a benign transfer and retain its state/receipt hashes, confirm the
+internal lease is idle, and reboot through the authorized controller. Query
+capabilities without logging credentials, then start a new benign transfer with
+the observed boot and a new ID. Check the exact archived prior lease, advanced
+internal revision, unchanged old business evidence, successful new transfer,
+and rejection of old-boot resume/ID takeover. Separately verify root-lock
+contention and occupied/corrupt/foreign lease refusal in an isolated protected
+work root; never inject malformed state into live evidence. Windows ACLs, native
+locking/durability and deployment/reboot qualification remain unverified by the
+Linux tests.
+
 ## Validation scope and remaining limits
 
 Linux tests inject a Windows-shaped observation strictly in process and use only benign temporary files. They exercise actual Linux filesystem publication and real owned child processes. Native Windows handle tests are written but skipped on Linux. These tests do not establish Windows ACL/worker behavior on a VM, VM epoch provenance, host global completion, actual 4 GiB transfers, or VM end-to-end acceptance. A forced deadline exits the worker process, leaving a recoverable task error and any already published final directory intact. Deployers must confirm Windows behavior in the later deployment stage.
