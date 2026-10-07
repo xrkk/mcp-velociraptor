@@ -61,6 +61,11 @@ def create_server() -> MCPServer:
         download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
     )
     transfer_service = register_transfer_tools(server)
+    if os.environ.get("VELOCIRAPTOR_LINUX_DOMAIN") == "1":
+        # Opt-in Linux professional domain (LNX-VR); unset keeps the
+        # registry byte-identical for existing (Windows) deployments.
+        from velociraptor_linux_domain import register_linux_domain_tools
+        register_linux_domain_tools(server)
     validate_combined_registry(server, specs, transfer_names=TRANSFER_TOOL_NAMES)
     server._guest_transfer_tools = transfer_service
     return server
