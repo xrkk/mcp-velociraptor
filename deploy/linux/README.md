@@ -17,3 +17,8 @@
   （`velociraptor --api_config /opt/velociraptor/api-access/api_client.yaml query ...`）。
 - 验收：`tests/linux_domain_runner.py`（两次 triage/范围供给/平台路由），
   证据在 MalTrace `.tmp/linux-master-20260930/lnxvr-accept-20261007/`。
+
+
+## 凭据文件说明（2026-10-07 补记）
+
+`server.config.yaml`/`client.config.yaml` 含部署时生成的真实 RSA 私钥，禁止进入 Git；已移出仓库。重建方式：按 deploy-remnux.sh 内注释用 `velociraptor config generate -i` 等命令生成（127.0.0.1 自签、writeback 字段入 Client 节），生成后仅存 /opt/velociraptor（0600）。
