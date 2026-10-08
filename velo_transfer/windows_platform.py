@@ -47,6 +47,10 @@ _READ = 0x0001 | 0x0008 | 0x0080 | 0x00020000 | 0x80000000 | 0x10000000
 _KNOWN = 0x001F01FF | 0xF0000000
 _PRIVATE_KINDS = frozenset(("work", "tasks", "task", "lock", "state", "stage", "parent"))
 _PUBLIC_KINDS = frozenset(("policy", "read_root", "write_root"))
+# A DOS drive root cannot be renamed/deleted as a child directory. Creating
+# siblings there does not authorize replacing a separately private child.
+# Effective DELETE_CHILD or security-control rights still invalidate it.
+_DRIVE_ROOT_REPLACE = 0x0040 | 0x00040000 | 0x00080000 | 0x10000000
 
 
 @dataclass(frozen=True)
@@ -244,7 +248,7 @@ def _decode_ace(raw: bytes) -> Ace:
 
 
 def _evaluate(snapshot: AclSnapshot, kind: str, trusted: frozenset[str]) -> None:
-    if kind not in _PRIVATE_KINDS | _PUBLIC_KINDS | {"ancestor"}:
+    if kind not in _PRIVATE_KINDS | _PUBLIC_KINDS | {"ancestor", "content_drive_root"}:
         raise Error("windows_acl_kind_invalid")
     if (not isinstance(snapshot, AclSnapshot) or snapshot.dacl_present is not True or
             not isinstance(snapshot.aces, tuple) or not snapshot.aces):
@@ -259,6 +263,15 @@ def _evaluate(snapshot: AclSnapshot, kind: str, trusted: frozenset[str]) -> None
         # OWNER RIGHTS applies only to this object's owner, already checked
         # above. Windows adds this ACE to some service-created private dirs.
         if ace.sid in trusted or ace.sid == _OWNER_RIGHTS or ace.ace_type == 1:
+            continue
+        if kind == "content_drive_root":
+            # Inherit-only ACEs do not control the root itself. All actual
+            # descendants are still evaluated, including the private parent
+            # and stage/final; no inherited grant is trusted on their behalf.
+            if ace.flags & 0x08:
+                continue
+            if ace.mask & _DRIVE_ROOT_REPLACE:
+                raise Error("windows_acl_untrusted_write")
             continue
         # Deny ACEs never cancel an untrusted allow. Inherit-only grants are
         # considered too: they may become effective on a new child object.
@@ -430,6 +443,24 @@ def _fingerprint(path: Path) -> tuple[int, int, int, int]:
     return info.st_dev, info.st_ino, info.st_mode, getattr(info, "st_file_attributes", 0)
 
 
+def _is_fixed_volume_root(path: Path) -> bool:
+    """Qualify a real fixed drive root, never a SUBST/UNC/device alias."""
+    raw = str(path)
+    if re.fullmatch(r"[A-Za-z]:\\", raw) is None:
+        return False
+    _require_windows()
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    drive_type = kernel.GetDriveTypeW
+    drive_type.argtypes = [ctypes.c_wchar_p]
+    drive_type.restype = ctypes.c_uint
+    volume_name = kernel.GetVolumeNameForVolumeMountPointW
+    volume_name.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
+    volume_name.restype = ctypes.c_int
+    buffer = ctypes.create_unicode_buffer(64)
+    return (drive_type(raw) == 3 and bool(volume_name(raw, buffer, len(buffer))) and
+            re.fullmatch(r"\\\\\?\\Volume\{[0-9a-fA-F-]{36}\}\\", buffer.value) is not None)
+
+
 class WindowsAclVerifier:
     """Conservative read-only DACL verifier for policy/store/content callbacks."""
 
@@ -465,7 +496,16 @@ class WindowsAclVerifier:
         for item in chain:
             fingerprint = _fingerprint(item)
             snapshot = self._reader(item)
-            _evaluate(snapshot, kind if item == candidate else "ancestor", self._trusted)
+            evaluated_kind = kind if item == candidate else "ancestor"
+            if (item != candidate and kind in ("stage", "parent") and
+                    re.fullmatch(r"[A-Za-z]:\\", str(item)) is not None and
+                    _is_fixed_volume_root(item)):
+                evaluated_kind = "content_drive_root"
+            try:
+                _evaluate(snapshot, evaluated_kind, self._trusted)
+            except Error as exc:
+                raise Error(exc.code, **{**exc.context, "path": str(item),
+                            "requested_path": raw, "acl_kind": evaluated_kind}) from exc
             before.append(fingerprint)
             snapshots.append(snapshot)
         for item, fingerprint, snapshot in zip(chain, before, snapshots):

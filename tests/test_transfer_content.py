@@ -396,6 +396,25 @@ class ContentTests(unittest.TestCase):
         self.assertEqual(caught.exception.context["stage_path"], str(self.dest / failure_name))
         self.assertEqual(list((self.dest / failure_name).iterdir()), [])
 
+    def test_staging_acl_failure_retains_path_and_native_diagnostic(self):
+        def register(*args):
+            raise TransferContentError('windows_acl_untrusted_write',
+                path=str(self.dest), requested_path=str(self.dest / 'new'),
+                acl_kind='parent', winerror=5, os_error='Access is denied.', registered=True)
+        with self.assertRaises(TransferContentError) as caught:
+            prepare_staging(self.dest / 'new', self.dest, self.budget,
+                stage_name='.velo-stage-acl-failure', register_stage=register,
+                verify_windows_acl=lambda path: True)
+        context = caught.exception.context
+        self.assertEqual(context['path'], str(self.dest))
+        self.assertEqual(context['requested_path'], str(self.dest / 'new'))
+        self.assertEqual(context['acl_kind'], 'parent')
+        self.assertEqual(context['winerror'], 5)
+        self.assertEqual(context['os_error'], 'Access is denied.')
+        self.assertFalse(context['registered'])
+        self.assertEqual(context['stage_path'], str(self.dest / '.velo-stage-acl-failure'))
+        self.assertFalse((self.dest / 'new').exists())
+
     def test_space_drop_during_package_and_unpack(self):
         import shutil
         data = os.urandom(2 * BLOCK_SIZE + 123)

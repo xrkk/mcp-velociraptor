@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from velo_transfer.errors import TransferContentError as Error
 from velo_transfer import windows_platform as platform
@@ -89,6 +89,97 @@ class IdentityTests(unittest.TestCase):
         self.assertTrue(all(child.poll() is not None for child in children))
         self.assertTrue(all(child.stdout.closed and child.stderr.closed for child in children))
         print("bounded identity child exit codes:", [child.returncode for child in children])
+
+
+class DriveRootAclTests(unittest.TestCase):
+    def setUp(self):
+        self.drive = PureWindowsPath('C:/')
+        self.parent = self.drive / 'private'
+        self.stage = self.parent / '.velo-stage-test'
+        self.default = platform.AclSnapshot(TRUSTED,
+            (platform.Ace(0, 0, 0x001F01FF, TRUSTED),))
+        self.snapshots = {self.drive: platform.AclSnapshot(TRUSTED, (
+            platform.Ace(0, 0, 0x001301BF, OTHER),
+            platform.Ace(0, 0x0B, 0xE0010000, OTHER),
+            *self.default.aces))}
+        self.verifier = platform.WindowsAclVerifier(
+            _reader=lambda p: self.snapshots.get(p, self.default), _current_sid=CURRENT)
+
+    def verify(self, path, kind):
+        with mock.patch.object(platform, 'Path', PureWindowsPath), mock.patch.object(
+                platform, '_fingerprint', return_value=(1, 2, 3, 0)), mock.patch.object(
+                platform, '_is_fixed_volume_root', return_value=True):
+            return self.verifier(path, kind)
+
+    def assert_rejected(self, path, kind, code='windows_acl_untrusted_write'):
+        with self.assertRaises(Error) as caught:
+            self.verify(path, kind)
+        self.assertEqual(caught.exception.code, code)
+        self.assertEqual(caught.exception.context['requested_path'], str(path))
+        return caught.exception
+
+    def test_private_content_under_standard_drive_root_passes_only_content_gate(self):
+        self.assertIs(self.verify(self.parent, 'parent'), True)
+        self.assertIs(self.verify(self.stage, 'stage'), True)
+        for kind in ('work', 'policy', 'state'):
+            with self.subTest(kind=kind):
+                error = self.assert_rejected(self.stage, kind)
+                self.assertEqual(error.context['path'], str(self.drive))
+        self.assert_rejected(self.drive, 'parent')
+
+    def test_effective_drive_child_delete_or_security_control_is_still_refused(self):
+        for mask in (0x0040, 0x00040000, 0x00080000, 0x10000000):
+            with self.subTest(mask=mask):
+                self.snapshots[self.drive] = platform.AclSnapshot(TRUSTED,
+                    (platform.Ace(0, 0, mask, OTHER), *self.default.aces))
+                error = self.assert_rejected(self.stage, 'stage')
+                self.assertEqual(error.context['path'], str(self.drive))
+        self.snapshots[self.drive] = platform.AclSnapshot(OTHER, self.default.aces)
+        self.assert_rejected(self.stage, 'stage', 'windows_acl_untrusted_owner')
+
+    def test_private_parent_and_intermediate_ancestors_are_not_relaxed(self):
+        for flags, mask, code in ((0, 0x0002, 'windows_acl_untrusted_write'),
+                                 (0x0B, 0x0002, 'windows_acl_untrusted_write'),
+                                 (0, 0x0001, 'windows_acl_untrusted_read')):
+            with self.subTest(flags=flags, mask=mask):
+                self.snapshots[self.parent] = platform.AclSnapshot(TRUSTED,
+                    (platform.Ace(0, flags, mask, OTHER), *self.default.aces))
+                self.assert_rejected(self.parent, 'parent', code)
+                if mask & 0x0002:
+                    self.assert_rejected(self.stage, 'stage', code)
+        self.snapshots.clear()
+        intermediate = self.drive / 'shared'
+        self.snapshots[intermediate] = platform.AclSnapshot(TRUSTED,
+            (platform.Ace(0, 0, 0x0004, OTHER), *self.default.aces))
+        error = self.assert_rejected(intermediate / 'private' / 'stage', 'stage')
+        self.assertEqual(error.context['path'], str(intermediate))
+
+    def test_unqualified_drive_alias_retains_strict_ancestor_gate(self):
+        with mock.patch.object(platform, 'Path', PureWindowsPath), mock.patch.object(
+                platform, '_fingerprint', return_value=(1, 2, 3, 0)), mock.patch.object(
+                platform, '_is_fixed_volume_root', return_value=False):
+            with self.assertRaises(Error) as caught:
+                self.verifier(self.stage, 'stage')
+        self.assertEqual(caught.exception.code, 'windows_acl_untrusted_write')
+        self.assertEqual(caught.exception.context['path'], str(self.drive))
+
+    def test_volume_probe_requires_fixed_mount_manager_volume(self):
+        kernel = mock.Mock()
+        kernel.GetDriveTypeW.return_value = 3
+        def volume_name(path, buffer, size):
+            buffer.value = r'\\?\Volume{12345678-1234-1234-1234-123456789abc}' + '\\'
+            return 1
+        kernel.GetVolumeNameForVolumeMountPointW.side_effect = volume_name
+        with mock.patch.object(platform, '_require_windows'), mock.patch.object(
+                platform.ctypes, 'WinDLL', return_value=kernel, create=True):
+            self.assertTrue(platform._is_fixed_volume_root(self.drive))
+            kernel.GetDriveTypeW.return_value = 4
+            self.assertFalse(platform._is_fixed_volume_root(self.drive))
+            kernel.GetDriveTypeW.return_value = 3
+            kernel.GetVolumeNameForVolumeMountPointW.side_effect = None
+            kernel.GetVolumeNameForVolumeMountPointW.return_value = 0
+            self.assertFalse(platform._is_fixed_volume_root(self.drive))
+        self.assertFalse(platform._is_fixed_volume_root(self.parent))
 
 
 class AclTests(unittest.TestCase):

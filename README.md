@@ -29,6 +29,9 @@ Explicit Windows drive-root policies can authorize all currently accessible
 local filesystems. Read sources, push destinations (`write_roots`) and private
 `work_root` remain separate scopes; see the [subsequent .149 scope record](docs/windows-all-filesystem-read-roots.md).
 
+Private push destinations can pass a qualified fixed-drive-root ancestor without
+weakening their own ACL checks. See [C/E publication and output permissions](docs/windows-content-acl-verification.md).
+
 ## Daily Windows service entry and restart
 
 The formal SCM launch file is `velociraptor_windows_service.py`. It delegates

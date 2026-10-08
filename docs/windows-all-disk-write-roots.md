@@ -1,5 +1,8 @@
 # .149 所有磁盘写入范围与剩余限制
 
+本记录保留扩大配置后首次 C 卷拒绝的历史事实；后续卷根祖先校验调整及
+C/E 实际发布成功见 [内容 ACL 修复验收](windows-content-acl-verification.md)。
+
 用户于 2026-10-08 授权 write_roots 也改为所有磁盘，并要求说明其他限制。
 本次只修改 .149 私有策略的 write_roots；没有修改应用 ACL 门禁、任何已有
 卷/目录/源文件 ACL、read_roots、work_root、预算、身份或服务配置。

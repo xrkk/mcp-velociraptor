@@ -438,7 +438,7 @@ def prepare_staging(destination_directory: str | Path, allowed_root: str | Path,
         if register_stage(str(stage), dict(identity), dict(parent_identity)) is not True:
             raise Error("stage_registration_failed")
     except Error as exc:
-        raise Error(exc.code, **context) from exc
+        raise Error(exc.code, **{**exc.context, **context}) from exc
     except Exception as exc:
         raise Error("stage_registration_failed", **context) from exc
     return {"staging_directory": str(stage), "staging_identity": identity,

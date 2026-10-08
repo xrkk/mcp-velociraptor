@@ -39,6 +39,25 @@ The verifier calls `GetNamedSecurityInfoW` with `OWNER_SECURITY_INFORMATION | DA
 
 Every path component must have a trusted owner and no untrusted *allow* ACE for evidence-changing rights: write/append/create, write EA/attributes, delete child or object, `WRITE_DAC`, `WRITE_OWNER`, `GENERIC_WRITE`, or `GENERIC_ALL`. An untrusted deny ACE does not cancel an untrusted allow. Inheritable and `INHERIT_ONLY` grants are conservatively considered because they can affect new children. For `work`, `tasks`, `task`, `lock`, `state`, `stage`, and `parent`, untrusted read grants also reject. Ordinary untrusted read/traverse grants on ancestors and on the nonsecret policy file do not by themselves reject. The root-chain rule may reject a deployment whose service account or protected system directory owner is outside the trusted SID set; an authorized deployment operator must inspect and explicitly allowlist that owner SID where justified. The adapter never fixes permissions or broadens a service account.
 
+For content `stage`/`parent` checks only, a canonical DOS drive root ancestor
+qualified by `GetDriveTypeW=DRIVE_FIXED` and `GetVolumeNameForVolumeMountPointW`
+uses a narrower replacement-rights check. Its trusted owner, supported ACEs,
+identity/ACL stability and no-reparse checks still apply. Ordinary root sibling
+creation rights do not by themselves reject a separately private child;
+effective untrusted DELETE_CHILD, WRITE_DAC, WRITE_OWNER or GENERIC_ALL still
+reject. Root inherit-only grants do not control the root itself; every actual
+descendant still passes its original gate. Other ancestors, the private parent,
+stage/final and all policy/work/store checks retain their original strict masks.
+The volume-root exception never applies to a candidate root itself, an
+unqualified/SUBST drive or UNC/device alias. This does not allow arbitrary
+ordinary-user-writable destinations or change existing DACLs.
+
+ACL evaluation errors identify the offending `path`, `requested_path` and
+`acl_kind`; stage preparation preserves these alongside its own stage identity
+and registration state, plus any underlying native diagnostic already present.
+See the [native .149 content ACL record](windows-content-acl-verification.md)
+for actual C/E publication, retained refusal and output DACL evidence.
+
 This is a conservative DACL test, not a proof against administrator, owner, same-account hostile mutation, privileges that override DACLs, or ACL races. The content and store still recheck identities at their own action boundaries. Real Windows ACL behavior and power-loss durability require target-side validation.
 
 ## Cross-account output handoff
