@@ -7,7 +7,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PolicyPath,
     [Parameter(Mandatory = $true)]
-    [string]$SourceRoot
+    [string]$SourceRoot,
+    # Limit a production handoff to one completed file/batch and its root chain.
+    [string]$ArtifactPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -91,19 +93,29 @@ if ((Test-Within $work $root.FullName) -or (Test-Within $root.FullName $work) -o
 
 # Check all existing members before changing any ACL; never recurse through a
 # junction. Administrative producers must stay stopped throughout this handoff.
+$selection = if ([string]::IsNullOrEmpty($ArtifactPath)) { $root } else { Get-SafeItem $ArtifactPath }
+Assert-SafeChain $selection.FullName
+if (-not (Test-Within $selection.FullName $root.FullName)) { throw 'ArtifactPath must be within SourceRoot.' }
 $items = [Collections.Generic.List[object]]::new()
+$seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+$parent = if ($selection -is [IO.DirectoryInfo]) { $selection.Parent } else { $selection.Directory }
+while ($null -ne $parent -and (Test-Within $parent.FullName $root.FullName)) {
+    $item = Get-SafeItem $parent.FullName
+    if ($seen.Add($item.FullName)) { $items.Add($item) }
+    $parent = $parent.Parent
+}
 $pending = [Collections.Generic.Stack[object]]::new()
-$pending.Push($root)
+$pending.Push($selection)
 while ($pending.Count -gt 0) {
     $item = Get-SafeItem ($pending.Pop().FullName)
-    $items.Add($item)
-    Assert-NoReadDeny (Get-Acl -LiteralPath $item.FullName) $item.FullName
+    if ($seen.Add($item.FullName)) { $items.Add($item) }
     if ($item -is [IO.DirectoryInfo]) {
         foreach ($child in Get-ChildItem -LiteralPath $item.FullName -Force) {
             $pending.Push((Get-SafeItem $child.FullName))
         }
     }
 }
+foreach ($item in $items) { Assert-NoReadDeny (Get-Acl -LiteralPath $item.FullName) $item.FullName }
 foreach ($ancestor in @($root.Parent)) {
     while ($null -ne $ancestor) {
         Assert-NoReadDeny (Get-Acl -LiteralPath $ancestor.FullName) $ancestor.FullName
@@ -116,7 +128,11 @@ foreach ($item in $items) {
         Assert-SafeChain $item.FullName
         $acl = Get-Acl -LiteralPath $item.FullName
         Assert-NoReadDeny $acl $item.FullName
-        if ($item -is [IO.DirectoryInfo]) {
+        if ($item -is [IO.DirectoryInfo] -and -not (Test-Within $item.FullName $selection.FullName)) {
+            # Ancestor grants are this-folder-only; inheritable grants here
+            # would propagate to unrelated, possibly still-active batches.
+            $grants = ,@($DirectoryRead, [Security.AccessControl.InheritanceFlags]::None, $None)
+        } elseif ($item -is [IO.DirectoryInfo]) {
             # Traverse/list on directories; Read on files, independently of owner.
             $grants = @(@($DirectoryRead, $CI, $None), @($Read, $OI, $IO))
         } else {
@@ -142,4 +158,5 @@ foreach ($item in $items) {
     }
 }
 [ordered]@{ account = $Account; service_sid = $Sid.Value; source_root = $root.FullName
-    mode = $Mode; checked_objects = $items.Count; acl_verified = $true } | ConvertTo-Json -Compress
+    artifact_path = $selection.FullName; mode = $Mode; checked_objects = $items.Count
+    acl_verified = $true } | ConvertTo-Json -Compress

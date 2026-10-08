@@ -144,6 +144,7 @@ class NativeSourceHandoffTests(unittest.TestCase):
             # the deployed virtual account is the only deployment prerequisite.
             command = r'''
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $account = [Security.Principal.NTAccount]::new('NT SERVICE\mcp-velociraptor')
 try { $sid = $account.Translate([Security.Principal.SecurityIdentifier]) } catch { exit 77 }
 $root = Join-Path TASK_ROOT 'outputs'
@@ -163,6 +164,16 @@ function Run-Handoff($mode, $source = $root) {
 $rejected = $false
 try { Run-Handoff 'verify' } catch { $rejected = $true }
 if (-not $rejected) { throw 'OWNER RIGHTS incorrectly satisfied service read.' }
+$one = Join-Path $root 'output-1.txt'
+& TASK_SCRIPT -Mode configure -PolicyPath $policy -SourceRoot $root -ArtifactPath $one | Out-Null
+& TASK_SCRIPT -Mode verify -PolicyPath $policy -SourceRoot $root -ArtifactPath $one | Out-Null
+$rejected = $false
+try { Run-Handoff 'verify' } catch { $rejected = $true }
+if (-not $rejected) { throw 'Scoped handoff touched unrelated outputs.' }
+$before = (Get-Acl -LiteralPath TASK_ROOT).Sddl
+$rejected = $false
+try { & TASK_SCRIPT -Mode configure -PolicyPath $policy -SourceRoot $root -ArtifactPath TASK_ROOT | Out-Null } catch { $rejected = $true }
+if (-not $rejected -or (Get-Acl -LiteralPath TASK_ROOT).Sddl -cne $before) { throw 'Outside artifact was modified.' }
 Run-Handoff 'configure'
 Run-Handoff 'verify'
 $before = (Get-Acl -LiteralPath $root).Sddl
@@ -200,6 +211,16 @@ foreach ($mode in @('configure', 'verify')) {
     if (-not $rejected) { throw 'Deny was silently bypassed.' }
 }
 if ((Get-Acl -LiteralPath $protected).Sddl -cne $before) { throw 'Deny was removed.' }
+$junctionTarget = Join-Path TASK_ROOT 'junction-target'
+$null = New-Item -ItemType Directory -Path $junctionTarget
+$junction = Join-Path $root 'junction'
+$null = New-Item -ItemType Junction -Path $junction -Target $junctionTarget
+$rootBefore = (Get-Acl -LiteralPath $root).Sddl
+$targetBefore = (Get-Acl -LiteralPath $junctionTarget).Sddl
+$rejected = $false
+try { & TASK_SCRIPT -Mode configure -PolicyPath $policy -SourceRoot $root -ArtifactPath $junction | Out-Null } catch { $rejected = $_.Exception.Message -like '*ordinary filesystem object*' }
+if (-not $rejected -or (Get-Acl -LiteralPath $root).Sddl -cne $rootBefore -or
+    (Get-Acl -LiteralPath $junctionTarget).Sddl -cne $targetBefore) { throw 'Reparse handoff was accepted or changed ACLs.' }
 $rejected = $false
 try { Run-Handoff 'configure' TASK_ROOT } catch { $rejected = $true }
 if (-not $rejected) { throw 'Outside-policy root accepted.' }
@@ -210,7 +231,8 @@ if (-not $rejected) { throw 'Outside-policy root accepted.' }
             child_env["PSModulePath"] = str(Path(os.environ["SystemRoot"]) /
                                           "System32/WindowsPowerShell/v1.0/Modules")
             result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", command],
-                                    env=child_env, capture_output=True, text=True, timeout=60)
+                                    env=child_env, capture_output=True, text=True,
+                                    encoding='utf-8', errors='replace', timeout=60)
             if result.returncode == 77:
                 self.skipTest("deployed service virtual account not available")
             self.assertEqual(result.returncode, 0, result.stderr)
