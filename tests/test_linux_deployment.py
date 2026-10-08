@@ -37,7 +37,7 @@ class DeployTests(unittest.TestCase):
             v = m.settings(self.root, self.data); v['Monitoring'] = {}; v['CA'] = {'private_key': 'MODEL'}
             v['Client'].update(ca_certificate='MODEL', nonce='MODEL'); return json.dumps(v).encode()
         if 'show' in a:
-            if self.fault == 'missing-config': return b'{}'
+            if self.fault == 'missing-config' and 'server.config.yaml' in a[a.index('--config')+1]: return b'{}'
             return Path(a[a.index('--config')+1]).read_bytes()
         if a[-1] == 'client': return (self.root / 'server.config.yaml').read_bytes()
         if 'api_client' in a: Path(a[-1]).write_text('MODEL'); return b''
@@ -52,6 +52,7 @@ class DeployTests(unittest.TestCase):
 
     def test_success_and_readonly_reentry(self):
         self.assertEqual(self.deploy()['status'], 'READY'); before = list(self.calls)
+        self.assertIsNone(json.loads((self.root/'server.config.yaml').read_text())['Monitoring'])
         self.assertEqual(self.deploy()['status'], 'READY')
         self.assertFalse(any('enable' in a for a in self.calls[len(before):]))
         self.assertEqual(stat.S_IMODE((self.root/'server.config.yaml').stat().st_mode), 0o600)

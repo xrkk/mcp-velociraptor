@@ -103,7 +103,8 @@ def validate_config(binary, config, expected, client=False):
         for k, v in expected[section].items():
             require(value.get(section, {}).get(k) == v, 'CONFIG_MISMATCH')
     require(not value.get('ExtraFrontends') and not value.get('autocert_cert_cache'), 'EXTRA_LISTENER')
-    require(not value.get('Monitoring', {}).get('bind_port'), 'EXTRA_LISTENER')
+    if not client:
+        require(value.get('Monitoring') is None, 'EXTRA_LISTENER')
     require(bool(value['Client'].get('ca_certificate')) and bool(value['Client'].get('nonce')), 'CONFIG_MISSING')
     if not client:
         require(bool(value.get('CA', {}).get('private_key')), 'CONFIG_MISSING')
@@ -142,6 +143,8 @@ def ready(root, expected_uuid, expected_boot):
     matches = [r for r in rows if r.get('client_id') == client_id]
     require(len(matches) == 1 and matches[0].get('os_info', {}).get('system', '').lower() == 'linux', 'ENROLLMENT_NOT_READY')
     listeners = run(['ss', '-H', '-lntp']).decode().splitlines()
+    owned = [line.split()[3] for line in listeners if '"velociraptor"' in line]
+    require(set(owned) == {'127.0.0.1:8000', '127.0.0.1:8001', '127.0.0.1:8889'}, 'EXTRA_LISTENER')
     for port in (8000, 8001, 8889):
         found = [line for line in listeners if len(line.split()) > 3 and line.split()[3].rsplit(':', 1)[-1] == str(port)]
         require(len(found) == 1 and found[0].split()[3] == f'127.0.0.1:{port}', 'LISTENER_MISMATCH')
@@ -204,7 +207,13 @@ def deploy(binary, root, datastore, transaction, expected_uuid, expected_boot, r
         for name in ('logs', 'client-temp', 'api-access'):
             (root / name).mkdir(mode=0o700)
         phase = 'config'; expected = settings(root, datastore)
-        write_new(root / 'server.config.yaml', run([target, 'config', 'generate', '--nobanner', '--merge', json.dumps(expected)]))
+        generated = stage / 'generated.config.yaml'
+        write_new(generated, run([target, 'config', 'generate', '--nobanner', '--merge', json.dumps(expected)]))
+        # v0.77.3 restores omitted Monitoring from defaults. Explicit JSON null
+        # survives its YAML loader and is the upstream no-monitoring condition.
+        config = json.loads(run([target, '--config', generated, 'config', 'show', '--json']))
+        config['Monitoring'] = None
+        write_new(root / 'server.config.yaml', json_bytes(config))
         validate_config(target, root / 'server.config.yaml', expected)
         write_new(root / 'client.config.yaml', run([target, '--config', root / 'server.config.yaml', 'config', 'client']))
         validate_config(target, root / 'client.config.yaml', expected, client=True)
