@@ -1,5 +1,15 @@
 # Velociraptor Agent POC
 
+## Loopback Linux deployment
+
+The offline `deploy/linux/deploy-remnux.sh` entry now takes explicit binary,
+installation/datastore paths, transaction, VM UUID and boot identity. It pins
+v0.77.3 by full SHA-256, creates fresh root-private configuration, refuses
+unknown or incomplete installations and requires both services, enrollment
+and the guest-local API to be ready. See [Linux deployment](../deploy/linux/README.md).
+This deployment does not qualify the still-unconnected Linux triage or
+in-memory high-granularity scope interfaces. Windows defaults are unchanged.
+
 Producer outputs use the explicit
 [cross-account artifact export](../docs/artifact-export-handoff.md) before a
 Velo pull; private configuration changes use
