@@ -1,0 +1,1067 @@
+[
+  {
+    "name": "Generic.Client.Info",
+    "aliases": [],
+    "description": "Collects basic system details including hostname, OS version,\ninterfaces, and platform info\n\nThis artifact is collected when any new client is enrolled into the\nsystem. The Velociraptor server watches for completions of this\nartifact and populates its internal client info index from this\nartifact.\n\nYou can edit this artifact to enhance the client's interrogation\ninformation as required, by adding new sources.\n\nNOTE: Do not modify the BasicInformation source since its results\nare required by the server in that exact format.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "",
+    "parameters": [],
+    "type": "client",
+    "sources": [
+      {
+        "name": "BasicInformation",
+        "description": "This source is used internally to populate agent info. Do not\nmodify or remove this query.\n",
+        "precondition": "",
+        "query": "LET Interfaces = SELECT HardwareAddrString AS MAC\nFROM interfaces()\nWHERE HardwareAddr\n\nSELECT config.Version.Name AS Name,\n       config.Version.BuildTime as BuildTime,\n       config.Version.Version as Version,\n       config.Version.ci_build_url AS build_url,\n       config.Version.install_time as install_time,\n       config.Labels AS Labels,\n       Hostname, OS, Architecture,\n       Platform, PlatformVersion, KernelVersion, Fqdn,\n       Interfaces.MAC AS MACAddresses\nFROM info()\n",
+        "queries": [
+          "LET Interfaces = SELECT HardwareAddrString AS MAC FROM interfaces() WHERE HardwareAddr",
+          "SELECT config.Version.Name AS Name, config.Version.BuildTime AS BuildTime, config.Version.Version AS Version, config.Version.ci_build_url AS build_url, config.Version.install_time AS install_time, config.Labels AS Labels, Hostname, OS, Architecture, Platform, PlatformVersion, KernelVersion, Fqdn, Interfaces.MAC AS MACAddresses FROM info()"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "DetailedInfo",
+        "description": "",
+        "precondition": "",
+        "query": "LET Info = SELECT * FROM info()\nSELECT _key AS Param, _value AS Value FROM items(item=Info[0])\n",
+        "queries": [
+          "LET Info = SELECT * FROM info()",
+          "SELECT _key AS Param, _value AS Value FROM items(item=Info[0])"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "LinuxInfo",
+        "description": "Linux specific information about the host",
+        "precondition": "SELECT OS From info() where OS = 'linux'",
+        "query": "SELECT if(condition=version(function='sysinfo') != NULL, then=sysinfo()) AS `Computer Info`,\n{ SELECT Name, HardwareAddrString AS MACAddress,\n         Up, PointToPoint,\n         AddrsString AS IPAddresses\n  FROM interfaces() WHERE HardwareAddr} AS `Network Info`\nFROM scope()\n",
+        "queries": [
+          "SELECT if(condition=version(function='sysinfo') != NULL, then=sysinfo()) AS `Computer Info`, { SELECT Name, HardwareAddrString AS MACAddress, Up, PointToPoint, AddrsString AS IPAddresses FROM interfaces() WHERE HardwareAddr } AS `Network Info` FROM scope()"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "WindowsInfo",
+        "description": "Windows specific information about the host",
+        "precondition": "SELECT OS From info() where OS = 'windows'",
+        "query": "LET DomainLookup <= dict(\n   `0`='Standalone Workstation',\n   `1`='Member Workstation',\n   `2`='Standalone Server',\n   `3`='Member Server',\n   `4`='Backup Domain Controller',\n   `5`='Primary Domain Controller')\n\nSELECT\n    {\n      SELECT DNSHostName, Name, Domain, TotalPhysicalMemory,\n             get(item=DomainLookup,\n                 field=str(str=DomainRole), default=\"Unknown\") AS DomainRole\n      FROM wmi(\n         query='SELECT * FROM win32_computersystem')\n    } AS `Computer Info`,\n    {\n      SELECT Caption,\n         join(array=IPAddress, sep=\", \") AS IPAddresses,\n         join(array=IPSubnet, sep=\", \") AS IPSubnet,\n         MACAddress,\n         join(array=DefaultIPGateway, sep=\", \") AS DefaultIPGateway,\n         DNSHostName,\n         join(array=DNSServerSearchOrder, sep=\", \") AS DNSServerSearchOrder\n      FROM wmi(\n         query=\"SELECT * from Win32_NetworkAdapterConfiguration\" )\n      WHERE IPAddress\n    } AS `Network Info`\nFROM scope()\n",
+        "queries": [
+          "LET DomainLookup <= dict(`0`='Standalone Workstation', `1`='Member Workstation', `2`='Standalone Server', `3`='Member Server', `4`='Backup Domain Controller', `5`='Primary Domain Controller')",
+          "SELECT { SELECT DNSHostName, Name, Domain, TotalPhysicalMemory, get(item=DomainLookup, field=str(str=DomainRole), default=\"Unknown\") AS DomainRole FROM wmi(query='SELECT * FROM win32_computersystem') } AS `Computer Info`, { SELECT Caption, join(array=IPAddress, sep=\", \") AS IPAddresses, join(array=IPSubnet, sep=\", \") AS IPSubnet, MACAddress, join(array=DefaultIPGateway, sep=\", \") AS DefaultIPGateway, DNSHostName, join(array=DNSServerSearchOrder, sep=\", \") AS DNSServerSearchOrder FROM wmi(query=\"SELECT * from Win32_NetworkAdapterConfiguration\") WHERE IPAddress } AS `Network Info` FROM scope()"
+        ],
+        "notebook": [
+          {
+            "template": "/*\n# Enumerate Domain Roles\n\nSearch all clients' enrollment information for their domain roles.\n*/\n--\n-- Remove the below comments to label Domain Controllers\nSELECT *--, label(client_id=client_id, labels=\"DomainController\", op=\"set\") AS Label\nFROM foreach(row={\n   SELECT * FROM clients()\n}, query={\n    SELECT\n      `Computer Info`.Name AS Name, client_id,\n      `Computer Info`.DomainRole AS DomainRole\n    FROM source(client_id=client_id,\n        flow_id=last_interrogate_flow_id,\n        source=\"WindowsInfo\")\n})\n-- WHERE DomainRole =~ \"Controller\"\n",
+            "type": "vql_suggestion",
+            "name": "Enumerate Domain Roles",
+            "output": "",
+            "env": []
+          }
+        ]
+      },
+      {
+        "name": "Users",
+        "description": "",
+        "precondition": "SELECT OS From info() where OS = 'windows'",
+        "query": "SELECT Name, Description, Mtime AS LastLogin\nFROM Artifact.Windows.Sys.Users()\n",
+        "queries": [
+          "SELECT Name, Description, Mtime AS LastLogin FROM Artifact.Windows.Sys.Users()"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [
+      {
+        "type": "client",
+        "timeout": 0,
+        "name": "",
+        "template": "{{ define \"pre\" }}\nLET Cap(X) = upcase(string=X[0:1]) + X[1:]\n\nLET ClientInfo <= SELECT *, Cap(X=os_info.system) AS OS\n  FROM clients(client_id=ClientId)\n  LIMIT 1\n\nLET Hostname <= ClientInfo[0].os_info.hostname\nLET OS <= Cap(X=ClientInfo[0].os_info.system)\n\nLET _Timestamp <= SELECT timestamp(epoch=active_time) AS Timestamp\n   FROM flows(client_id=ClientId, flow_id=FlowId)\nLET Timestamp <= _Timestamp[0].Timestamp\n\n// Parse the env part from the notebook definitions.\nLET GetEnv(X) = to_dict(item={\n    SELECT key AS _key,\n           value AS _value\n    FROM foreach(row=X)\n  })\n\n// Look for a special notebook of name \"quick_link\" - we will\n// render it here.\nLET GetSources(X) = SELECT GetEnv(X=env) AS Env\nFROM foreach(row=X,\nquery={\n  SELECT * FROM foreach(row=notebook)\n  WHERE notebook.name =~ \"quick_link\"\n})\n\n// Returns a list of artifact names and configuration Env\nLET FindQuickLinks = SELECT *,\n    link_to(client_id=ClientId, flow_id='new',\n            artifact=artifact_name, raw=TRUE) AS Link,\n    Env.weight || 10 AS Weight\nFROM foreach(row={\n    SELECT name as artifact_name, sources\n    FROM artifact_definitions()\n    WHERE type =~ \"^client$\"\n  },\n             query={\n    SELECT artifact_name, Env\n    FROM GetSources(X=sources)\n    WHERE Env.text AND OS =~ ( Env.os_filter || \".\" )\n  })\nORDER BY Weight\n\n{{ end }}\n{{ $_ := Query \"pre\" | Expand }}\n\n{{ range Query \"SELECT * FROM FindQuickLinks\" | Expand -}}\n  <velo-button text=\"{{ Get . \"Env.text\" }}\"\n               icon=\"{{ Get . \"Env.icon\" }}\"\n               href=\"{{ Get . \"Link\" }}\">\n  >\n  </velo-button>\n{{- end }}\n\n\n# {{ Scope \"Hostname\" }} ( {{ Scope \"ClientId\" }} ) @ {{ Scope \"Timestamp\" }}\n\n{{ Query \"SELECT * FROM source(source='BasicInformation')\" | Table }}\n\n# Memory and CPU footprint over the past 24 hours\n\n{{ define \"resources\" }}\n SELECT * FROM sample(\n   n=4,\n   query={\n     SELECT Timestamp,\n            rate(x=CPU, y=Timestamp) * 100 As CPUPercent,\n            RSS / 1000000 AS MemoryUse\n     FROM source(artifact=\"Generic.Client.Stats\",\n                 client_id=ClientId,\n                 start_time=now() - 86400)\n     WHERE CPUPercent >= 0\n   })\n{{ end }}\n\n{{ define \"computerinfo\" }}\nLET X <= SELECT *\n  FROM source(source=\"LinuxInfo\")\n  LIMIT 1\n\nSELECT humanize(bytes=TotalPhysicalMemory) AS  TotalPhysicalMemory,\n       humanize(bytes=TotalFreeMemory) AS  TotalFreeMemory,\n       humanize(bytes=TotalSharedMemory) AS  TotalSharedMemory,\n       humanize(bytes=TotalSwap) AS  TotalSwap,\n       humanize(bytes=FreeSwap) AS  FreeSwap\nFROM foreach(row=X[0].`Computer Info`)\n{{ end }}\n\n<div>\n{{ Query \"resources\" | TimeChart \"RSS.yaxis\" 2 }}\n</div>\n\n{{ $windows_info := Query \"SELECT * FROM source(source='WindowsInfo')\" }}\n{{ if $windows_info | Expand }}\n# Windows agent information\n  {{ $windows_info | Table }}\n{{ end }}\n\n{{ $linux_info := Query \"LET X <= SELECT * FROM source(source='LinuxInfo') LIMIT 1 SELECT * FROM X\" }}\n{{ if Query \"SELECT * FROM source(source='LinuxInfo')\" | Expand }}\n# Linux agent information\n\n### Network Info\n  {{ Query \"SELECT * FROM foreach(row=X[0].`Network Info`)\" | Table }}\n\n### Computer Info\n  {{ Query \"computerinfo\" | Table }}\n\n{{ end }}\n\n# Active Users\n{{ Query \"SELECT * FROM source(source='Users')\" | Table }}\n",
+        "parameters": []
+      }
+    ],
+    "column_types": [
+      {
+        "name": "BuildTime",
+        "type": "timestamp",
+        "description": ""
+      },
+      {
+        "name": "LastLogin",
+        "type": "timestamp",
+        "description": ""
+      }
+    ],
+    "raw": "name: Generic.Client.Info\ndescription: |\n  Collects basic system details including hostname, OS version,\n  interfaces, and platform info\n\n  This artifact is collected when any new client is enrolled into the\n  system. The Velociraptor server watches for completions of this\n  artifact and populates its internal client info index from this\n  artifact.\n\n  You can edit this artifact to enhance the client's interrogation\n  information as required, by adding new sources.\n\n  NOTE: Do not modify the BasicInformation source since its results\n  are required by the server in that exact format.\n\nsources:\n  - name: BasicInformation\n    description: |\n      This source is used internally to populate agent info. Do not\n      modify or remove this query.\n    query: |\n        LET Interfaces = SELECT HardwareAddrString AS MAC\n        FROM interfaces()\n        WHERE HardwareAddr\n\n        SELECT config.Version.Name AS Name,\n               config.Version.BuildTime as BuildTime,\n               config.Version.Version as Version,\n               config.Version.ci_build_url AS build_url,\n               config.Version.install_time as install_time,\n               config.Labels AS Labels,\n               Hostname, OS, Architecture,\n               Platform, PlatformVersion, KernelVersion, Fqdn,\n               Interfaces.MAC AS MACAddresses\n        FROM info()\n\n  - name: DetailedInfo\n    query: |\n      LET Info = SELECT * FROM info()\n      SELECT _key AS Param, _value AS Value FROM items(item=Info[0])\n\n  - name: LinuxInfo\n    description: Linux specific information about the host\n    precondition: SELECT OS From info() where OS = 'linux'\n    query: |\n      SELECT if(condition=version(function='sysinfo') != NULL, then=sysinfo()) AS `Computer Info`,\n      { SELECT Name, HardwareAddrString AS MACAddress,\n               Up, PointToPoint,\n               AddrsString AS IPAddresses\n        FROM interfaces() WHERE HardwareAddr} AS `Network Info`\n      FROM scope()\n\n  - name: WindowsInfo\n    description: Windows specific information about the host\n    precondition: SELECT OS From info() where OS = 'windows'\n    query: |\n      LET DomainLookup <= dict(\n         `0`='Standalone Workstation',\n         `1`='Member Workstation',\n         `2`='Standalone Server',\n         `3`='Member Server',\n         `4`='Backup Domain Controller',\n         `5`='Primary Domain Controller')\n\n      SELECT\n          {\n            SELECT DNSHostName, Name, Domain, TotalPhysicalMemory,\n                   get(item=DomainLookup,\n                       field=str(str=DomainRole), default=\"Unknown\") AS DomainRole\n            FROM wmi(\n               query='SELECT * FROM win32_computersystem')\n          } AS `Computer Info`,\n          {\n            SELECT Caption,\n               join(array=IPAddress, sep=\", \") AS IPAddresses,\n               join(array=IPSubnet, sep=\", \") AS IPSubnet,\n               MACAddress,\n               join(array=DefaultIPGateway, sep=\", \") AS DefaultIPGateway,\n               DNSHostName,\n               join(array=DNSServerSearchOrder, sep=\", \") AS DNSServerSearchOrder\n            FROM wmi(\n               query=\"SELECT * from Win32_NetworkAdapterConfiguration\" )\n            WHERE IPAddress\n          } AS `Network Info`\n      FROM scope()\n\n    notebook:\n      - type: vql_suggestion\n        name: \"Enumerate Domain Roles\"\n        template: |\n          /*\n          # Enumerate Domain Roles\n\n          Search all clients' enrollment information for their domain roles.\n          */\n          --\n          -- Remove the below comments to label Domain Controllers\n          SELECT *--, label(client_id=client_id, labels=\"DomainController\", op=\"set\") AS Label\n          FROM foreach(row={\n             SELECT * FROM clients()\n          }, query={\n              SELECT\n                `Computer Info`.Name AS Name, client_id,\n                `Computer Info`.DomainRole AS DomainRole\n              FROM source(client_id=client_id,\n                  flow_id=last_interrogate_flow_id,\n                  source=\"WindowsInfo\")\n          })\n          -- WHERE DomainRole =~ \"Controller\"\n\n  - name: Users\n    precondition: SELECT OS From info() where OS = 'windows'\n    query: |\n      SELECT Name, Description, Mtime AS LastLogin\n      FROM Artifact.Windows.Sys.Users()\n\nreports:\n  - type: CLIENT\n    template: |\n      {{ define \"pre\" }}\n      LET Cap(X) = upcase(string=X[0:1]) + X[1:]\n\n      LET ClientInfo <= SELECT *, Cap(X=os_info.system) AS OS\n        FROM clients(client_id=ClientId)\n        LIMIT 1\n\n      LET Hostname <= ClientInfo[0].os_info.hostname\n      LET OS <= Cap(X=ClientInfo[0].os_info.system)\n\n      LET _Timestamp <= SELECT timestamp(epoch=active_time) AS Timestamp\n         FROM flows(client_id=ClientId, flow_id=FlowId)\n      LET Timestamp <= _Timestamp[0].Timestamp\n\n      // Parse the env part from the notebook definitions.\n      LET GetEnv(X) = to_dict(item={\n          SELECT key AS _key,\n                 value AS _value\n          FROM foreach(row=X)\n        })\n\n      // Look for a special notebook of name \"quick_link\" - we will\n      // render it here.\n      LET GetSources(X) = SELECT GetEnv(X=env) AS Env\n      FROM foreach(row=X,\n      query={\n        SELECT * FROM foreach(row=notebook)\n        WHERE notebook.name =~ \"quick_link\"\n      })\n\n      // Returns a list of artifact names and configuration Env\n      LET FindQuickLinks = SELECT *,\n          link_to(client_id=ClientId, flow_id='new',\n                  artifact=artifact_name, raw=TRUE) AS Link,\n          Env.weight || 10 AS Weight\n      FROM foreach(row={\n          SELECT name as artifact_name, sources\n          FROM artifact_definitions()\n          WHERE type =~ \"^client$\"\n        },\n                   query={\n          SELECT artifact_name, Env\n          FROM GetSources(X=sources)\n          WHERE Env.text AND OS =~ ( Env.os_filter || \".\" )\n        })\n      ORDER BY Weight\n\n      {{ end }}\n      {{ $_ := Query \"pre\" | Expand }}\n\n      {{ range Query \"SELECT * FROM FindQuickLinks\" | Expand -}}\n        <velo-button text=\"{{ Get . \"Env.text\" }}\"\n                     icon=\"{{ Get . \"Env.icon\" }}\"\n                     href=\"{{ Get . \"Link\" }}\">\n        >\n        </velo-button>\n      {{- end }}\n\n\n      # {{ Scope \"Hostname\" }} ( {{ Scope \"ClientId\" }} ) @ {{ Scope \"Timestamp\" }}\n\n      {{ Query \"SELECT * FROM source(source='BasicInformation')\" | Table }}\n\n      # Memory and CPU footprint over the past 24 hours\n\n      {{ define \"resources\" }}\n       SELECT * FROM sample(\n         n=4,\n         query={\n           SELECT Timestamp,\n                  rate(x=CPU, y=Timestamp) * 100 As CPUPercent,\n                  RSS / 1000000 AS MemoryUse\n           FROM source(artifact=\"Generic.Client.Stats\",\n                       client_id=ClientId,\n                       start_time=now() - 86400)\n           WHERE CPUPercent >= 0\n         })\n      {{ end }}\n\n      {{ define \"computerinfo\" }}\n      LET X <= SELECT *\n        FROM source(source=\"LinuxInfo\")\n        LIMIT 1\n\n      SELECT humanize(bytes=TotalPhysicalMemory) AS  TotalPhysicalMemory,\n             humanize(bytes=TotalFreeMemory) AS  TotalFreeMemory,\n             humanize(bytes=TotalSharedMemory) AS  TotalSharedMemory,\n             humanize(bytes=TotalSwap) AS  TotalSwap,\n             humanize(bytes=FreeSwap) AS  FreeSwap\n      FROM foreach(row=X[0].`Computer Info`)\n      {{ end }}\n\n      <div>\n      {{ Query \"resources\" | TimeChart \"RSS.yaxis\" 2 }}\n      </div>\n\n      {{ $windows_info := Query \"SELECT * FROM source(source='WindowsInfo')\" }}\n      {{ if $windows_info | Expand }}\n      # Windows agent information\n        {{ $windows_info | Table }}\n      {{ end }}\n\n      {{ $linux_info := Query \"LET X <= SELECT * FROM source(source='LinuxInfo') LIMIT 1 SELECT * FROM X\" }}\n      {{ if Query \"SELECT * FROM source(source='LinuxInfo')\" | Expand }}\n      # Linux agent information\n\n      ### Network Info\n        {{ Query \"SELECT * FROM foreach(row=X[0].`Network Info`)\" | Table }}\n\n      ### Computer Info\n        {{ Query \"computerinfo\" | Table }}\n\n      {{ end }}\n\n      # Active Users\n      {{ Query \"SELECT * FROM source(source='Users')\" | Table }}\n\n\ncolumn_types:\n  - name: BuildTime\n    type: timestamp\n  - name: LastLogin\n    type: timestamp\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Sys.Users",
+    "aliases": [],
+    "description": "Gets user-specific information like homedir, group, etc. from\n`/etc/passwd`.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "",
+    "parameters": [
+      {
+        "name": "PasswordFile",
+        "default": "/etc/passwd",
+        "description": "The location of the password file.",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "",
+        "description": "",
+        "precondition": "SELECT OS From info() where OS = 'linux'\n",
+        "query": "SELECT User, Description, Uid, Gid, Homedir, Shell\nFROM split_records(\n      filenames=PasswordFile,\n      regex=\":\", record_regex=\"\\r?\\n\",\n      columns=[\"User\", \"X\", \"Uid\", \"Gid\", \"Description\", \"Homedir\", \"Shell\"])\n",
+        "queries": [
+          "SELECT User, Description, Uid, Gid, Homedir, Shell FROM split_records(filenames=PasswordFile, regex=\":\", record_regex=\"\\r?\\n\", columns=[\"User\", \"X\", \"Uid\", \"Gid\", \"Description\", \"Homedir\", \"Shell\"])"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Sys.Users\ndescription: |\n  Gets user-specific information like homedir, group, etc. from\n  `/etc/passwd`.\n\nparameters:\n  - name: PasswordFile\n    default: /etc/passwd\n    description: The location of the password file.\nsources:\n  - precondition: |\n      SELECT OS From info() where OS = 'linux'\n    query: |\n      SELECT User, Description, Uid, Gid, Homedir, Shell\n      FROM split_records(\n            filenames=PasswordFile,\n            regex=\":\", record_regex=\"\\r?\\n\",\n            columns=[\"User\", \"X\", \"Uid\", \"Gid\", \"Description\", \"Homedir\", \"Shell\"])\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Sys.Pslist",
+    "aliases": [
+      "MacOS.Sys.Pslist"
+    ],
+    "description": "Lists processes and their associated binaries.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "SELECT OS From info() where OS =~ 'linux|darwin'\n",
+    "parameters": [
+      {
+        "name": "processRegex",
+        "default": ".",
+        "description": "",
+        "type": "regex",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "",
+        "description": "",
+        "precondition": "",
+        "query": "SELECT Pid, Ppid, Name, CommandLine, Exe,\n       hash(path=Exe) as Hash,\n       Username, CreateTime,\n       MemoryInfo.rss AS RSS,\n       Exe =~ \"\\\\(deleted\\\\)$\" AS Deleted\nFROM process_tracker_pslist()\nWHERE Name =~ processRegex\n",
+        "queries": [
+          "SELECT Pid, Ppid, Name, CommandLine, Exe, hash(path=Exe) AS Hash, Username, CreateTime, MemoryInfo.rss AS RSS, Exe =~ \"\\\\(deleted\\\\)$\" AS Deleted FROM process_tracker_pslist() WHERE Name =~ processRegex"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Sys.Pslist\ndescription: |\n  Lists processes and their associated binaries.\n\naliases:\n  - MacOS.Sys.Pslist\n\nparameters:\n  - name: processRegex\n    default: .\n    type: regex\n\nprecondition: |\n  SELECT OS From info() where OS =~ 'linux|darwin'\n\nsources:\n  - query: |\n        SELECT Pid, Ppid, Name, CommandLine, Exe,\n               hash(path=Exe) as Hash,\n               Username, CreateTime,\n               MemoryInfo.rss AS RSS,\n               Exe =~ \"\\\\(deleted\\\\)$\" AS Deleted\n        FROM process_tracker_pslist()\n        WHERE Name =~ processRegex\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Network.Netstat",
+    "aliases": [],
+    "description": "Reads Linux `/proc/net` files to display socket connection states\nand processes.\n\nAlso extracts corresponding process information.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "\nSELECT OS From info() where OS = 'linux'\n",
+    "parameters": [
+      {
+        "name": "StateRegex",
+        "default": "LISTEN|ESTAB",
+        "description": "Only show these states",
+        "type": "regex",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "TCP4",
+        "description": "",
+        "precondition": "",
+        "query": "// Extract the port as an int (part after the :)\nLET GetPort(X) = int(int=\"0x\" + regex_replace(source=X, re=\".+:\", replace=\"\"))\n\n// Remove the part after the :: for the IPv6 address\nLET _GetIP6Part(X) = regex_replace(source=X, re=\"::.+\", replace=\"\")\n\n// Insert a : between each 4 digits - IPv6 addresses look like\n// 0000:0000:0000:0000:0000:0000:0000:0000\nLET ParseIP6(addr) = ip(parse=_GetIP6Part(\n                          X=regex_replace(re=\"(....)\",\n                                          replace=\"$1:\",\n                                          source=addr)))\n\n// Extract the first 4 hex digits in reverse order\nLET _ParseIP4(X) = SELECT int(int=\"0x\" + _value) AS I,\n                          _key\n  FROM items(item=split(sep=\":\",\n                        string=regex_replace(\n                          source=X,\n                          re=\"(..)\",\n                          replace=\"$1:\")))\n  WHERE _key < 4\n  ORDER BY _key DESC\n\n// Join them on a . and parse as an IP address\nLET ParseIP4(addr) = ip(parse=join(array=_ParseIP4(X=addr).I, sep=\".\"))\n\n-- https://elixir.bootlin.com/linux/latest/source/include/net/tcp_states.h#L14\nLET StateLookup <= dict(`01`=\"Established\",\n                        `02`=\"Syn Sent\",\n                        `06`=\"Time Wait\",\n                        -- No owner process\n                        `0A`=\"Listening\")\n\n-- Enumerate all the sockets and cache them in memory for\n-- reverse lookup. The following is basically lsof.\nLET X = SELECT\n    OSPath[1] AS Pid,\n    Data.Link AS Filename,\n    parse_string_with_regex(\n      string=Data.Link,\n      regex=\"(?P<Type>socket|pipe):\\\\[(?P<inode>[0-9]+)\\\\]\") AS Details\n  FROM glob(globs=\"/proc/*/fd/*\")\n\nLET _ <= log(message=\"Scanning all process handles\")\n\nLET AllSockets <= SELECT\n    atoi(string=Pid) AS Pid,\n    read_file(filename=\"/proc/\" + Pid + \"/comm\") AS Command,\n    read_file(filename=\"/proc/\" + Pid + \"/cmdline\") AS CommandLine,\n    Filename,\n    Details.Type AS Type,\n    Details.inode AS Inode\n  FROM X\n  WHERE Type =~ \"socket\"\n\nLET GetProcByInode(inode) = SELECT *\n  FROM AllSockets\n  WHERE Inode = inode\n  LIMIT 1\n\n-- Parse the TCP table and refer back to the socket\n-- so we can print process info.\nSELECT inode,\n       get(item=StateLookup, field=st) AS State,\n       uid,\n       GetProcByInode(inode=inode)[0] AS ProcessInfo,\n       ParseIP4(addr=local_address) AS LocalAddr,\n       GetPort(X=local_address) AS LocalPort,\n       ParseIP4(addr=rem_address) AS RemoteAddr,\n       GetPort(X=rem_address) AS RemotePort\nFROM split_records(\n  columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"],\n  filenames=\"/proc/net/tcp\",\n  regex=\" +\")\nWHERE sl =~ \":\"\n AND State =~ StateRegex\n",
+        "queries": [
+          "LET GetPort(X) = int(int=\"0x\" + regex_replace(source=X, re=\".+:\", replace=\"\"))",
+          "LET _GetIP6Part(X) = regex_replace(source=X, re=\"::.+\", replace=\"\")",
+          "LET ParseIP6(addr) = ip(parse=_GetIP6Part(X=regex_replace(re=\"(....)\", replace=\"$1:\", source=addr)))",
+          "LET _ParseIP4(X) = SELECT int(int=\"0x\" + _value) AS I, _key FROM items(item=split(sep=\":\", string=regex_replace(source=X, re=\"(..)\", replace=\"$1:\"))) WHERE _key < 4 ORDER BY _key DESC",
+          "LET ParseIP4(addr) = ip(parse=join(array=_ParseIP4(X=addr).I, sep=\".\"))",
+          "LET StateLookup <= dict(`01`=\"Established\", `02`=\"Syn Sent\", `06`=\"Time Wait\", `0A`=\"Listening\")",
+          "LET X = SELECT OSPath[1] AS Pid, Data.Link AS Filename, parse_string_with_regex(string=Data.Link, regex=\"(?P<Type>socket|pipe):\\\\[(?P<inode>[0-9]+)\\\\]\") AS Details FROM glob(globs=\"/proc/*/fd/*\")",
+          "LET _ <= log(message=\"Scanning all process handles\")",
+          "LET AllSockets <= SELECT atoi(string=Pid) AS Pid, read_file(filename=\"/proc/\" + Pid + \"/comm\") AS Command, read_file(filename=\"/proc/\" + Pid + \"/cmdline\") AS CommandLine, Filename, Details.Type AS Type, Details.inode AS Inode FROM X WHERE Type =~ \"socket\"",
+          "LET GetProcByInode(inode) = SELECT * FROM AllSockets WHERE Inode = inode LIMIT 1",
+          "SELECT inode, get(item=StateLookup, field=st) AS State, uid, GetProcByInode(inode=inode)[0] AS ProcessInfo, ParseIP4(addr=local_address) AS LocalAddr, GetPort(X=local_address) AS LocalPort, ParseIP4(addr=rem_address) AS RemoteAddr, GetPort(X=rem_address) AS RemotePort FROM split_records(columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"], filenames=\"/proc/net/tcp\", regex=\" +\") WHERE sl =~ \":\"  AND State =~ StateRegex"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "TCP6",
+        "description": "",
+        "precondition": "",
+        "query": "-- Parse the TCP6 table and refer back to the socket\n-- so we can print process info.\nSELECT \"TCP6\" AS Type,\n       inode,\n       get(item=StateLookup, field=st) AS State,\n       uid,\n       GetProcByInode(inode=inode)[0] AS ProcessInfo,\n       ParseIP6(addr=local_address) AS LocalAddr,\n       GetPort(X=local_address) AS LocalPort,\n       ParseIP6(addr=rem_address) AS RemoteAddr,\n       GetPort(X=rem_address) AS RemotePort\nFROM split_records(\n  columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"],\n  filenames=\"/proc/net/tcp6\",\n  regex=\" +\")\nWHERE sl =~ \":\"\n AND State =~ StateRegex\n",
+        "queries": [
+          "SELECT \"TCP6\" AS Type, inode, get(item=StateLookup, field=st) AS State, uid, GetProcByInode(inode=inode)[0] AS ProcessInfo, ParseIP6(addr=local_address) AS LocalAddr, GetPort(X=local_address) AS LocalPort, ParseIP6(addr=rem_address) AS RemoteAddr, GetPort(X=rem_address) AS RemotePort FROM split_records(columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"], filenames=\"/proc/net/tcp6\", regex=\" +\") WHERE sl =~ \":\"  AND State =~ StateRegex"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Network.Netstat\ndescription: |\n  Reads Linux `/proc/net` files to display socket connection states\n  and processes.\n\n  Also extracts corresponding process information.\n\ntype: CLIENT\n\nparameters:\n   - name: StateRegex\n     type: regex\n     default: \"LISTEN|ESTAB\"\n     description: Only show these states\n\nprecondition:\n  SELECT OS From info() where OS = 'linux'\n\nsources:\n  - name: TCP4\n    query: |\n      // Extract the port as an int (part after the :)\n      LET GetPort(X) = int(int=\"0x\" + regex_replace(source=X, re=\".+:\", replace=\"\"))\n\n      // Remove the part after the :: for the IPv6 address\n      LET _GetIP6Part(X) = regex_replace(source=X, re=\"::.+\", replace=\"\")\n\n      // Insert a : between each 4 digits - IPv6 addresses look like\n      // 0000:0000:0000:0000:0000:0000:0000:0000\n      LET ParseIP6(addr) = ip(parse=_GetIP6Part(\n                                X=regex_replace(re=\"(....)\",\n                                                replace=\"$1:\",\n                                                source=addr)))\n\n      // Extract the first 4 hex digits in reverse order\n      LET _ParseIP4(X) = SELECT int(int=\"0x\" + _value) AS I,\n                                _key\n        FROM items(item=split(sep=\":\",\n                              string=regex_replace(\n                                source=X,\n                                re=\"(..)\",\n                                replace=\"$1:\")))\n        WHERE _key < 4\n        ORDER BY _key DESC\n\n      // Join them on a . and parse as an IP address\n      LET ParseIP4(addr) = ip(parse=join(array=_ParseIP4(X=addr).I, sep=\".\"))\n\n      -- https://elixir.bootlin.com/linux/latest/source/include/net/tcp_states.h#L14\n      LET StateLookup <= dict(`01`=\"Established\",\n                              `02`=\"Syn Sent\",\n                              `06`=\"Time Wait\",\n                              -- No owner process\n                              `0A`=\"Listening\")\n\n      -- Enumerate all the sockets and cache them in memory for\n      -- reverse lookup. The following is basically lsof.\n      LET X = SELECT\n          OSPath[1] AS Pid,\n          Data.Link AS Filename,\n          parse_string_with_regex(\n            string=Data.Link,\n            regex=\"(?P<Type>socket|pipe):\\\\[(?P<inode>[0-9]+)\\\\]\") AS Details\n        FROM glob(globs=\"/proc/*/fd/*\")\n\n      LET _ <= log(message=\"Scanning all process handles\")\n\n      LET AllSockets <= SELECT\n          atoi(string=Pid) AS Pid,\n          read_file(filename=\"/proc/\" + Pid + \"/comm\") AS Command,\n          read_file(filename=\"/proc/\" + Pid + \"/cmdline\") AS CommandLine,\n          Filename,\n          Details.Type AS Type,\n          Details.inode AS Inode\n        FROM X\n        WHERE Type =~ \"socket\"\n\n      LET GetProcByInode(inode) = SELECT *\n        FROM AllSockets\n        WHERE Inode = inode\n        LIMIT 1\n\n      -- Parse the TCP table and refer back to the socket\n      -- so we can print process info.\n      SELECT inode,\n             get(item=StateLookup, field=st) AS State,\n             uid,\n             GetProcByInode(inode=inode)[0] AS ProcessInfo,\n             ParseIP4(addr=local_address) AS LocalAddr,\n             GetPort(X=local_address) AS LocalPort,\n             ParseIP4(addr=rem_address) AS RemoteAddr,\n             GetPort(X=rem_address) AS RemotePort\n      FROM split_records(\n        columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"],\n        filenames=\"/proc/net/tcp\",\n        regex=\" +\")\n      WHERE sl =~ \":\"\n       AND State =~ StateRegex\n\n  - name: TCP6\n    query:  |\n      -- Parse the TCP6 table and refer back to the socket\n      -- so we can print process info.\n      SELECT \"TCP6\" AS Type,\n             inode,\n             get(item=StateLookup, field=st) AS State,\n             uid,\n             GetProcByInode(inode=inode)[0] AS ProcessInfo,\n             ParseIP6(addr=local_address) AS LocalAddr,\n             GetPort(X=local_address) AS LocalPort,\n             ParseIP6(addr=rem_address) AS RemoteAddr,\n             GetPort(X=rem_address) AS RemotePort\n      FROM split_records(\n        columns=[\"_\", \"sl\", \"local_address\", \"rem_address\", \"st\", \"queues\", \"tr_tm_when\", \"retransmit\", \"uid\", \"timeout\", \"inode\"],\n        filenames=\"/proc/net/tcp6\",\n        regex=\" +\")\n      WHERE sl =~ \":\"\n       AND State =~ StateRegex\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Sys.Services",
+    "aliases": [],
+    "description": "Parses services output from `systemctl`.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [
+      "EXECVE"
+    ],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "",
+    "parameters": [],
+    "type": "client",
+    "sources": [
+      {
+        "name": "",
+        "description": "",
+        "precondition": "SELECT OS From info() where OS = 'linux'\n",
+        "query": "\nLET services = SELECT Stdout FROM execve(argv=['systemctl', 'list-units',  '--type=service'])\n\nLET all_services = SELECT grok(grok=\"%{NOTSPACE:Unit}%{SPACE}%{NOTSPACE:Load}%{SPACE}%{NOTSPACE:Active}%{SPACE}%{NOTSPACE:Sub}%{SPACE}%{GREEDYDATA:Description}\", data=Line) AS Parsed\nFROM parse_lines(accessor=\"data\", filename=services.Stdout)\n\nSELECT * FROM foreach(row=all_services, column=\"Parsed\") WHERE Unit =~ \".service\"\n",
+        "queries": [
+          "LET services = SELECT Stdout FROM execve(argv=['systemctl', 'list-units', '--type=service'])",
+          "LET all_services = SELECT grok(grok=\"%{NOTSPACE:Unit}%{SPACE}%{NOTSPACE:Load}%{SPACE}%{NOTSPACE:Active}%{SPACE}%{NOTSPACE:Sub}%{SPACE}%{GREEDYDATA:Description}\", data=Line) AS Parsed FROM parse_lines(accessor=\"data\", filename=services.Stdout)",
+          "SELECT * FROM foreach(row=all_services, column=\"Parsed\") WHERE Unit =~ \".service\""
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Sys.Services\ndescription: |\n  Parses services output from `systemctl`.\n\nimplied_permissions:\n  - EXECVE\n\nsources:\n  - precondition: |\n      SELECT OS From info() where OS = 'linux'\n    queries:\n      - |\n        LET services = SELECT Stdout FROM execve(argv=['systemctl', 'list-units',  '--type=service'])\n\n        LET all_services = SELECT grok(grok=\"%{NOTSPACE:Unit}%{SPACE}%{NOTSPACE:Load}%{SPACE}%{NOTSPACE:Active}%{SPACE}%{NOTSPACE:Sub}%{SPACE}%{GREEDYDATA:Description}\", data=Line) AS Parsed\n        FROM parse_lines(accessor=\"data\", filename=services.Stdout)\n\n        SELECT * FROM foreach(row=all_services, column=\"Parsed\") WHERE Unit =~ \".service\"\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Search.FileFinder",
+    "aliases": [],
+    "description": "Searches for files by path glob, inspects file content via YARA, and\nprovides file hash and upload options..\n\nThis artifact is useful in the following scenarios:\n\n* We need to locate all the places on our network where customer\n  data has been copied.\n\n* We\u2019ve identified malware in a data breach, named using short\n  random strings in specific folders and need to search for other\n  instances across the network.\n\n* We believe our user account credentials have been dumped and\n  need to locate them.\n\n* We need to search for exposed credit card data to satisfy PCI\n  requirements.\n\n* We have a sample of data that has been disclosed and need to\n  locate other similar files\n\n**Performance Note**\n\nThis artifact can be quite expensive, especially if we search file\ncontent. It will require opening each file and reading its entire\ncontent. To minimize the impact on the endpoint we recommend this\nartifact is collected with a rate limited way (about 20-50 ops per\nsecond).\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "\nSELECT * FROM info() where OS = 'linux'\n",
+    "parameters": [
+      {
+        "name": "SearchFilesGlob",
+        "default": "/home/*",
+        "description": "Use a glob to define the files that will be searched.",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "SearchFilesGlobTable",
+        "default": "Glob\n/home/someuser/*\n",
+        "description": "Alternative specify multiple globs in a table",
+        "type": "csv",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "YaraRule",
+        "default": "",
+        "description": "A yara rule to search for matching files.",
+        "type": "yara",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "Upload_File",
+        "default": "N",
+        "description": "",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "Calculate_Hash",
+        "default": "N",
+        "description": "",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "MoreRecentThan",
+        "default": "",
+        "description": "",
+        "type": "timestamp",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "ModifiedBefore",
+        "default": "",
+        "description": "",
+        "type": "timestamp",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "ExcludePathRegex",
+        "default": "^/(proc|sys|run|snap)",
+        "description": "If this regex matches the path of any directory we do not even descend inside of it.",
+        "type": "regex",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "LocalFilesystemOnly",
+        "default": "Y",
+        "description": "When set we stay on local attached filesystems including loop, attached disk, cdrom, device mapper, and excluding proc, nfs etc.",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "OneFilesystem",
+        "default": "N",
+        "description": "When set we do not follow a link to go on to a different filesystem.",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "DoNotFollowSymlinks",
+        "default": "N",
+        "description": "If specified we are allowed to follow symlinks while globbing",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "ROOT",
+        "default": "",
+        "description": "The root from which to start searching.",
+        "type": "hidden",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "ACCESSOR",
+        "default": "file",
+        "description": "",
+        "type": "hidden",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "UPLOAD_IS_RESUMABLE",
+        "default": "N",
+        "description": "If set the uploads can be resumed if the flow times out or errors.\n",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "",
+        "description": "",
+        "precondition": "",
+        "query": "-- This list comes from cat /proc/devices and represents actual\n-- devices. Most virtual devices like /proc, fuse and network\n-- filesystems have a major number of 0.\nLET LocalDeviceMajor <= (\n   253,\n   7,   -- loop\n   8,   -- sd\n   9,   -- md\n   11,  -- sr\n   65,  -- sd\n   66,  -- sd\n   67,  -- sd\n   68,  -- sd\n   69,  -- sd\n   70,  -- sd\n   71,  -- sd\n   128, -- sd\n   129, -- sd\n   130, -- sd\n   131, -- sd\n   132, -- sd\n   133, -- sd\n   134, -- sd\n   135, -- sd\n   202, -- xvd\n   253, -- device-mapper\n   254, -- mdp\n   259, -- blkext\n)\n\nLET RecursionCallback = if(\n   condition=LocalFilesystemOnly,\n     then=if(condition=ExcludePathRegex,\n             then=\"x=>x.Data.DevMajor IN LocalDeviceMajor AND NOT x.OSPath =~ ExcludePathRegex\",\n             else=\"x=>x.Data.DevMajor IN LocalDeviceMajor\"),\n     else=if(condition=ExcludePathRegex,\n             then=\"x=>NOT x.OSPath =~ ExcludePathRegex\",\n             else=\"\"))\n\nLET file_search = SELECT OSPath,\n           Sys.mft as Inode,\n           Mode.String AS Mode, Size,\n           Mtime AS MTime,\n           Atime AS ATime,\n           Ctime AS CTime,\n           IsDir, Mode, Data\n    FROM glob(globs=SearchFilesGlobTable.Glob + SearchFilesGlob,\n              recursion_callback=RecursionCallback,\n              root=ROOT,\n              one_filesystem=OneFilesystem,\n              accessor=ACCESSOR, nosymlink=DoNotFollowSymlinks)\n\nLET more_recent = SELECT * FROM if(\n    condition=MoreRecentThan,\n    then={\n      SELECT * FROM file_search\n      WHERE MTime > MoreRecentThan\n    }, else={\n      SELECT * FROM file_search\n    })\n\nLET modified_before = SELECT * FROM if(\n    condition=ModifiedBefore,\n    then={\n      SELECT * FROM more_recent\n      WHERE MTime < ModifiedBefore\n        AND MTime > MoreRecentThan\n    }, else={\n      SELECT * FROM more_recent\n    })\n\nLET keyword_search = SELECT * FROM if(\n    condition=YaraRule,\n    then={\n      SELECT * FROM foreach(\n        row={\n           SELECT * FROM modified_before\n           WHERE Mode.IsRegular\n        },\n        query={\n           SELECT OSPath, Inode, Mode,\n                  Size, ATime, MTime, CTime,\n                  str(str=String.Data) As Keywords\n\n           FROM yara(files=OSPath,\n                     key=\"A\",\n                     rules=YaraRule,\n                     accessor=ACCESSOR)\n        })\n    }, else={\n      SELECT *, NULL AS Keywords FROM modified_before\n    })\n\nSELECT OSPath, Inode, Mode, Size, ATime,\n         MTime, CTime, Keywords,\n           if(condition=Upload_File and Mode.IsRegular,\n              then=upload(file=OSPath,\n                          accessor=ACCESSOR)) AS Upload,\n           if(condition=Calculate_Hash and Mode.IsRegular,\n              then=hash(path=OSPath,\n                        accessor=ACCESSOR)) AS Hash\nFROM keyword_search\n",
+        "queries": [
+          "LET LocalDeviceMajor <= (253, 7, 8, 9, 11, 65, 66, 67, 68, 69, 70, 71, 128, 129, 130, 131, 132, 133, 134, 135, 202, 253, 254, 259, )",
+          "LET RecursionCallback = if(condition=LocalFilesystemOnly, then=if(condition=ExcludePathRegex, then=\"x=>x.Data.DevMajor IN LocalDeviceMajor AND NOT x.OSPath =~ ExcludePathRegex\", else=\"x=>x.Data.DevMajor IN LocalDeviceMajor\"), else=if(condition=ExcludePathRegex, then=\"x=>NOT x.OSPath =~ ExcludePathRegex\", else=\"\"))",
+          "LET file_search = SELECT OSPath, Sys.mft AS Inode, Mode.String AS Mode, Size, Mtime AS MTime, Atime AS ATime, Ctime AS CTime, IsDir, Mode, Data FROM glob(globs=SearchFilesGlobTable.Glob + SearchFilesGlob, recursion_callback=RecursionCallback, root=ROOT, one_filesystem=OneFilesystem, accessor=ACCESSOR, nosymlink=DoNotFollowSymlinks)",
+          "LET more_recent = SELECT * FROM if(condition=MoreRecentThan, then={ SELECT * FROM file_search WHERE MTime > MoreRecentThan }, else={ SELECT * FROM file_search })",
+          "LET modified_before = SELECT * FROM if(condition=ModifiedBefore, then={ SELECT * FROM more_recent WHERE MTime < ModifiedBefore  AND MTime > MoreRecentThan }, else={ SELECT * FROM more_recent })",
+          "LET keyword_search = SELECT * FROM if(condition=YaraRule, then={ SELECT * FROM foreach(row={ SELECT * FROM modified_before WHERE Mode.IsRegular }, query={ SELECT OSPath, Inode, Mode, Size, ATime, MTime, CTime, str(str=String.Data) AS Keywords FROM yara(files=OSPath, key=\"A\", rules=YaraRule, accessor=ACCESSOR) }) }, else={ SELECT *, NULL AS Keywords FROM modified_before })",
+          "SELECT OSPath, Inode, Mode, Size, ATime, MTime, CTime, Keywords, if(condition=Upload_File  and Mode.IsRegular, then=upload(file=OSPath, accessor=ACCESSOR)) AS Upload, if(condition=Calculate_Hash  and Mode.IsRegular, then=hash(path=OSPath, accessor=ACCESSOR)) AS Hash FROM keyword_search"
+        ],
+        "notebook": [
+          {
+            "template": "",
+            "type": "none",
+            "name": "quick_link",
+            "output": "",
+            "env": [
+              {
+                "key": "text",
+                "value": "Search Files"
+              },
+              {
+                "key": "icon",
+                "value": "search"
+              },
+              {
+                "key": "os_filter",
+                "value": "Linux"
+              },
+              {
+                "key": "weight",
+                "value": "010"
+              }
+            ]
+          },
+          {
+            "template": "/*\n# Linux.Search.FileFinder\n*/\n\nSELECT * FROM source()\nLIMIT 50\n",
+            "type": "vql",
+            "name": "",
+            "output": "",
+            "env": []
+          }
+        ]
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [
+      {
+        "name": "ATime",
+        "type": "timestamp",
+        "description": ""
+      },
+      {
+        "name": "MTime",
+        "type": "timestamp",
+        "description": ""
+      },
+      {
+        "name": "CTime",
+        "type": "timestamp",
+        "description": ""
+      },
+      {
+        "name": "Upload",
+        "type": "preview_upload",
+        "description": ""
+      }
+    ],
+    "raw": "name: Linux.Search.FileFinder\ndescription: |\n  Searches for files by path glob, inspects file content via YARA, and\n  provides file hash and upload options..\n\n  This artifact is useful in the following scenarios:\n\n  * We need to locate all the places on our network where customer\n    data has been copied.\n\n  * We\u2019ve identified malware in a data breach, named using short\n    random strings in specific folders and need to search for other\n    instances across the network.\n\n  * We believe our user account credentials have been dumped and\n    need to locate them.\n\n  * We need to search for exposed credit card data to satisfy PCI\n    requirements.\n\n  * We have a sample of data that has been disclosed and need to\n    locate other similar files\n\n  **Performance Note**\n\n  This artifact can be quite expensive, especially if we search file\n  content. It will require opening each file and reading its entire\n  content. To minimize the impact on the endpoint we recommend this\n  artifact is collected with a rate limited way (about 20-50 ops per\n  second).\n\nprecondition:\n  SELECT * FROM info() where OS = 'linux'\n\nparameters:\n  - name: SearchFilesGlob\n    default: /home/*\n    description: Use a glob to define the files that will be searched.\n\n  - name: SearchFilesGlobTable\n    type: csv\n    default: |\n      Glob\n      /home/someuser/*\n    description: Alternative specify multiple globs in a table\n\n  - name: YaraRule\n    type: yara\n    default:\n    description: A yara rule to search for matching files.\n\n  - name: Upload_File\n    default: N\n    type: bool\n\n  - name: Calculate_Hash\n    default: N\n    type: bool\n\n  - name: MoreRecentThan\n    default: \"\"\n    type: timestamp\n\n  - name: ModifiedBefore\n    default: \"\"\n    type: timestamp\n\n  - name: ExcludePathRegex\n    default: \"^/(proc|sys|run|snap)\"\n    type: regex\n    description: If this regex matches the path of any directory we do not even descend inside of it.\n\n  - name: LocalFilesystemOnly\n    default: Y\n    type: bool\n    description: When set we stay on local attached filesystems including loop, attached disk, cdrom, device mapper, and excluding proc, nfs etc.\n\n  - name: OneFilesystem\n    default: N\n    type: bool\n    description: When set we do not follow a link to go on to a different filesystem.\n\n  - name: DoNotFollowSymlinks\n    type: bool\n    default: N\n    description: If specified we are allowed to follow symlinks while globbing\n\n  - name: ROOT\n    type: hidden\n    description: The root from which to start searching.\n\n  - name: ACCESSOR\n    type: hidden\n    default: \"file\"\n\n  - name: UPLOAD_IS_RESUMABLE\n    type: bool\n    default: N\n    description: |\n      If set the uploads can be resumed if the flow times out or errors.\n\nsources:\n- query: |\n    -- This list comes from cat /proc/devices and represents actual\n    -- devices. Most virtual devices like /proc, fuse and network\n    -- filesystems have a major number of 0.\n    LET LocalDeviceMajor <= (\n       253,\n       7,   -- loop\n       8,   -- sd\n       9,   -- md\n       11,  -- sr\n       65,  -- sd\n       66,  -- sd\n       67,  -- sd\n       68,  -- sd\n       69,  -- sd\n       70,  -- sd\n       71,  -- sd\n       128, -- sd\n       129, -- sd\n       130, -- sd\n       131, -- sd\n       132, -- sd\n       133, -- sd\n       134, -- sd\n       135, -- sd\n       202, -- xvd\n       253, -- device-mapper\n       254, -- mdp\n       259, -- blkext\n    )\n\n    LET RecursionCallback = if(\n       condition=LocalFilesystemOnly,\n         then=if(condition=ExcludePathRegex,\n                 then=\"x=>x.Data.DevMajor IN LocalDeviceMajor AND NOT x.OSPath =~ ExcludePathRegex\",\n                 else=\"x=>x.Data.DevMajor IN LocalDeviceMajor\"),\n         else=if(condition=ExcludePathRegex,\n                 then=\"x=>NOT x.OSPath =~ ExcludePathRegex\",\n                 else=\"\"))\n\n    LET file_search = SELECT OSPath,\n               Sys.mft as Inode,\n               Mode.String AS Mode, Size,\n               Mtime AS MTime,\n               Atime AS ATime,\n               Ctime AS CTime,\n               IsDir, Mode, Data\n        FROM glob(globs=SearchFilesGlobTable.Glob + SearchFilesGlob,\n                  recursion_callback=RecursionCallback,\n                  root=ROOT,\n                  one_filesystem=OneFilesystem,\n                  accessor=ACCESSOR, nosymlink=DoNotFollowSymlinks)\n\n    LET more_recent = SELECT * FROM if(\n        condition=MoreRecentThan,\n        then={\n          SELECT * FROM file_search\n          WHERE MTime > MoreRecentThan\n        }, else={\n          SELECT * FROM file_search\n        })\n\n    LET modified_before = SELECT * FROM if(\n        condition=ModifiedBefore,\n        then={\n          SELECT * FROM more_recent\n          WHERE MTime < ModifiedBefore\n            AND MTime > MoreRecentThan\n        }, else={\n          SELECT * FROM more_recent\n        })\n\n    LET keyword_search = SELECT * FROM if(\n        condition=YaraRule,\n        then={\n          SELECT * FROM foreach(\n            row={\n               SELECT * FROM modified_before\n               WHERE Mode.IsRegular\n            },\n            query={\n               SELECT OSPath, Inode, Mode,\n                      Size, ATime, MTime, CTime,\n                      str(str=String.Data) As Keywords\n\n               FROM yara(files=OSPath,\n                         key=\"A\",\n                         rules=YaraRule,\n                         accessor=ACCESSOR)\n            })\n        }, else={\n          SELECT *, NULL AS Keywords FROM modified_before\n        })\n\n    SELECT OSPath, Inode, Mode, Size, ATime,\n             MTime, CTime, Keywords,\n               if(condition=Upload_File and Mode.IsRegular,\n                  then=upload(file=OSPath,\n                              accessor=ACCESSOR)) AS Upload,\n               if(condition=Calculate_Hash and Mode.IsRegular,\n                  then=hash(path=OSPath,\n                            accessor=ACCESSOR)) AS Hash\n    FROM keyword_search\n  notebook:\n    - type: none\n      name: quick_link\n      env:\n        - key: text\n          value: Search Files\n        - key: icon\n          value: search\n        - key: os_filter\n          value: Linux\n        - key: weight\n          value: \"010\"\n    - type: vql\n      template: |\n        /*\n        # Linux.Search.FileFinder\n        */\n\n        SELECT * FROM source()\n        LIMIT 50\n\ncolumn_types:\n  - name: ATime\n    type: timestamp\n  - name: MTime\n    type: timestamp\n  - name: CTime\n    type: timestamp\n  - name: Upload\n    type: preview_upload\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Generic.Collectors.File",
+    "aliases": [
+      "Windows.Collectors.File"
+    ],
+    "description": "Searches a filesystem using a set of glob patterns and uploads\nmatching files to the server.\n\nAll globs must be on the same device. The globs will be searched in\none pass - so you can provide many globs at the same time.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "",
+    "parameters": [
+      {
+        "name": "collectionSpec",
+        "default": "Glob\nUsers\\*\\NTUser.dat\n",
+        "description": "A CSV file with a Glob column with all the globs to collect.\nNOTE: Globs must not have a leading device.\n",
+        "type": "csv",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "Root",
+        "default": "C:",
+        "description": "On Windows, this is the device to apply all the glob on\n(e.g. `C:`). On *NIX, this should be a path to a subdirectory or\n/.\n",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "Accessor",
+        "default": "auto",
+        "description": "On Windows, this can be changed to `ntfs`.\n",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "NTFS_CACHE_TIME",
+        "default": "1000000",
+        "description": "How often to flush the NTFS cache. (Default is never).",
+        "type": "int",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "UPLOAD_IS_RESUMABLE",
+        "default": "N",
+        "description": "If set the uploads can be resumed if the flow times out or errors.\n",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "MaxFileSize",
+        "default": "18446744073709551615",
+        "description": "The max size in bytes of the individual files to collect.\nSet to 0 to disable it.\n",
+        "type": "int",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "All Matches Metadata",
+        "description": "",
+        "precondition": "",
+        "query": "LET RootPath <= pathspec(Path=Root, accessor=Accessor)\n\n-- Generate the collection globs for each device\nLET specs = SELECT RootPath + Glob AS Glob\n  FROM collectionSpec\n  WHERE log(message=format(format=\"Processing Device %v with %v: glob is %v\",\n                           args=[Root, Accessor, Glob]))\n\n-- Join all the collection rules into a single Glob plugin. This ensure we\n-- only make one pass over the filesystem. We only want LFNs.\nLET hits = SELECT OSPath AS SourceFile,\n                  Size,\n                  Btime AS Created,\n                  Ctime AS Changed,\n                  Mtime AS Modified,\n                  Atime AS LastAccessed\n  FROM glob(globs=specs.Glob, accessor=Accessor)\n  WHERE NOT IsDir\n   AND log(message=\"Found \" + SourceFile)\n   AND ( Size <= MaxFileSize OR\n         ( log(message=\"Skipping file \" + SourceFile + \" Due to MaxFileSize\")\n           AND FALSE ))\n\n-- Pass all the results to the next query. This will serialize\n-- to disk if there are too many results.\nLET all_results <= SELECT Created,\n                          Changed,\n                          LastAccessed,\n                          Modified,\n                          Size,\n                          SourceFile\n  FROM hits\n\nSELECT *\nFROM all_results\n",
+        "queries": [
+          "LET RootPath <= pathspec(Path=Root, accessor=Accessor)",
+          "LET specs = SELECT RootPath + Glob AS Glob FROM collectionSpec WHERE log(message=format(format=\"Processing Device %v with %v: glob is %v\", args=[Root, Accessor, Glob]))",
+          "LET hits = SELECT OSPath AS SourceFile, Size, Btime AS Created, Ctime AS Changed, Mtime AS Modified, Atime AS LastAccessed FROM glob(globs=specs.Glob, accessor=Accessor) WHERE NOT IsDir  AND log(message=\"Found \" + SourceFile)  AND (Size <= MaxFileSize OR (log(message=\"Skipping file \" + SourceFile + \" Due to MaxFileSize\")  AND FALSE))",
+          "LET all_results <= SELECT Created, Changed, LastAccessed, Modified, Size, SourceFile FROM hits",
+          "SELECT * FROM all_results"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "Uploads",
+        "description": "",
+        "precondition": "",
+        "query": "-- Upload the files. Split into workers so the files are uploaded in parallel.\nLET uploaded_files = SELECT *\n  FROM foreach(row={\n    SELECT *\n    FROM all_results\n  },\n               workers=30,\n               query={\n    SELECT Created,\n           Changed,\n           LastAccessed,\n           Modified,\n           SourceFile,\n           Size,\n           upload(file=SourceFile, accessor=Accessor, mtime=Modified) AS Upload\n    FROM scope()\n  })\n\n-- Separate the hashes into their own column.\nSELECT now() AS CopiedOnTimestamp,\n       SourceFile,\n       Upload.Path AS DestinationFile,\n       Size AS FileSize,\n       Upload.sha256 AS SourceFileSha256,\n       Created,\n       Changed,\n       Modified,\n       LastAccessed\nFROM uploaded_files\n",
+        "queries": [
+          "LET uploaded_files = SELECT * FROM foreach(row={ SELECT * FROM all_results }, workers=30, query={ SELECT Created, Changed, LastAccessed, Modified, SourceFile, Size, upload(file=SourceFile, accessor=Accessor, mtime=Modified) AS Upload FROM scope() })",
+          "SELECT now() AS CopiedOnTimestamp, SourceFile, Upload.Path AS DestinationFile, Size AS FileSize, Upload.sha256 AS SourceFileSha256, Created, Changed, Modified, LastAccessed FROM uploaded_files"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Generic.Collectors.File\ndescription: |\n   Searches a filesystem using a set of glob patterns and uploads\n   matching files to the server.\n\n   All globs must be on the same device. The globs will be searched in\n   one pass - so you can provide many globs at the same time.\n\naliases:\n  - Windows.Collectors.File\n\nparameters:\n  - name: collectionSpec\n    description: |\n       A CSV file with a Glob column with all the globs to collect.\n       NOTE: Globs must not have a leading device.\n    type: csv\n    default: |\n       Glob\n       Users\\*\\NTUser.dat\n\n  - name: Root\n    description: |\n      On Windows, this is the device to apply all the glob on\n      (e.g. `C:`). On *NIX, this should be a path to a subdirectory or\n      /.\n    default: \"C:\"\n\n  - name: Accessor\n    default: auto\n    description: |\n      On Windows, this can be changed to `ntfs`.\n\n  - name: NTFS_CACHE_TIME\n    type: int\n    description: How often to flush the NTFS cache. (Default is never).\n    default: \"1000000\"\n\n  - name: UPLOAD_IS_RESUMABLE\n    type: bool\n    default: N\n    description: |\n      If set the uploads can be resumed if the flow times out or errors.\n\n  - name: MaxFileSize\n    type: int\n    default: 18446744073709551615\n    description: |\n      The max size in bytes of the individual files to collect.\n      Set to 0 to disable it.\n\n\nsources:\n   - name: All Matches Metadata\n     query: |\n        LET RootPath <= pathspec(Path=Root, accessor=Accessor)\n\n        -- Generate the collection globs for each device\n        LET specs = SELECT RootPath + Glob AS Glob\n          FROM collectionSpec\n          WHERE log(message=format(format=\"Processing Device %v with %v: glob is %v\",\n                                   args=[Root, Accessor, Glob]))\n\n        -- Join all the collection rules into a single Glob plugin. This ensure we\n        -- only make one pass over the filesystem. We only want LFNs.\n        LET hits = SELECT OSPath AS SourceFile,\n                          Size,\n                          Btime AS Created,\n                          Ctime AS Changed,\n                          Mtime AS Modified,\n                          Atime AS LastAccessed\n          FROM glob(globs=specs.Glob, accessor=Accessor)\n          WHERE NOT IsDir\n           AND log(message=\"Found \" + SourceFile)\n           AND ( Size <= MaxFileSize OR\n                 ( log(message=\"Skipping file \" + SourceFile + \" Due to MaxFileSize\")\n                   AND FALSE ))\n\n        -- Pass all the results to the next query. This will serialize\n        -- to disk if there are too many results.\n        LET all_results <= SELECT Created,\n                                  Changed,\n                                  LastAccessed,\n                                  Modified,\n                                  Size,\n                                  SourceFile\n          FROM hits\n\n        SELECT *\n        FROM all_results\n\n\n   - name: Uploads\n     query: |\n        -- Upload the files. Split into workers so the files are uploaded in parallel.\n        LET uploaded_files = SELECT *\n          FROM foreach(row={\n            SELECT *\n            FROM all_results\n          },\n                       workers=30,\n                       query={\n            SELECT Created,\n                   Changed,\n                   LastAccessed,\n                   Modified,\n                   SourceFile,\n                   Size,\n                   upload(file=SourceFile, accessor=Accessor, mtime=Modified) AS Upload\n            FROM scope()\n          })\n\n        -- Separate the hashes into their own column.\n        SELECT now() AS CopiedOnTimestamp,\n               SourceFile,\n               Upload.Path AS DestinationFile,\n               Size AS FileSize,\n               Upload.sha256 AS SourceFileSha256,\n               Created,\n               Changed,\n               Modified,\n               LastAccessed\n        FROM uploaded_files\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Sys.Crontab",
+    "aliases": [],
+    "description": "Displays parsed information from crontab.\n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "SELECT OS From info() where OS = 'linux'",
+    "parameters": [
+      {
+        "name": "cronTabGlob",
+        "default": "/etc/crontab,/etc/cron.d/**,/var/at/tabs/**,/var/spool/cron/**,/var/spool/cron/crontabs/**",
+        "description": "",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "cronTabScripts",
+        "default": "/etc/cron.daily/*,/etc/cron.hourly/*,/etc/cron.monthly/*,/etc/cron.weekly/*",
+        "description": "",
+        "type": "",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "Length",
+        "default": "10000",
+        "description": "",
+        "type": "int",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "CronTabs",
+        "description": "",
+        "precondition": "",
+        "query": "LET raw = SELECT * FROM foreach(\n    row={\n      SELECT OSPath from glob(globs=split(string=cronTabGlob, sep=\",\"))\n    },\n    query={\n      SELECT OSPath, data, parse_string_with_regex(\n        string=data,\n        regex=[\n           /* Regex for event (Starts with @) */\n           \"^(?P<Event>@[a-zA-Z]+)\\\\s+(?P<Command>.+)\",\n\n           /* Regex for regular command. */\n           \"^(?P<Minute>[^\\\\s]+)\\\\s+\"+\n           \"(?P<Hour>[^\\\\s]+)\\\\s+\"+\n           \"(?P<DayOfMonth>[^\\\\s]+)\\\\s+\"+\n           \"(?P<Month>[^\\\\s]+)\\\\s+\"+\n           \"(?P<DayOfWeek>[^\\\\s]+)\\\\s+\"+\n           \"(?P<User>[^\\\\s]+)\\\\s+\"+\n           \"(?P<Command>.+)$\"]) as Record\n\n      /* Read lines from the file and filter ones that start with \"#\" */\n      FROM split_records(\n         filenames=OSPath,\n         regex=\"\\n\", columns=[\"data\"]) WHERE not data =~ \"^\\\\s*#\"\n      }) WHERE Record.Command\n\nSELECT Record.Event AS Event,\n         Record.User AS User,\n         Record.Minute AS Minute,\n         Record.Hour AS Hour,\n         Record.DayOfMonth AS DayOfMonth,\n         Record.Month AS Month,\n         Record.DayOfWeek AS DayOfWeek,\n         Record.Command AS Command,\n         OSPath AS Path\nFROM raw\n",
+        "queries": [
+          "LET raw = SELECT * FROM foreach(row={ SELECT OSPath FROM glob(globs=split(string=cronTabGlob, sep=\",\")) }, query={ SELECT OSPath, data, parse_string_with_regex(string=data, regex=[\"^(?P<Event>@[a-zA-Z]+)\\\\s+(?P<Command>.+)\", \"^(?P<Minute>[^\\\\s]+)\\\\s+\" + \"(?P<Hour>[^\\\\s]+)\\\\s+\" + \"(?P<DayOfMonth>[^\\\\s]+)\\\\s+\" + \"(?P<Month>[^\\\\s]+)\\\\s+\" + \"(?P<DayOfWeek>[^\\\\s]+)\\\\s+\" + \"(?P<User>[^\\\\s]+)\\\\s+\" + \"(?P<Command>.+)$\"]) AS Record FROM split_records(filenames=OSPath, regex=\"\\n\", columns=[\"data\"]) WHERE NOT data =~ \"^\\\\s*#\" }) WHERE Record.Command",
+          "SELECT Record.Event AS Event, Record.User AS User, Record.Minute AS Minute, Record.Hour AS Hour, Record.DayOfMonth AS DayOfMonth, Record.Month AS Month, Record.DayOfWeek AS DayOfWeek, Record.Command AS Command, OSPath AS Path FROM raw"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "CronScripts",
+        "description": "",
+        "precondition": "",
+        "query": "SELECT Mtime, OSPath, read_file(filename=OSPath,length=Length) AS Content\nFROM glob(globs=split(string=cronTabScripts, sep=\",\"))\n",
+        "queries": [
+          "SELECT Mtime, OSPath, read_file(filename=OSPath, length=Length) AS Content FROM glob(globs=split(string=cronTabScripts, sep=\",\"))"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "Uploaded",
+        "description": "",
+        "precondition": "",
+        "query": "SELECT OSPath, upload(file=OSPath) AS Upload\nFROM glob(globs=split(string=cronTabGlob + \",\" + cronTabScripts, sep=\",\"))\n",
+        "queries": [
+          "SELECT OSPath, upload(file=OSPath) AS Upload FROM glob(globs=split(string=cronTabGlob + \",\" + cronTabScripts, sep=\",\"))"
+        ],
+        "notebook": []
+      }
+    ],
+    "imports": [],
+    "export": "",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Sys.Crontab\ndescription: |\n  Displays parsed information from crontab.\n\nparameters:\n  - name: cronTabGlob\n    default: /etc/crontab,/etc/cron.d/**,/var/at/tabs/**,/var/spool/cron/**,/var/spool/cron/crontabs/**\n  - name: cronTabScripts\n    default: /etc/cron.daily/*,/etc/cron.hourly/*,/etc/cron.monthly/*,/etc/cron.weekly/*\n  - name: Length\n    default: 10000\n    type: int\n\nprecondition: SELECT OS From info() where OS = 'linux'\n\nsources:\n  - name: CronTabs\n    query: |\n      LET raw = SELECT * FROM foreach(\n          row={\n            SELECT OSPath from glob(globs=split(string=cronTabGlob, sep=\",\"))\n          },\n          query={\n            SELECT OSPath, data, parse_string_with_regex(\n              string=data,\n              regex=[\n                 /* Regex for event (Starts with @) */\n                 \"^(?P<Event>@[a-zA-Z]+)\\\\s+(?P<Command>.+)\",\n\n                 /* Regex for regular command. */\n                 \"^(?P<Minute>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<Hour>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<DayOfMonth>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<Month>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<DayOfWeek>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<User>[^\\\\s]+)\\\\s+\"+\n                 \"(?P<Command>.+)$\"]) as Record\n\n            /* Read lines from the file and filter ones that start with \"#\" */\n            FROM split_records(\n               filenames=OSPath,\n               regex=\"\\n\", columns=[\"data\"]) WHERE not data =~ \"^\\\\s*#\"\n            }) WHERE Record.Command\n\n      SELECT Record.Event AS Event,\n               Record.User AS User,\n               Record.Minute AS Minute,\n               Record.Hour AS Hour,\n               Record.DayOfMonth AS DayOfMonth,\n               Record.Month AS Month,\n               Record.DayOfWeek AS DayOfWeek,\n               Record.Command AS Command,\n               OSPath AS Path\n      FROM raw\n  - name: CronScripts\n    query: |\n      SELECT Mtime, OSPath, read_file(filename=OSPath,length=Length) AS Content\n      FROM glob(globs=split(string=cronTabScripts, sep=\",\"))\n  - name: Uploaded\n    query: |\n      SELECT OSPath, upload(file=OSPath) AS Upload\n      FROM glob(globs=split(string=cronTabGlob + \",\" + cronTabScripts, sep=\",\"))\n",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  },
+  {
+    "name": "Linux.Forensics.Journal",
+    "aliases": [],
+    "description": "Extracts records from systemd journal files for forensic analysis.\n\nSystemd uses a binary log format to store logs. This parses the\nbinary journal logs. \n",
+    "author": "",
+    "reference": [],
+    "references": [],
+    "required_permissions": [],
+    "implied_permissions": [],
+    "impersonate": "",
+    "resources": {
+      "timeout": 0,
+      "ops_per_second": 0,
+      "cpu_limit": 0,
+      "iops_limit": 0,
+      "max_rows": 0,
+      "max_upload_bytes": 0,
+      "max_batch_wait": 0,
+      "max_batch_rows": 0,
+      "max_batch_rows_buffer": 0
+    },
+    "tools": [],
+    "precondition": "",
+    "parameters": [
+      {
+        "name": "JournalGlob",
+        "default": "/{run,var}/log/journal/*/*.journal{,~}",
+        "description": "A Glob expression for finding journal files.",
+        "type": "glob",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "IdentifierRegex",
+        "default": "",
+        "description": "Regex of event source e.g sshd or kernel",
+        "type": "regex",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "IocRegex",
+        "default": "",
+        "description": "IOC regex in event data",
+        "type": "regex",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "DateAfter",
+        "default": "",
+        "description": "search for events after this date. YYYY-MM-DDTmm:hh:ssZ",
+        "type": "timestamp",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "DateBefore",
+        "default": "",
+        "description": "search for events before this date. YYYY-MM-DDTmm:hh:ssZ",
+        "type": "timestamp",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      },
+      {
+        "name": "AlsoUpload",
+        "default": "",
+        "description": "If set we also upload the raw files.",
+        "type": "bool",
+        "choices": [],
+        "friendly_name": "",
+        "validating_regex": "",
+        "artifact_type": "",
+        "sources": false
+      }
+    ],
+    "type": "client",
+    "sources": [
+      {
+        "name": "Uploads",
+        "description": "",
+        "precondition": "",
+        "query": "SELECT *\nFROM if(condition=AlsoUpload,\n        then={\n    SELECT OSPath,\n           upload(file=OSPath) AS Upload\n    FROM glob(globs=JournalGlob)\n  })\n",
+        "queries": [
+          "SELECT * FROM if(condition=AlsoUpload, then={ SELECT OSPath, upload(file=OSPath) AS Upload FROM glob(globs=JournalGlob) })"
+        ],
+        "notebook": []
+      },
+      {
+        "name": "",
+        "description": "",
+        "precondition": "",
+        "query": "LET standard = SELECT *\n  FROM foreach(row={\n    SELECT OSPath\n    FROM glob(globs=JournalGlob)\n  },\n               query={\n    SELECT *\n    FROM parse_journald(filename=OSPath,\n                        start_time=DateAfter,\n                        end_time=DateBefore)\n  })\n\nLET identifier_only = SELECT *\n  FROM foreach(row={\n    SELECT OSPath\n    FROM glob(globs=JournalGlob)\n  },\n               query={\n    SELECT *\n    FROM parse_journald(filename=OSPath,\n                        start_time=DateAfter,\n                        end_time=DateBefore)\n    WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex\n  })\n\nLET all_regex = SELECT *\n  FROM foreach(row={\n    SELECT OSPath\n    FROM glob(globs=JournalGlob)\n  },\n               query={\n    SELECT *\n    FROM parse_journald(filename=OSPath,\n                        start_time=DateAfter,\n                        end_time=DateBefore)\n    WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex\n     AND format(format='%s_%s_%s',\n                args=[EventData, System._CMDLINE, System._EXE]) =~\n           IocRegex\n  })\n\nLET ioc_only = SELECT *\n  FROM foreach(row={\n    SELECT OSPath\n    FROM glob(globs=JournalGlob)\n  },\n               query={\n    SELECT *\n    FROM parse_journald(filename=OSPath,\n                        start_time=DateAfter,\n                        end_time=DateBefore)\n    WHERE format(format='%s_%s_%s',\n                 args=[EventData, System._CMDLINE,\n                   System._EXE]) =~ IocRegex\n  })\n\nSELECT *\nFROM if(condition=IdentifierRegex\n         AND IocRegex,\n        then=all_regex,\n        else=if(condition=IdentifierRegex,\n                then=identifier_only,\n                else=if(condition=IocRegex, then=ioc_only, else=standard)))\n",
+        "queries": [
+          "LET standard = SELECT * FROM foreach(row={ SELECT OSPath FROM glob(globs=JournalGlob) }, query={ SELECT * FROM parse_journald(filename=OSPath, start_time=DateAfter, end_time=DateBefore) })",
+          "LET identifier_only = SELECT * FROM foreach(row={ SELECT OSPath FROM glob(globs=JournalGlob) }, query={ SELECT * FROM parse_journald(filename=OSPath, start_time=DateAfter, end_time=DateBefore) WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex })",
+          "LET all_regex = SELECT * FROM foreach(row={ SELECT OSPath FROM glob(globs=JournalGlob) }, query={ SELECT * FROM parse_journald(filename=OSPath, start_time=DateAfter, end_time=DateBefore) WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex  AND format(format='%s_%s_%s', args=[EventData, System._CMDLINE, System._EXE]) =~ IocRegex })",
+          "LET ioc_only = SELECT * FROM foreach(row={ SELECT OSPath FROM glob(globs=JournalGlob) }, query={ SELECT * FROM parse_journald(filename=OSPath, start_time=DateAfter, end_time=DateBefore) WHERE format(format='%s_%s_%s', args=[EventData, System._CMDLINE, System._EXE]) =~ IocRegex })",
+          "SELECT * FROM if(condition=IdentifierRegex  AND IocRegex, then=all_regex, else=if(condition=IdentifierRegex, then=identifier_only, else=if(condition=IocRegex, then=ioc_only, else=standard)))"
+        ],
+        "notebook": [
+          {
+            "template": "/*\n# Simplified log view\n*/\nSELECT System.Timestamp AS Timestamp,\n      EventData.SYSLOG_IDENTIFIER AS Unit,\n      get(item=Priorities, field=str(str=EventData.PRIORITY)) AS Level,\n      System._EXE AS Executable,\n      System._CMDLINE AS _Cmdline,\n      System._PID AS PID,\n      EventData.MESSAGE AS Message,\n      System AS _System,\n      EventData AS _EventData\nFROM source()\nORDER BY Timestamp\n",
+            "type": "vql_suggestion",
+            "name": "Simplified view",
+            "output": "",
+            "env": []
+          },
+          {
+            "template": "/*\n# Message count\n\n{{ define \"Messages\" }}\nSELECT int(int=System.Timestamp.Unix / 60) * 60 AS MinBin,\n                        count() AS Count\n  FROM source()\n  GROUP BY MinBin\n  ORDER BY MinBin\n{{ end }}\n{{ Query \"Messages\" | TimeChart }}\n*/\nLET Dummy <= 42\n",
+            "type": "vql_suggestion",
+            "name": "Message count as plot",
+            "output": "",
+            "env": []
+          },
+          {
+            "template": "/*\n# Journal timeline\n{{ Timeline \"Journal\" }}\n*/\nLET _ <= timeline_add(key='Timestamp',\n                      name='journal',\n                      timeline='Journal',\n                      query={\n    SELECT System.Timestamp AS Timestamp,\n          EventData.SYSLOG_IDENTIFIER AS Unit,\n          get(item=Priorities, field=str(str=EventData.PRIORITY)) AS Level,\n          System._EXE AS Executable,\n          System._CMDLINE AS _Cmdline,\n          System._PID AS PID,\n          EventData.MESSAGE AS Message,\n          System,\n          EventData\n    FROM source()\n  })",
+            "type": "vql_suggestion",
+            "name": "Timeline",
+            "output": "",
+            "env": []
+          }
+        ]
+      }
+    ],
+    "imports": [],
+    "export": "LET Priorities <= dict(`0`='emerg',\n                    `1`='alert',\n                    `2`='crit',\n                    `3`='err',\n                    `4`='warning',\n                    `5`='notice',\n                    `6`='info',\n                    `7`='debug')\n",
+    "reports": [],
+    "column_types": [],
+    "raw": "name: Linux.Forensics.Journal\ndescription: |\n  Extracts records from systemd journal files for forensic analysis.\n\n  Systemd uses a binary log format to store logs. This parses the\n  binary journal logs. \n\nparameters:\n- name: JournalGlob\n  type: glob\n  description: A Glob expression for finding journal files.\n  default: /{run,var}/log/journal/*/*.journal{,~}\n- name: IdentifierRegex\n  type: regex\n  description: \"Regex of event source e.g sshd or kernel\"\n- name: IocRegex\n  type: regex\n  description: \"IOC regex in event data\"\n- name: DateAfter\n  type: timestamp\n  description: \"search for events after this date. YYYY-MM-DDTmm:hh:ssZ\"\n- name: DateBefore\n  type: timestamp\n  description: \"search for events before this date. YYYY-MM-DDTmm:hh:ssZ\"\n- name: AlsoUpload\n  type: bool\n  description: If set we also upload the raw files.\n\nexport: |\n  LET Priorities <= dict(`0`='emerg',\n                      `1`='alert',\n                      `2`='crit',\n                      `3`='err',\n                      `4`='warning',\n                      `5`='notice',\n                      `6`='info',\n                      `7`='debug')\n\nsources:\n- name: Uploads\n  query: |\n     SELECT *\n     FROM if(condition=AlsoUpload,\n             then={\n         SELECT OSPath,\n                upload(file=OSPath) AS Upload\n         FROM glob(globs=JournalGlob)\n       })\n\n- query: |\n     LET standard = SELECT *\n       FROM foreach(row={\n         SELECT OSPath\n         FROM glob(globs=JournalGlob)\n       },\n                    query={\n         SELECT *\n         FROM parse_journald(filename=OSPath,\n                             start_time=DateAfter,\n                             end_time=DateBefore)\n       })\n\n     LET identifier_only = SELECT *\n       FROM foreach(row={\n         SELECT OSPath\n         FROM glob(globs=JournalGlob)\n       },\n                    query={\n         SELECT *\n         FROM parse_journald(filename=OSPath,\n                             start_time=DateAfter,\n                             end_time=DateBefore)\n         WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex\n       })\n\n     LET all_regex = SELECT *\n       FROM foreach(row={\n         SELECT OSPath\n         FROM glob(globs=JournalGlob)\n       },\n                    query={\n         SELECT *\n         FROM parse_journald(filename=OSPath,\n                             start_time=DateAfter,\n                             end_time=DateBefore)\n         WHERE EventData.SYSLOG_IDENTIFIER =~ IdentifierRegex\n          AND format(format='%s_%s_%s',\n                     args=[EventData, System._CMDLINE, System._EXE]) =~\n                IocRegex\n       })\n\n     LET ioc_only = SELECT *\n       FROM foreach(row={\n         SELECT OSPath\n         FROM glob(globs=JournalGlob)\n       },\n                    query={\n         SELECT *\n         FROM parse_journald(filename=OSPath,\n                             start_time=DateAfter,\n                             end_time=DateBefore)\n         WHERE format(format='%s_%s_%s',\n                      args=[EventData, System._CMDLINE,\n                        System._EXE]) =~ IocRegex\n       })\n\n     SELECT *\n     FROM if(condition=IdentifierRegex\n              AND IocRegex,\n             then=all_regex,\n             else=if(condition=IdentifierRegex,\n                     then=identifier_only,\n                     else=if(condition=IocRegex, then=ioc_only, else=standard)))\n\n  notebook:\n    - type: vql_suggestion\n      name: Simplified view\n      template: |\n        /*\n        # Simplified log view\n        */\n        SELECT System.Timestamp AS Timestamp,\n              EventData.SYSLOG_IDENTIFIER AS Unit,\n              get(item=Priorities, field=str(str=EventData.PRIORITY)) AS Level,\n              System._EXE AS Executable,\n              System._CMDLINE AS _Cmdline,\n              System._PID AS PID,\n              EventData.MESSAGE AS Message,\n              System AS _System,\n              EventData AS _EventData\n        FROM source()\n        ORDER BY Timestamp\n\n    - name: Message count as plot\n      type: vql_suggestion\n      template: |\n        /*\n        # Message count\n\n        {{ define \"Messages\" }}\n        SELECT int(int=System.Timestamp.Unix / 60) * 60 AS MinBin,\n                                count() AS Count\n          FROM source()\n          GROUP BY MinBin\n          ORDER BY MinBin\n        {{ end }}\n        {{ Query \"Messages\" | TimeChart }}\n        */\n        LET Dummy <= 42\n\n    - type: vql_suggestion\n      name: Timeline\n      template: |\n        /*\n        # Journal timeline\n        {{ Timeline \"Journal\" }}\n        */\n        LET _ <= timeline_add(key='Timestamp',\n                              name='journal',\n                              timeline='Journal',\n                              query={\n            SELECT System.Timestamp AS Timestamp,\n                  EventData.SYSLOG_IDENTIFIER AS Unit,\n                  get(item=Priorities, field=str(str=EventData.PRIORITY)) AS Level,\n                  System._EXE AS Executable,\n                  System._CMDLINE AS _Cmdline,\n                  System._PID AS PID,\n                  EventData.MESSAGE AS Message,\n                  System,\n                  EventData\n            FROM source()\n          })",
+    "compiled": true,
+    "built_in": true,
+    "compiled_in": true,
+    "is_alias": false,
+    "is_inherited": false,
+    "metadata": {
+      "hidden": false,
+      "basic": false,
+      "tags": []
+    }
+  }
+]

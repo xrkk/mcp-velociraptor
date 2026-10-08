@@ -7,8 +7,14 @@ installation/datastore paths, transaction, VM UUID and boot identity. It pins
 v0.77.3 by full SHA-256, creates fresh root-private configuration, refuses
 unknown or incomplete installations and requires both services, enrollment
 and the guest-local API to be ready. See [Linux deployment](deploy/linux/README.md).
-This deployment does not qualify the still-unconnected Linux triage or
-in-memory high-granularity scope interfaces. Windows defaults are unchanged.
+The explicit Linux registry now injects a bound professional backend for
+`linux_triage_launch/status/results/export/cancel/collect/compare` and platform
+routing. `VELOCIRAPTOR_LINUX_DOMAIN=1` selects this Linux-only registry with
+`VELOCIRAPTOR_LINUX_ROOT`; unset retains the Windows registry. The one-shot
+`velociraptor_linux_cli.py --deployment-root <root>` uses the same registered
+handlers without a listener. See [basic triage](deploy/linux/triage.md).
+Local tests do not qualify native collections. High-granularity scope records
+remain in-memory bookkeeping; actual scope effects/realtime telemetry are open.
 
 Completed Windows-MCP and FakeNet outputs can use the explicit
 [cross-account artifact export](docs/artifact-export-handoff.md) before a Velo

@@ -43,6 +43,15 @@ def create_server() -> MCPServer:
     Both entry transports share this one registration; no second server is
     constructed and no tool is registered twice.
     """
+    if os.environ.get("VELOCIRAPTOR_LINUX_DOMAIN") == "1":
+        # Explicit Linux-only registry; default Windows construction below is unchanged.
+        from velociraptor_linux_backend import LinuxTriageBackend
+        from velociraptor_linux_domain import register_linux_domain_tools
+        backend = LinuxTriageBackend(os.environ["VELOCIRAPTOR_LINUX_ROOT"])
+        server = MCPServer("velociraptor-mcp-linux")
+        register_linux_domain_tools(server, clients_provider=backend.clients, backend=backend)
+        server._linux_backend = backend
+        return server
     # velociraptor_api loads repo-local .env before resolving this setting.
     init_stub(os.environ.get("VELOCIRAPTOR_API_CONFIG"))
     rows = read_root_artifact_definitions()
@@ -61,11 +70,6 @@ def create_server() -> MCPServer:
         download_root=os.environ.get("VELOCIRAPTOR_DOWNLOAD_ROOT"),
     )
     transfer_service = register_transfer_tools(server)
-    if os.environ.get("VELOCIRAPTOR_LINUX_DOMAIN") == "1":
-        # Opt-in Linux professional domain (LNX-VR); unset keeps the
-        # registry byte-identical for existing (Windows) deployments.
-        from velociraptor_linux_domain import register_linux_domain_tools
-        register_linux_domain_tools(server)
     validate_combined_registry(server, specs, transfer_names=TRANSFER_TOOL_NAMES)
     server._guest_transfer_tools = transfer_service
     return server

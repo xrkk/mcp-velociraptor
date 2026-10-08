@@ -111,7 +111,7 @@ class TriageTests(unittest.TestCase):
         run_b = {'fingerprint': 'f1', 'client_id': 'C.lnx1',
                  'category_results': {'process': 1, 'net': 1, 'extra': 1}}
         result = compare_triage_runs(run_a, run_b)
-        self.assertTrue(result['repeatable'])
+        self.assertFalse(result['repeatable'])  # Historical summaries have no valid originals.
         run_c = dict(run_b, fingerprint='f2')
         self.assertFalse(compare_triage_runs(run_a, run_c)['repeatable'])
         run_d = dict(run_b, category_results={'process': 1})
@@ -157,6 +157,6 @@ class TargetScopeTests(unittest.TestCase):
     def test_default_artifacts_cover_required_categories(self):
         names = default_artifact_names()
         for required in ('Linux.Sys.Pslist',
-                         'Linux.Systemd.Status', 'Linux.Sys.Crontab',
+                         'Linux.Sys.Services', 'Linux.Sys.Crontab',
                          'Linux.Network.Netstat'):
             self.assertIn(required, names)

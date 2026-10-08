@@ -1,25 +1,10 @@
 # Copyright 2026 Google LLC
-"""LNX-VR Linux domain: platform routing, artifact fingerprints, scoped
-collection planning and the default/targeted triage toolset.
+"""Linux professional registry and historical in-memory scope records.
 
-MalTrace master plan 7.1 (LNX-VR) contract implemented here:
-
-- Platform routing: Linux tools only act on endpoints whose registered OS is
-  ``linux``; a non-Linux (e.g. Windows) target is refused with
-  ``WRONG_PLATFORM`` and the refusal carries proof that no Velociraptor
-  mutation was issued for that target (Windows no-mis-operation evidence).
-- Linux artifact fingerprint: the built-in triage set is pinned with exact
-  names so two same-premise triage runs are comparable and drift is
-  detectable.
-- High-granularity scope supply: a default allowed set, explicit temporary
-  extension with reason/scope/expiry, observable effective scope, withdrawal
-  back to default, and full stop — each transition recorded and reviewable
-  for P04's I-006 consumption.
-- Session collect lifecycle: plan -> launch -> status -> (withdraw/extend) ->
-  stop, with bounded resource hints.
-
-Pure logic (unit-testable without a live server); the guest runner in
-``linux_domain_runner.py`` executes the same plans against the real API.
+Production basic triage uses the injected LinuxTriageBackend and full original
+artifact fingerprints. ScopeState and its hints are bookkeeping only: they do
+not implement realtime collection, scope activation, expiry, withdrawal or stop.
+The historical name-only plan is not native collection evidence.
 """
 from __future__ import annotations
 
@@ -37,12 +22,13 @@ DEFAULT_TRIAGE_ARTIFACTS: tuple[tuple[str, str], ...] = (
     ('Linux.Sys.Users', 'local accounts'),
     ('Linux.Network.Netstat', 'connections with process mapping'),
     ('Linux.Sys.Crontab', 'cron persistence'),
-    ('Linux.Systemd.Status', 'systemd services'),
-    ('Linux.Sys.Autostart', 'autostart entries'),
+    ('Linux.Sys.Services', 'systemd service inventory'),
+    ('Generic.Collectors.File', 'explicitly scoped service/timer file acquisition'),
     ('Linux.Sys.Pslist', 'process list with ppid lineage (fork/exec fact '
                          'clues; realtime event streams belong to client '
                          'monitoring sessions, not base triage)'),
-    ('Linux.Triage.Sequential', 'bounded filesystem triage'),
+    ('Linux.Search.FileFinder', 'bounded file metadata/hash/acquisition'),
+    ('Linux.Forensics.Journal', 'bounded system/security logs'),
 )
 
 SCOPE_KINDS = frozenset({'default', 'temporary_extension'})
@@ -98,6 +84,8 @@ class ScopeState:
             'active_extensions': [e for e in self.extensions
                                   if e.get('active')],
             'stopped': self.stopped,
+            'backend_applied': False,
+            'limitation': 'in-memory bookkeeping only; no actual collection scope effects',
         }
 
     def bind_targets(self, targets: Iterable[str]) -> dict:
@@ -213,6 +201,10 @@ class LinuxPlatformRouter:
                 'LINUX_CLIENT_NOT_UNIQUE',
                 'pass an explicit client_id or register exactly one Linux client',
                 {'linux_clients': [c['client_id'] for c in linux]})
+        matching = [c for c in clients if c.get('client_id') == client_id]
+        if len(matching) > 1:
+            raise LinuxDomainError('LINUX_CLIENT_NOT_UNIQUE', 'ambiguous client identity',
+                                   {'velociraptor_mutations_issued': 0})
         match = next((c for c in linux if c['client_id'] == client_id), None)
         if match is not None:
             return match
@@ -225,7 +217,7 @@ class LinuxPlatformRouter:
                  'velociraptor_mutations_issued': 0})
         raise LinuxDomainError('CLIENT_NOT_FOUND',
                                'client id not registered',
-                               {'client_id': client_id})
+                               {'client_id': client_id, 'velociraptor_mutations_issued': 0})
 
 
 @dataclass
@@ -235,15 +227,19 @@ class TriagePlan:
     artifacts: list[str]
     fingerprint: str
     resource_hints: dict
+    parameters: dict = field(default_factory=dict)
 
     def as_launch_specs(self) -> list[dict]:
-        return [{'artifact': name, 'client_id': self.client_id}
+        return [{'artifact': name, 'client_id': self.client_id,
+                 'parameters': dict(self.parameters.get(name, {})),
+                 'timeout': self.resource_hints['timeout_seconds'],
+                 'max_bytes': self.resource_hints['max_collection_mb'] * 1024 * 1024}
                 for name in self.artifacts]
 
 
 def build_triage_plan(session: ScopeState, client: dict,
                       *, max_timeout_seconds: int = 600,
-                      max_collection_mb: int = 512) -> TriagePlan:
+                      max_collection_mb: int = 512, parameters: dict | None = None) -> TriagePlan:
     if session.stopped:
         raise LinuxDomainError('SCOPE_STOPPED', 'session scope already stopped')
     artifacts = sorted(session.allowed_artifacts)
@@ -254,25 +250,14 @@ def build_triage_plan(session: ScopeState, client: dict,
         fingerprint=fingerprint_artifacts(artifacts),
         resource_hints={'timeout_seconds': max_timeout_seconds,
                         'max_collection_mb': max_collection_mb},
+        parameters=parameters or {},
     )
 
 
 def compare_triage_runs(run_a: dict, run_b: dict) -> dict:
-    """Same-premise repeatability check between two triage executions."""
-    stable = run_a.get('fingerprint') == run_b.get('fingerprint')
-    same_client = run_a.get('client_id') == run_b.get('client_id')
-    categories_a = run_a.get('category_results', {})
-    categories_b = run_b.get('category_results', {})
-    common = sorted(set(categories_a) & set(categories_b))
-    missing_in_b = sorted(set(categories_a) - set(categories_b))
-    return {
-        'same_fingerprint': stable,
-        'same_client': same_client,
-        'common_categories': common,
-        'missing_categories_in_second_run': missing_in_b,
-        'repeatable': bool(stable and same_client and not missing_in_b
-                           and common),
-    }
+    """Verify actual closed originals; matching names or ERROR states never pass."""
+    from velociraptor_linux_backend import compare_verified
+    return compare_verified(run_a, run_b)
 
 
 # ---- bridge registration (opt-in via VELOCIRAPTOR_LINUX_DOMAIN=1) ---------
@@ -287,12 +272,15 @@ LINUX_DOMAIN_TOOL_NAMES = (
     'linux_scope_extend',
     'linux_scope_withdraw',
     'linux_scope_stop',
+    'linux_triage_launch', 'linux_triage_status', 'linux_triage_results',
+    'linux_triage_export', 'linux_triage_cancel', 'linux_triage_collect',
+    'linux_triage_compare',
 )
 
 _SCOPE_SESSIONS: dict[str, ScopeState] = {}
 
 
-def register_linux_domain_tools(server) -> tuple[str, ...]:
+def register_linux_domain_tools(server, *, clients_provider=None, backend=None) -> tuple[str, ...]:
     """Register the Linux professional-domain tools on one MCPServer.
 
     Opt-in only: the bridge calls this exclusively when
@@ -300,10 +288,46 @@ def register_linux_domain_tools(server) -> tuple[str, ...]:
     unchanged.
     """
     def platform_route(client_id: str) -> dict:
-        raise LinuxDomainError(
-            'NO_CLIENTS_PROVIDER',
-            'platform routing requires a live clients provider; use the '
-            'deployment runner for native acceptance')
+        if backend is not None:
+            return backend.route(client_id)
+        if clients_provider is None:
+            raise LinuxDomainError('NO_CLIENTS_PROVIDER', 'live clients provider is required')
+        return LinuxPlatformRouter(clients_provider).resolve_linux_target(client_id)
+
+    def professional():
+        if backend is None:
+            raise LinuxDomainError('NO_TRIAGE_BACKEND', 'real professional backend is required')
+        return backend
+
+    def triage_launch(session_id: str, run_id: str, client_id: str, plan: dict) -> dict:
+        return professional().launch(session_id, run_id, client_id, plan)
+
+    def triage_status(run_id: str) -> dict:
+        return professional().status(run_id)
+
+    def triage_results(run_id: str) -> dict:
+        return professional().results(run_id)
+
+    def triage_export(run_id: str, include_bytes: bool = False) -> dict:
+        return professional().export(run_id, include_bytes=include_bytes)
+
+    def triage_cancel(run_id: str) -> dict:
+        return professional().cancel(run_id)
+
+    def triage_collect(session_id: str, run_id: str, client_id: str, plan: dict) -> dict:
+        return professional().collect(session_id, run_id, client_id, plan)
+
+    def triage_compare(first: str, second: str) -> dict:
+        return professional().compare(first, second)
+
+    for handler, name in ((triage_launch, 'linux_triage_launch'),
+                          (triage_status, 'linux_triage_status'),
+                          (triage_results, 'linux_triage_results'),
+                          (triage_export, 'linux_triage_export'),
+                          (triage_cancel, 'linux_triage_cancel'),
+                          (triage_collect, 'linux_triage_collect'),
+                          (triage_compare, 'linux_triage_compare')):
+        server.add_tool(handler, name=name, description='Bounded real Linux basic triage; no realtime scope qualification.')
 
     def _scope(session_id: str) -> ScopeState:
         scope = _SCOPE_SESSIONS.get(session_id)
