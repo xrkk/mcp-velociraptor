@@ -36,6 +36,14 @@ independent; see the [subsequent .149 scope record](../docs/windows-all-filesyst
 Private push destinations can pass a qualified fixed-drive-root ancestor without
 weakening their own ACL checks. See [C/E publication and output permissions](../docs/windows-content-acl-verification.md).
 
+Windows deployments can set `VELOCIRAPTOR_TRANSFER_OUTPUT_ACCESS=shared_modify`
+in the protected bridge service environment and restart only Velo. New guest
+pushes accept ordinary-user parents while staging stays private, then grant
+completed output trees inheritable Modify for local Users, authenticated users
+and services. SYSTEM/admin access stays intact; ACL handoff must succeed before
+push COMPLETE. Unset retains private output. This is a bridge workflow outside
+the historical agent; see [scope and .149 verification](../docs/windows-shared-output-access.md).
+
 ## Daily Windows bridge service
 
 The bridge's formal Windows SCM entry is `velociraptor_windows_service.py` in
@@ -115,7 +123,9 @@ actual application cause. Transfer shutdown still runs on bridge exit.
 
 The formal app uses one actual pinned SDK manager, controller/ledger instance
 and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
-gates. All 137 schemas and seven transfer protocols remain unchanged. The
+gates. The 137 tool names and request parameters remain unchanged. The transfer
+contract additionally permits the output-access capability and receipt described
+above. The
 seven transfer schemas are now stored compactly in
 `velo_transfer/transfer_tools_schema.json` (2026-10-06): identical repeated
 error-code enums use a local `$ref` back to each tool's own literal anchor, and

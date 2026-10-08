@@ -36,6 +36,14 @@ local filesystems. Read sources, push destinations (`write_roots`) and private
 Private push destinations can pass a qualified fixed-drive-root ancestor without
 weakening their own ACL checks. See [C/E publication and output permissions](docs/windows-content-acl-verification.md).
 
+Windows deployments can set `VELOCIRAPTOR_TRANSFER_OUTPUT_ACCESS=shared_modify`
+in the protected service environment and restart only Velo. New guest pushes
+then accept ordinary-user destination parents, keep staging private, and grant
+completed output trees inheritable Modify for local Users, authenticated users
+and services. SYSTEM/admin access stays intact; ACL handoff must succeed before
+push COMPLETE. Unset defaults to private output. See [configuration, scope and
+.149 verification](docs/windows-shared-output-access.md).
+
 ## Daily Windows service entry and restart
 
 The formal SCM launch file is `velociraptor_windows_service.py`. It delegates
@@ -137,7 +145,9 @@ actual application cause. Transfer shutdown still runs on bridge exit.
 
 The formal app uses one actual pinned SDK manager, controller/ledger instance
 and SDK session bindings for MCP and chunkbin, behind bearer and Host/Origin
-gates. All 137 schemas and seven transfer protocols remain unchanged. Host
+gates. The 137 tool names and request parameters remain unchanged. The transfer
+contract additionally permits the output-access capability and receipt described
+above. Host
 verification exercises the production native algorithm with MODEL Windows
 permissions/identities, actual SDK loopback and limited real POSIX file I/O.
 The admitted maintenance API below now exercises complete original acquisition

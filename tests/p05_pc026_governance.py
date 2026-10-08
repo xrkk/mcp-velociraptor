@@ -182,6 +182,7 @@ LOCAL_MODULES = frozenset({
     'velo_transfer/http_wire.py',
     'velo_transfer/manifest.py',
     'velo_transfer/mcp_tools.py',
+    'velo_transfer/output_access.py',
     'velo_transfer/policy.py',
     'velo_transfer/protocol.py',
     'velo_transfer/storage.py',
@@ -277,6 +278,11 @@ LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
 # Actual SDK/capture stream close ownership and primary-error preservation.
 ENTRIES = ENTRIES | frozenset({'tests/test_observation_sdk_close.py'})
+LOCAL_MODULES = LOCAL_MODULES | ENTRIES
+
+# Guest shared-output handoff and its real release-worker fixture.
+ENTRIES = ENTRIES | frozenset({'tests/test_transfer_output_access.py',
+    'tests/test_transfer_guest_finalization.py'})
 LOCAL_MODULES = LOCAL_MODULES | ENTRIES
 
 # Actual formal HTTP resource/individual entries and historical root separation.

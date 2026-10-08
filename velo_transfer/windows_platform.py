@@ -51,6 +51,7 @@ _PUBLIC_KINDS = frozenset(("policy", "read_root", "write_root"))
 # siblings there does not authorize replacing a separately private child.
 # Effective DELETE_CHILD or security-control rights still invalidate it.
 _DRIVE_ROOT_REPLACE = 0x0040 | 0x00040000 | 0x00080000 | 0x10000000
+_SHARED_CONTENT_PARENTS = frozenset(('shared_content_parent', 'shared_content_ancestor'))
 
 
 @dataclass(frozen=True)
@@ -248,18 +249,22 @@ def _decode_ace(raw: bytes) -> Ace:
 
 
 def _evaluate(snapshot: AclSnapshot, kind: str, trusted: frozenset[str]) -> None:
-    if kind not in _PRIVATE_KINDS | _PUBLIC_KINDS | {"ancestor", "content_drive_root"}:
+    if kind not in _PRIVATE_KINDS | _PUBLIC_KINDS | _SHARED_CONTENT_PARENTS | {"ancestor", "content_drive_root"}:
         raise Error("windows_acl_kind_invalid")
     if (not isinstance(snapshot, AclSnapshot) or snapshot.dacl_present is not True or
             not isinstance(snapshot.aces, tuple) or not snapshot.aces):
         raise Error("windows_acl_unprotected")
-    if snapshot.owner_sid not in trusted:
+    if snapshot.owner_sid not in trusted and kind not in _SHARED_CONTENT_PARENTS:
         raise Error("windows_acl_untrusted_owner")
     for ace in snapshot.aces:
         if ace.ace_type not in (0, 1) or ace.flags & ~0x1F:
             raise Error("windows_acl_unsupported")
         if type(ace.mask) is not int or ace.mask < 0 or ace.mask & ~_KNOWN:
             raise Error("windows_acl_unsupported")
+        # Opt-in editable outputs can live beneath ordinary-user directories.
+        # This never applies to the stage itself or to policy/work/state gates.
+        if kind in _SHARED_CONTENT_PARENTS:
+            continue
         # OWNER RIGHTS applies only to this object's owner, already checked
         # above. Windows adds this ACE to some service-created private dirs.
         if ace.sid in trusted or ace.sid == _OWNER_RIGHTS or ace.ace_type == 1:
@@ -477,11 +482,13 @@ class WindowsAclVerifier:
         self._reader = _reader or _read_security
         self._trusted = frozenset((_SYSTEM, _ADMINS, _canonical_sid(_current_sid or current_process_sid()), *extras))
 
-    def __call__(self, path: str | Path, kind: str) -> bool:
+    def __call__(self, path: str | Path, kind: str, *, shared_content=False) -> bool:
         if not self._test_mode:
             _require_windows()
         if kind not in _PRIVATE_KINDS | _PUBLIC_KINDS:
             raise Error("windows_acl_kind_invalid")
+        if shared_content and kind not in ('stage', 'parent'):
+            raise Error('windows_acl_kind_invalid')
         candidate = Path(path)
         raw = str(path)
         if (not candidate.is_absolute() or "\x00" in raw or len(raw) > 32767 or
@@ -497,7 +504,11 @@ class WindowsAclVerifier:
             fingerprint = _fingerprint(item)
             snapshot = self._reader(item)
             evaluated_kind = kind if item == candidate else "ancestor"
-            if (item != candidate and kind in ("stage", "parent") and
+            if shared_content and item != candidate:
+                evaluated_kind = 'shared_content_ancestor'
+            elif shared_content and kind == 'parent':
+                evaluated_kind = 'shared_content_parent'
+            elif (item != candidate and kind in ("stage", "parent") and
                     re.fullmatch(r"[A-Za-z]:\\", str(item)) is not None and
                     _is_fixed_volume_root(item)):
                 evaluated_kind = "content_drive_root"
@@ -517,7 +528,7 @@ class WindowsAclVerifier:
         return True
 
     def content_callback(self, stage: str | Path, parent: str | Path,
-                         destination: str | Path | None = None):
+                         destination: str | Path | None = None, *, shared_content=False):
         """One-argument callback for stage, parent and post-publish destination."""
         stage_path, parent_path = Path(stage), Path(parent)
         destination_path = Path(destination) if destination is not None else None
@@ -528,11 +539,11 @@ class WindowsAclVerifier:
         def verify(path: Path) -> bool:
             candidate = Path(path)
             if candidate == stage_path:
-                return self(candidate, "stage")
+                return self(candidate, "stage", shared_content=shared_content)
             if candidate == parent_path:
-                return self(candidate, "parent")
+                return self(candidate, "parent", shared_content=shared_content)
             if destination_path is not None and candidate == destination_path:
-                return self(candidate, "stage")
+                return self(candidate, "stage", shared_content=shared_content)
             raise Error("windows_acl_path_invalid")
 
         return verify

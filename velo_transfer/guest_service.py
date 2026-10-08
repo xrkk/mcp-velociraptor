@@ -26,6 +26,8 @@ from .guest_worker import (RootLease, process_birth, read_activation, same_proce
 from .manifest import (Budget, _no_link, canonical_json, capture_sources, check_relative,
                        digest_json, directory_identity, file_identity, safe_chain, validate_sources)
 from .policy import load_policy
+from .output_access import (SHARED_SIDS, configured_mode, grant_output_tree,
+                            read_output_security, validate_output_security)
 from .protocol import (PROTOCOL_VERSION, GuestTerminal, prepare_receipt, publish_intent,
                        recover_publication, receipt_digest, validate_destination)
 from .storage import TaskStore, _sync_directory, _validate_json
@@ -109,6 +111,7 @@ class GuestTransferService:
         self._test_acl = _acl_verifier
         self._guest = _guest
         self._worker_delay = _worker_delay
+        self.output_access_mode = configured_mode()
         self._owned = {}
         self._observed_children = {}
         self._chunk_cache = {}
@@ -158,6 +161,8 @@ class GuestTransferService:
                 "write_root_ids": [digest_json(str(p)) for p in self.policy.write_roots],
                 "default_chunk_bytes": min(1 << 20, limits["max_chunk_bytes"]),
                 "limits": limits, "binary_wire": None,
+                **({'output_access_mode': self.output_access_mode}
+                   if self.output_access_mode != 'private' else {}),
                 **({"max_batch_chunks": limits["max_batch_chunks"]}
                    if "max_batch_chunks" in limits else {})}
 
@@ -208,6 +213,10 @@ class GuestTransferService:
             dest = request["expected_destination"]["canonical_path"]
             path = self.policy.resolve_local(dest, "write", allow_missing_leaf=True)
             self.policy.resolve_local(str(path.parent), "write")
+            if self.output_access_mode == 'shared_modify' and (
+                    path.is_relative_to(self.policy.work_root) or
+                    path.is_relative_to(self.policy.policy_path.parent)):
+                raise Error('private_output_target', path=str(path))
             package = request["package"]
             _dict(package, ("size", "sha256", "manifest_sha256"))
             if not _positive(package["size"], allow_zero=True) or not _hex(package["sha256"]) or not _hex(package["manifest_sha256"]):
@@ -443,7 +452,9 @@ class GuestTransferService:
                          "terminal": None, "stage_intent": None, "staging": None,
                          "publish_intent": None, "owner": None, "cancelled": False,
                          "error": None, "cleanup": None, "destination_verification": None,
-                         "prefix_verification": None}
+                         "prefix_verification": None,
+                         "output_access_mode": (self.output_access_mode
+                             if request['direction'] == 'push' else 'private')}
                 envelope = store.create(transfer_id, self._binding(request), state)
                 if envelope["state"] != state:
                     raise Error("task_binding_conflict")
@@ -462,7 +473,9 @@ class GuestTransferService:
                 "terminal": copy.deepcopy(terminal), "cleanup": state["cleanup"],
                 "destination_verification": copy.deepcopy(state.get("destination_verification")),
                 "error": state["error"], "worker": copy.deepcopy(state["owner"]),
-                "prefix_verification": copy.deepcopy(state.get("prefix_verification"))}
+                "prefix_verification": copy.deepcopy(state.get("prefix_verification")),
+                **({'output_access': copy.deepcopy(state['output_access'])}
+                   if state.get('output_access') is not None else {})}
 
     def transfer_status(self, transfer_id: str, request_digest: str):
         store = self._store()
@@ -1383,9 +1396,12 @@ class GuestTransferService:
             self._protocol_binding(state["request"], state["package"]),
             state["request"]["expected_destination"])
 
-    def _content_acl(self, stage, destination):
+    def _content_acl(self, stage, destination, state=None):
         if os.name != "nt":
             return None
+        if state and state.get('output_access_mode') == 'shared_modify':
+            return self.acl.content_callback(stage, destination.parent, destination,
+                                             shared_content=True)
         return self.acl.content_callback(stage, destination.parent, destination)
 
     def _clear_registered_stage(self, staging, allowed_root, budget, callback):
@@ -1449,7 +1465,7 @@ class GuestTransferService:
                 staging = state["staging"]
                 if not Path(staging["staging_directory"]).exists():
                     raise Error("stage_reconcile_required")
-                callback = self._content_acl(Path(staging["staging_directory"]), destination)
+                callback = self._content_acl(Path(staging["staging_directory"]), destination, state)
                 self._clear_registered_stage(staging, root, budget, callback)
                 extracted = unpack_bundle(self._package_file(state), self.policy.work_root,
                     state["package"]["size"], state["package"]["sha256"], destination,
@@ -1469,7 +1485,7 @@ class GuestTransferService:
                 return
             stage_name = ".velo-stage-" + hashlib.sha256(request["transfer_id"].encode()).hexdigest()[:32]
             stage = destination.parent / stage_name
-            callback = self._content_acl(stage, destination)
+            callback = self._content_acl(stage, destination, state)
             store = self._store()
             with store.writer():
                 fresh = self._load(request["transfer_id"], request["request_digest"], store)
@@ -1531,7 +1547,7 @@ class GuestTransferService:
         root = max((root for root in self.policy.write_roots if destination.is_relative_to(root)),
                    key=lambda item: len(item.parts))
         manifest = self._manifest(state)
-        callback = self._content_acl(Path(staging["staging_directory"]), destination)
+        callback = self._content_acl(Path(staging["staging_directory"]), destination, state)
         if state["publish_intent"] is None:
             self._hash_package(state, budget)
             verify_tree(staging["staging_directory"], manifest, budget,
@@ -1606,10 +1622,39 @@ class GuestTransferService:
         for name in state["cleanup_targets"]:
             self._remove_owned_temporary(state, name)
         # The source package is gone. Keep the manifest and the published tree;
-        # this verification is the last business action of this release worker.
+        # Verify before optionally handing the finished tree to editable users.
         proof = (self._verify_push_destination(state, terminal, budget)
                  if request["direction"] == "push" else None)
         store = self._store()
+        access = None
+        if request['direction'] == 'push' and state.get('output_access_mode') == 'shared_modify':
+            if proof is None:
+                raise Error('destination_verification_invalid')
+            intent = self._output_access_intent(terminal)
+            if state.get('output_access_intent') not in (None, intent):
+                raise Error('output_access_conflict')
+            # Authorize the exact final tree durably before the first ACL write.
+            while state.get('output_access_intent') is None:
+                budget.check()
+                try:
+                    with store.writer():
+                        fresh = self._load(request['transfer_id'], request['request_digest'], store)
+                        current = fresh['state']
+                        if (current['owner'] != state['owner'] or current['error'] is not None or
+                                current['terminal'] != state['terminal']):
+                            raise Error('release_state_changed')
+                        current['output_access_intent'] = intent
+                        self._save(store, fresh, current)
+                        state['output_access_intent'] = intent
+                except Error as exc:
+                    if exc.code != 'writer_busy':
+                        raise
+                    time.sleep(0.005)
+            destination = Path(request['expected_destination']['canonical_path'])
+            result = grant_output_tree(destination, self._manifest(state), budget,
+                terminal.publication['directory_identity'], getattr(self.acl, '_trusted', frozenset()))
+            access = {**intent, **result, 'acl_verified': True,
+                      'content_verification_phase': 'before_access_handoff'}
         # Status may briefly hold the short writer lock while it observes the
         # worker. Do not lose the post-cleanup proof to transient contention.
         while True:
@@ -1629,6 +1674,9 @@ class GuestTransferService:
                     if proof is not None:
                         self._validate_destination_verification(current, terminal, proof)
                         current["destination_verification"] = proof
+                    if access is not None:
+                        self._validate_output_access(terminal, access)
+                        current['output_access'] = access
                     current["cleanup"] = {"temporary_files_removed": True, "workers_stopped": False}
                     self._save(store, fresh, current)
                 break
@@ -1661,9 +1709,19 @@ class GuestTransferService:
         self.policy.resolve_local(destination, "write")
         self.policy.resolve_local(destination.parent, "write")
         if os.name == "nt":
-            callback = self._content_acl(Path(staging["staging_directory"]), destination)
-            if callback(destination.parent) is not True or callback(destination) is not True:
+            callback = self._content_acl(Path(staging["staging_directory"]), destination, state)
+            if callback(destination.parent) is not True:
                 raise Error("windows_acl_not_verified")
+            if state.get('output_access_intent') is not None:
+                if (state.get('output_access_mode') != 'shared_modify' or
+                        state['output_access_intent'] != self._output_access_intent(terminal)):
+                    raise Error('output_access_conflict')
+                try:
+                    validate_output_security(read_output_security(destination), self.acl._trusted)
+                except Error as exc:
+                    raise Error(exc.code, **{**exc.context, 'path': str(destination)}) from exc
+            elif callback(destination) is not True:
+                raise Error('windows_acl_not_verified')
         if directory_identity(destination.parent) != intent["parent_identity"]:
             raise Error("destination_parent_changed")
         manifest = self._manifest(state)
@@ -1711,6 +1769,24 @@ class GuestTransferService:
                     "verification_phase": "post_cleanup"}
         if canonical_json(proof) != canonical_json(expected):
             raise Error("destination_verification_invalid")
+
+    def _output_access_intent(self, terminal):
+        return {'schema': 'velo.transfer.output-access.v1', 'mode': 'shared_modify',
+                'binding': copy.deepcopy(terminal.binding),
+                'publication_receipt_sha256': receipt_digest(terminal.publication),
+                'directory_identity': copy.deepcopy(terminal.publication['directory_identity']),
+                'manifest_sha256': terminal.binding['manifest_sha256'],
+                'principals': list(SHARED_SIDS)}
+
+    def _validate_output_access(self, terminal, access):
+        intent = self._output_access_intent(terminal)
+        fields = set(intent) | {'objects', 'acl_sha256', 'acl_verified', 'content_verification_phase'}
+        if (not isinstance(access, dict) or set(access) != fields or
+                {key: access[key] for key in intent} != intent or
+                type(access['objects']) is not int or access['objects'] <= 0 or
+                not _hex(access['acl_sha256']) or access['acl_verified'] is not True or
+                access['content_verification_phase'] != 'before_access_handoff'):
+            raise Error('output_access_not_verified')
 
     def _cleanup_path(self, state, name):
         permitted = ("bundle.zip",) if state["request"]["direction"] == "pull" else (
@@ -1804,6 +1880,8 @@ class GuestTransferService:
                         return
                     try:
                         self._validate_destination_verification(state, terminal, proof)
+                        if state.get('output_access_mode') == 'shared_modify':
+                            self._validate_output_access(terminal, state.get('output_access'))
                     except Error as exc:
                         state["error"] = exc.code
                         self._save(store, envelope, state)
