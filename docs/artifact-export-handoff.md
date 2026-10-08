@@ -13,6 +13,12 @@ Velo private state and configuration. The new directory can have a protected
 SYSTEM/admins DACL before source Read grants are configured. Existing broader
 service grants are preserved by the handoff helper, not silently reduced.
 
+Daily LocalSystem deployments read through the existing SYSTEM ACE. The
+helpers retain their virtual-service SID Read grants for compatibility; those
+grants do not restrict SYSTEM to Read. Producer completion, independent-copy
+publication, path policy and diagnostics still apply. See the
+[SYSTEM migration record](windows-system-account.md).
+
 | Input | Producer evidence | Consumer |
 | --- | --- | --- |
 | Text/report output | Windows-MCP writer closed; all selected producer jobs finished | Velo service reads export copy |

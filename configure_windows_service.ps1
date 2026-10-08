@@ -1,17 +1,20 @@
-# Configure an existing, dedicated-account MCP service for daily operation.
+# Configure an existing MCP service for daily operation.
 # Run elevated after deploying this script and velociraptor_windows_service.py.
 # Does not install a service, read secrets, or restart a running bridge.
 [CmdletBinding()]
 param(
     [ValidateSet('configure', 'verify')]
     [string]$Mode = 'verify',
-    [string]$RepoRoot = $PSScriptRoot
+    [string]$RepoRoot = $PSScriptRoot,
+    [ValidateSet('LocalSystem', 'VirtualAccount')]
+    [string]$ServiceAccount = 'LocalSystem'
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $ServiceName = 'mcp-velociraptor'
-$Account = 'NT SERVICE\mcp-velociraptor'
+$VirtualAccount = 'NT SERVICE\mcp-velociraptor'
+$Account = if ($ServiceAccount -eq 'LocalSystem') { 'LocalSystem' } else { $VirtualAccount }
 $TaskName = 'mcp-velociraptor-keepalive'
 $TaskDescription = 'Velociraptor MCP daily service keepalive v1'
 $ServiceKey = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
@@ -23,15 +26,16 @@ $ExpectedBinary = "`"$Python`" `"$Entry`""
 $LegacyBinary = "`"$Python`" `"$LegacyEntry`""
 $PowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 
-# The task only starts this exact service, under its existing virtual account.
+# The task only starts this exact service, under the selected account.
 # Disabled/manual mode provides an additional explicit maintenance opt-out.
 $KeepAliveCommand = @'
 $ErrorActionPreference = 'Stop'
 $service = Get-CimInstance Win32_Service -Filter "Name='mcp-velociraptor'"
-if ($null -ne $service -and $service.StartName -eq 'NT SERVICE\mcp-velociraptor' -and $service.StartMode -eq 'Auto' -and $service.State -eq 'Stopped') {
+if ($null -ne $service -and $service.StartName -eq '__SERVICE_ACCOUNT__' -and $service.StartMode -eq 'Auto' -and $service.State -eq 'Stopped') {
     Start-Service -Name 'mcp-velociraptor'
 }
 '@
+$KeepAliveCommand = $KeepAliveCommand.Replace('__SERVICE_ACCOUNT__', $Account)
 $EncodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($KeepAliveCommand))
 $TaskArguments = '-NoProfile -NonInteractive -EncodedCommand ' + $EncodedCommand
 
@@ -46,9 +50,19 @@ function Assert-ExistingDeployment {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Required deployment file is missing.' }
     }
     $service = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
-    if ($null -eq $service -or $service.StartName -ne $Account -or
+    if ($null -eq $service -or $service.StartName -notin @($VirtualAccount, 'LocalSystem') -or
         $service.PathName -cnotin @($ExpectedBinary, $LegacyBinary)) {
         throw 'Existing service identity differs; refusing to touch it.'
+    }
+    if ($service.StartName -ne $Account) {
+        if ($Mode -eq 'verify') { throw 'Service account differs from the selected account.' }
+        if ($service.State -ne 'Stopped') {
+            throw 'Disable keepalive and stop the service before changing its account.'
+        }
+        $task = Get-ScheduledTask -TaskName $TaskName -TaskPath '\' -ErrorAction SilentlyContinue
+        if ($null -ne $task -and $task.Settings.Enabled) {
+            throw 'Disable keepalive before changing the service account.'
+        }
     }
     $reference = Get-ItemProperty -LiteralPath ($ServiceKey + '\Environment') -Name VELOCIRAPTOR_ENV_FILE
     if ($reference.VELOCIRAPTOR_ENV_FILE -isnot [string] -or
@@ -81,7 +95,7 @@ function Assert-Recovery {
 
 Assert-ExistingDeployment
 if ($Mode -eq 'configure') {
-    Invoke-SC -Arguments @('config', $ServiceName, 'binPath=', $ExpectedBinary, 'start=', 'auto')
+    Invoke-SC -Arguments @('config', $ServiceName, 'binPath=', $ExpectedBinary, 'start=', 'auto', 'obj=', $Account)
     Invoke-SC -Arguments @('failure', $ServiceName, 'reset=', '86400', 'actions=', 'restart/10000/restart/10000/restart/10000')
     Invoke-SC -Arguments @('failureflag', $ServiceName, '1')
     $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $TaskArguments
@@ -95,8 +109,8 @@ if ($Mode -eq 'configure') {
 }
 
 $service = Get-CimInstance Win32_Service -Filter "Name='$ServiceName'"
-if ($service.StartMode -ne 'Auto' -or $service.PathName -cne $ExpectedBinary) {
-    throw 'Service must use automatic startup and the formal Windows entry.'
+if ($service.StartName -ne $Account -or $service.StartMode -ne 'Auto' -or $service.PathName -cne $ExpectedBinary) {
+    throw 'Service must use the selected account, automatic startup and the formal Windows entry.'
 }
 Assert-Recovery
 $task = Get-ScheduledTask -TaskName $TaskName -TaskPath '\'

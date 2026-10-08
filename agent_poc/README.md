@@ -25,11 +25,17 @@ The bridge's formal Windows SCM entry is `velociraptor_windows_service.py` in
 the repository root. It delegates to the established P05 SCM adapter and the
 same `mcp_velociraptor_bridge.main`; the historical agent is not the service
 launcher. Elevated `configure_windows_service.ps1 -Mode configure` changes an
-existing dedicated-account service to automatic startup, ten-second recovery
+existing service to LocalSystem (SYSTEM), automatic startup, ten-second recovery
 on failures, and the `mcp-velociraptor-keepalive` scheduled task (boot plus every
 minute) for stopped services. `-Mode verify` checks those settings without
-changing them. The bridge retains its virtual service account and protected
-configuration. Restart once to activate a changed entry. Disable the keepalive
+changing them. `-ServiceAccount VirtualAccount` selects the historical virtual
+account in either mode. Account migration requires stopped service and disabled
+keepalive; preserve existing ACLs and retain the former service SID in the
+protected `VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS` setting for existing private
+state. SYSTEM does not widen transfer read roots or remove file sharing limits.
+See the [SYSTEM migration record](../docs/windows-system-account.md); this does
+not qualify strict-audit service-principal approvals. Restart once to activate
+a changed entry. Disable the keepalive
 task before a planned manual stop and re-enable it after maintenance; Manual
 or Disabled service startup also suppresses keepalive. See the main README and
 [operating commands](../docs/practical-use.md#windows-服务启动与保活).

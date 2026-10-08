@@ -27,7 +27,9 @@ to the established `tests/p05_service_host.py` adapter, which runs
 still references that adapter directly; the `tests` location came from the
 deployment/acceptance phase, not from a separate test MCP server.
 
-For an already deployed dedicated-account service, run elevated:
+For an already deployed service, run elevated. The daily account defaults to
+LocalSystem (SYSTEM); `-ServiceAccount VirtualAccount` explicitly selects the
+historical `NT SERVICE\mcp-velociraptor` account in both modes:
 
 ```powershell
 .\configure_windows_service.ps1 -Mode configure
@@ -39,12 +41,20 @@ processes after 10 seconds (all failures; counter reset after 24 hours), and
 enables recovery for nonzero service exits. A SYSTEM scheduled task named
 `mcp-velociraptor-keepalive` checks once per minute and at boot, starting the
 existing service when stopped and still automatic. This also covers a normal
-manual stop, which SCM failure recovery alone does not restart. The bridge
-continues to run as `NT SERVICE\mcp-velociraptor`.
+manual stop, which SCM failure recovery alone does not restart. Keepalive checks
+the selected service account as well as startup/state.
 
 The script verifies existing service identity and protected configuration
 reference without reading secrets, and does not restart an already running
-bridge. Restart the service once to activate a changed launch file. For planned
+bridge. Account migration requires a stopped service and disabled keepalive.
+Before migrating existing virtual-account state, retain the old service SID in
+the protected environment's `VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS` (semicolon
+separated) so private owner/ACL verification still accepts existing state.
+Preserve configuration ACLs through the private update workflow. SYSTEM does
+not widen `read_roots`, remove sharing restrictions or change producer completion
+requirements. This daily migration does not qualify historical strict-audit
+service-principal approvals. See the [SYSTEM migration record](docs/windows-system-account.md).
+Restart the service once to activate a changed launch file. For planned
 maintenance, disable the keepalive task before stopping the service; re-enable
 it and start the service afterward. Alternatively, selecting Manual or Disabled
 startup suppresses keepalive. Current daily settings are separate from the

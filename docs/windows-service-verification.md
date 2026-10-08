@@ -1,5 +1,10 @@
 # Windows daily service verification — 2026-10-06
 
+This is the historical virtual-account verification. The subsequent authorized
+LocalSystem deployment and its separate native checks are recorded in
+[SYSTEM account migration](windows-system-account.md); the originals below
+are not rewritten as SYSTEM evidence.
+
 Scope: the existing `mcp-velociraptor` service on the Windows guest with IPv4
 suffix `.149`, using its existing virtual account and deployment configuration.
 Only the formal SCM launcher and daily service-management script were deployed.

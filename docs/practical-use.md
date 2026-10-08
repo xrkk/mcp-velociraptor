@@ -27,7 +27,9 @@ http://<guest-host-only-ip>:28790/mcp
 .\configure_windows_service.ps1 -Mode verify
 ```
 
-配置脚本只修改身份匹配的已有 `mcp-velociraptor` 服务，不安装新服务，也不重启正在运行的服务。正式入口变更后需重启一次使其生效。服务保持专用虚拟账户；启动类型为自动，进程崩溃的 SCM 恢复间隔为 10 秒，所有后续故障继续重启，故障计数 24 小时重置，非零退出恢复标志也开启。正常手动停止由 `mcp-velociraptor-keepalive` 任务在下一次每分钟检查时重新启动；任务也在系统启动时检查，执行者为 SYSTEM。保活仅在服务为自动且已停止时启动它，不处理正在启动、停止中的状态。
+配置脚本只修改入口匹配、账号为 LocalSystem 或既有虚拟账户的 `mcp-velociraptor` 服务，不安装新服务，也不重启正在运行的服务。默认账号为 LocalSystem（SYSTEM）；`-ServiceAccount VirtualAccount` 显式选择原专用虚拟账户，configure/verify 均需一致选择。账号迁移前必须关闭保活并确认服务已停止；正式入口变更后需重启一次使其生效。启动类型为自动，进程崩溃的 SCM 恢复间隔为 10 秒，所有后续故障继续重启，故障计数 24 小时重置，非零退出恢复标志也开启。正常手动停止由 `mcp-velociraptor-keepalive` 任务在下一次每分钟检查时重新启动；任务也在系统启动时检查，执行者为 SYSTEM。保活核对选择的服务账号，仅在服务为自动且已停止时启动它，不处理正在启动、停止中的状态。
+
+迁移旧状态时，将原服务 SID 保留在私有环境文件的 `VELOCIRAPTOR_TRANSFER_EXTRA_TRUSTED_SIDS` 中（分号分隔），以保留对旧状态 owner/ACL 的信任；使用私有配置替换流程保留原 ACL 和备份。SYSTEM 不会绕过 `read_roots`、共享句柄限制或生产完成条件；历史严格审计的服务身份批准不因此获得新资格。部署及回收核验见 [SYSTEM 迁移记录](windows-system-account.md)。
 
 计划维护时先关闭保活，再正常停止服务：
 
