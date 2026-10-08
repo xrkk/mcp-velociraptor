@@ -6,11 +6,29 @@ import tempfile
 import time
 import unittest
 import uuid
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest import mock
 
 from velo_transfer.errors import TransferContentError as Error
-from velo_transfer.policy import load_policy, POLICY_SCHEMA, MAX_POLICY_BYTES
+from velo_transfer.policy import _absolute, load_policy, POLICY_SCHEMA, MAX_POLICY_BYTES
+
+
+class WindowsPathGrammarTests(unittest.TestCase):
+    def test_drive_roots_are_canonical_absolute_paths(self):
+        # PureWindowsPath models lexical grammar only; native policy/read
+        # verification remains a separate Windows deployment check.
+        with mock.patch('velo_transfer.policy.Path', PureWindowsPath), mock.patch('os.sep', '\\'):
+            for value in ('C:\\', 'E:\\', 'z:\\'):
+                with self.subTest(value=value):
+                    self.assertEqual(str(_absolute(value)), value)
+
+    def test_drive_root_aliases_and_device_paths_remain_rejected(self):
+        with mock.patch('velo_transfer.policy.Path', PureWindowsPath), mock.patch('os.sep', '\\'):
+            for value in ('C:', 'C:/', 'C:\\\\', 'C:\\.', 'C:\\..', '\\\\?\\C:\\', '\\\\.\\C:\\'):
+                with self.subTest(value=value):
+                    with self.assertRaises(Error) as caught:
+                        _absolute(value)
+                    self.assertEqual(caught.exception.code, 'invalid_local_path')
 
 
 class PolicyTests(unittest.TestCase):

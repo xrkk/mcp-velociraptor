@@ -1,5 +1,8 @@
 # .149 Velo SYSTEM 账号迁移
 
+本记录保留迁移当时两个 read root 的历史证据；后续用户授权的盘根读取范围
+变更见 [本地文件系统读取范围](windows-all-filesystem-read-roots.md)。
+
 用户于 2026-10-08 明确选择 Velo 使用 SYSTEM，并询问现有 read_roots。
 只维护 `mcp-velociraptor` 服务与其保活任务，不重启 VM、不恢复快照，
 不停止 dnSpy、Windows-MCP、FakeNet 或其他应用。

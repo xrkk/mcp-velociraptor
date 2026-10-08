@@ -19,6 +19,10 @@ for deployment and end-to-end verification status; export success alone does
 not establish transfer COMPLETE. These workflows require no VM reboot or
 snapshot restore.
 
+Explicit Windows drive-root policies can authorize all currently accessible
+local filesystems. Read sources, push destinations (`write_roots`) and private
+`work_root` remain separate scopes; see the [subsequent .149 scope record](docs/windows-all-filesystem-read-roots.md).
+
 ## Daily Windows service entry and restart
 
 The formal SCM launch file is `velociraptor_windows_service.py`. It delegates

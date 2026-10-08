@@ -112,7 +112,8 @@ def _absolute(value: str | Path) -> Path:
     if not path.is_absolute() or "\x00" in raw or any(part in (".", "..") for part in path.parts):
         raise Error("invalid_local_path")
     # Do not normalize away spelling that could hide an ancestor or a Windows alias.
-    if str(path) != raw.rstrip(os.sep) and raw != os.sep:
+    drive_root = raw == path.anchor and re.fullmatch(r"[A-Za-z]:\\", raw) is not None
+    if str(path) != raw.rstrip(os.sep) and raw != os.sep and not drive_root:
         raise Error("invalid_local_path")
     for part in path.parts[1:]:
         check_relative(part)

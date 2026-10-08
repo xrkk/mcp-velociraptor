@@ -19,6 +19,10 @@ workflows outside this historical agent. The
 records deployment and end-to-end verification. Neither workflow requires
 a VM reboot or snapshot restore.
 
+Explicit Windows drive-root policies can authorize currently accessible local
+filesystems. Pull read roots, push write roots and private work storage remain
+independent; see the [subsequent .149 scope record](../docs/windows-all-filesystem-read-roots.md).
+
 ## Daily Windows bridge service
 
 The bridge's formal Windows SCM entry is `velociraptor_windows_service.py` in
