@@ -62,3 +62,16 @@ Open lookup may call the filesystem create operation directly. Successful
 hook; O_CREAT opening an existing file does not qualify as a new create event.
 This is supported by the fixed kernel BTF/header and the upstream
 [Linux 6.8 open lookup](https://github.com/torvalds/linux/blob/v6.8/fs/namei.c).
+
+The P04 host integration can construct `RegisteredLinuxClient.for_scope(root,
+binding)` with an independently fixed current VM/boot/client/session/owner.
+It checks the original deployment VM/client and current kernel/writeback facts
+on every call, without rewriting `deployment-complete.json`. This client only
+permits matching `linux_scope_*` requests; basic triage and the default CLI keep
+the original deployment-boot contract. It is not an automatic boot follower.
+
+Each new scope also records `birth_basis`: SC_CLK_TCK=100, the initial time
+namespace and zero boottime/monotonic offsets for observer and targets. The probe
+uses integer division of group-leader start_boottime by 10000000, matching
+Linux 6.8 proc field 22 in this admitted namespace. Nonzero offsets or different
+clock units refuse before worker creation; no rounded or approximate matching.

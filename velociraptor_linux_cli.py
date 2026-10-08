@@ -12,12 +12,25 @@ class RegisteredLinuxClient:
         self.backend = LinuxTriageBackend(deployment_root)
         register_linux_domain_tools(self, clients_provider=self.backend.clients, backend=self.backend)
 
+    @classmethod
+    def for_scope(cls, deployment_root, binding):
+        from velociraptor_linux_scope import CurrentBootScopeProfessional
+        client = cls.__new__(cls)
+        client.handlers = {}
+        client.scope_binding = dict(binding)
+        client.backend = CurrentBootScopeProfessional(deployment_root, binding)
+        register_linux_domain_tools(client, clients_provider=client.backend.clients, backend=client.backend)
+        return client
+
     def add_tool(self, handler, *, name, description):
         if name in self.handlers:
             raise ValueError('duplicate tool')
         self.handlers[name] = handler
 
     def call(self, name, arguments):
+        if hasattr(self, 'scope_binding') and (not name.startswith('linux_scope_')
+                or any(arguments.get('request', {}).get(k) != v for k, v in self.scope_binding.items())):
+            raise LinuxDomainError('FOREIGN_SCOPE', 'scope client is bound to one owner and session')
         if name not in self.handlers:
             raise LinuxDomainError('UNKNOWN_TOOL', 'unknown registered Linux tool')
         return self.handlers[name](**arguments)

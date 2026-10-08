@@ -15,7 +15,7 @@ import sys
 import time
 import uuid
 
-from velociraptor_linux_backend import canonical, private_path, publish, require, sha
+from velociraptor_linux_backend import canonical, private_path, publish, require, sha, LinuxTriageBackend
 from velociraptor_linux_probe import BPFTRACE_SHA, SOURCE_ID
 
 TERMINAL = {'STOPPED', 'EXPIRED', 'FAILED'}
@@ -100,6 +100,45 @@ def validate_request(action, request):
             require(isinstance(request[k], str) and 0 < len(request[k].strip()) <= 1024, 'INTENT_REQUIRED')
 
 
+class CurrentBootScopeProfessional(LinuxTriageBackend):
+    """Explicit host-bound scope qualification after a VM reboot.
+
+    Preserve deployment-complete.json. Its VM/client must still match the
+    independent caller binding; current kernel boot and writeback are checked
+    by the ordinary backend on every call. This does not grant triage access.
+    """
+    def __init__(self, root, binding):
+        require(set(binding) == BINDING, 'SCOPE_BINDING')
+        for key in BINDING - {'client_id'}:
+            identifier(binding[key])
+        self.expected_scope = dict(binding)
+        super().__init__(root)
+
+    def identity(self):
+        old = self.deployment['ready']
+        require(all(old[k] == self.expected_scope[k] for k in ('vm_uuid', 'client_id')),
+                'DEPLOYMENT_SCOPE_DRIFT')
+        self.binding = dict(old, boot_id=self.expected_scope['boot_id'])
+        super().identity()
+
+
+def birth_basis(subjects):
+    require(os.sysconf('SC_CLK_TCK') == 100, 'CLOCK_UNSUPPORTED')
+    records = {}
+    initial = os.readlink('/proc/1/ns/time')
+    for name in ['self', *[str(t['pid']) for t in subjects]]:
+        p = Path('/proc') / name
+        require(os.readlink(p / 'ns/time') == initial, 'TIME_NAMESPACE_UNSUPPORTED')
+        offsets = (p / 'timens_offsets').read_text()
+        lines = [line.split() for line in offsets.splitlines()]
+        require(len(lines) == 2 and {r[0] for r in lines} == {'monotonic', 'boottime'}
+                and all(r[1:] == ['0', '0'] for r in lines), 'CLOCK_OFFSET_UNSUPPORTED')
+        records[name] = offsets
+    return dict(proc_stat_field=22, clock_ticks_per_second=100, tick_ns=10**7,
+                formula='floor(task.group_leader.start_boottime_ns / 10000000)',
+                initial_time_namespace=initial, zero_offsets=records)
+
+
 class ScopeBackend:
     def __init__(self, professional):
         self.professional = professional
@@ -147,6 +186,7 @@ class ScopeBackend:
         require(sha(Path('/usr/bin/bpftrace').read_bytes()) == BPFTRACE_SHA, 'BPFTRACE_DRIFT')
         require(os.sysconf('SC_CLK_TCK') == 100, 'CLOCK_UNSUPPORTED')
         require(Path('/sys/kernel/btf/vmlinux').is_file(), 'BTF_REQUIRED')
+        basis = birth_basis(request['targets'])
         if not self.root.exists():
             self.root.mkdir(mode=0o700)
         private_path(self.root, directory=True)
@@ -158,7 +198,8 @@ class ScopeBackend:
         source = {name: sha(Path(__file__).with_name(name).read_bytes()) for name in modules}
         premise = dict(request, source=SOURCE_ID, source_hashes=source,
                        bpftrace_sha256=BPFTRACE_SHA, kernel=os.uname().release,
-                       tick_ns=10**7, started_ns=now())
+                       tick_ns=10**7, birth_basis=basis,
+                       deployment_boot_id=self.professional.deployment['ready']['boot_id'], started_ns=now())
         premise['deadline_ns'] = premise['started_ns'] + request['lifetime_seconds'] * 10**9
         publish(directory / 'premise.json', canonical(premise))
         publish(directory / 'control.lock', b'')
