@@ -27,7 +27,6 @@ ARTIFACT_HASHES = {
     'Linux.Sys.Crontab': 'c055b91c872adf9d47938942bede3edb56d138deef149ebc1892004a1f8c8da6',
     'Linux.Forensics.Journal': '4a23362a50fb1b4b179438b72cc51c2f7f7e1bb5a9c1e5082869cb6895266e7b',
     'Linux.Search.FileFinder': '52429c5bb8919bdbae5938f0382d73bf58be91a0aafd2e0ac2d46578a20af5ba',
-    'Generic.Collectors.File': 'c61bde39247b56069dbf4b9744035d589f6edd484b2180ca41abc37434d575fd',
 }
 REQUIRED_CATEGORIES = ('process', 'file', 'network', 'persistence', 'logs', 'metadata', 'acquisition')
 LIMITATIONS = ['snapshot facts, not realtime fork/exec or file-change telemetry',
@@ -175,7 +174,6 @@ class LinuxTriageBackend:
         # Potentially broad/private default acquisitions must be explicitly scoped.
         for artifact, keys in {
             'Linux.Search.FileFinder': ['SearchFilesGlob','SearchFilesGlobTable','Upload_File','Calculate_Hash'],
-            'Generic.Collectors.File': ['Root','collectionSpec','MaxFileSize'],
             'Linux.Forensics.Journal': ['DateAfter','DateBefore','AlsoUpload'],
         }.items(): require(all(k in plan['parameters'][artifact] for k in keys), 'EXPLICIT_SCOPE_REQUIRED')
         require(plan['parameters']['Linux.Forensics.Journal']['AlsoUpload'] == 'N', 'RAW_JOURNAL_DISABLED')
@@ -274,6 +272,8 @@ class LinuxTriageBackend:
                     require(offset<=5000,'ROW_BOUND')
                     if len(rows)<100:break
                 data[artifact][name]=all_rows
+            reported=next(x['total_collected_rows'] for x in current['flows'] if x['flow_id']==fid)
+            require(sum(len(rows) for rows in data[artifact].values())==reported,'SOURCE_ROWS_MISSING')
             logs=self.api.query('SELECT * FROM flow_logs(client_id='+literal(cid)+',flow_id='+literal(fid)+') LIMIT 5001',directory)
             require(len(logs)<=5000,'LOG_BOUND')
             log_ref=publish(directory/('logs-'+fid+'-'+str(uuid.uuid4())+'.json'),canonical(logs))
@@ -356,12 +356,16 @@ class LinuxTriageBackend:
 def classify(data,files):
     def rows(name):return [r for source in data.get(name,{}).values() for r in source]
     finder=rows('Linux.Search.FileFinder')
-    units=rows('Generic.Collectors.File');cron=rows('Linux.Sys.Crontab')
+    unit_paths={r.get('OSPath','') for r in finder}
+    system_service=any('/systemd/system/' in x and x.endswith('.service') for x in unit_paths)
+    user_service=any('/systemd/user/' in x and x.endswith('.service') for x in unit_paths)
+    timer=any('/systemd/' in x and x.endswith('.timer') for x in unit_paths)
+    cron=rows('Linux.Sys.Crontab')
     return {
         'process':any(r.get('Pid') and r.get('Exe') for r in rows('Linux.Sys.Pslist')),
         'file':any(r.get('OSPath') and r.get('MTime') for r in finder),
         'network':any(r.get('ProcessInfo',{}).get('Pid') for r in rows('Linux.Network.Netstat') if isinstance(r.get('ProcessInfo'),dict)),
-        'persistence':bool(rows('Linux.Sys.Services') and cron and units),
+        'persistence':bool(rows('Linux.Sys.Services') and cron and system_service and user_service and timer),
         'logs':any(r.get('System') and r.get('EventData') for r in rows('Linux.Forensics.Journal')),
         'metadata':any(isinstance(r.get('Hash'),dict) and r['Hash'].get('SHA256') for r in finder),
         'acquisition':any(r['artifact']=='Linux.Search.FileFinder' and r['size']>0 for r in files),
@@ -400,6 +404,8 @@ def compare_verified(a,b):
                     target.extend(rows);seen.add(ref['artifact'])
                 elif ref['kind']=='file':files.append(ref)
             require(seen==set(ARTIFACT_HASHES),'PRODUCT_SET')
+            require(all(sum(len(v) for v in data[x['artifact']].values())==x['total_collected_rows']
+                        for x in run['flow_status']),'SOURCE_ROWS_MISSING')
             require(classify(data,files)==run['category_results'],'CATEGORY_ORIGINALS')
             return True
         except (KeyError,TypeError,ValueError,OSError,LinuxDomainError):return False

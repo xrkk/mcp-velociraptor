@@ -13,6 +13,7 @@ routing. `VELOCIRAPTOR_LINUX_DOMAIN=1` selects this Linux-only registry with
 `VELOCIRAPTOR_LINUX_ROOT`; unset retains the Windows registry. The one-shot
 `velociraptor_linux_cli.py --deployment-root <root>` uses the same registered
 handlers without a listener. See [basic triage](../deploy/linux/triage.md).
+The basic plan pins eight original artifacts and reconciles source row totals.
 Local tests do not qualify native collections. High-granularity scope records
 remain in-memory bookkeeping; actual scope effects/realtime telemetry are open.
 

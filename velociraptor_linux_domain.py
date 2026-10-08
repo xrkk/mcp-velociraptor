@@ -23,11 +23,10 @@ DEFAULT_TRIAGE_ARTIFACTS: tuple[tuple[str, str], ...] = (
     ('Linux.Network.Netstat', 'connections with process mapping'),
     ('Linux.Sys.Crontab', 'cron persistence'),
     ('Linux.Sys.Services', 'systemd service inventory'),
-    ('Generic.Collectors.File', 'explicitly scoped service/timer file acquisition'),
     ('Linux.Sys.Pslist', 'process list with ppid lineage (fork/exec fact '
                          'clues; realtime event streams belong to client '
                          'monitoring sessions, not base triage)'),
-    ('Linux.Search.FileFinder', 'bounded file metadata/hash/acquisition'),
+    ('Linux.Search.FileFinder', 'bounded file metadata/hash/acquisition and system/user/timer definitions'),
     ('Linux.Forensics.Journal', 'bounded system/security logs'),
 )
 

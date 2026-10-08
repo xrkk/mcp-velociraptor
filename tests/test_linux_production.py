@@ -38,7 +38,10 @@ class API:
             mapping={
                 'Linux.Sys.Pslist':[{'Pid':i+1,'Exe':'/MODEL/exe'} for i in range(205)],
                 'Linux.Search.FileFinder':[{'OSPath':'/MODEL/file','MTime':'MODEL','Hash':{'SHA256':b.sha(b'MODEL FILE')},
-                    'Upload':{'Path':'/MODEL/file','sha256':b.sha(b'MODEL FILE')}}],
+                    'Upload':{'Path':'/MODEL/file','sha256':b.sha(b'MODEL FILE')}},
+                    {'OSPath':'/usr/lib/systemd/system/model.service'},
+                    {'OSPath':'/usr/lib/systemd/user/model.service'},
+                    {'OSPath':'/usr/lib/systemd/system/model.timer'}],
                 'Linux.Network.Netstat':[{'ProcessInfo':{'Pid':1}}],
                 'Linux.Sys.Services':[{'Unit':'MODEL.service'}],
                 'Linux.Sys.Crontab':[{'Command':'MODEL READONLY'}],
@@ -58,7 +61,8 @@ class API:
             return [{'Data':base64.b64encode(b'MODEL FILE').decode()}]
         if 'FROM flows(' in q:
             f=next(x for x in self.flows if '"'+x['flow_id']+'"' in q)
-            return [{'session_id':f['flow_id'],'state':self.state}]
+            counts={'Generic.Client.Info':5,'Linux.Sys.Users':1,'Linux.Sys.Pslist':205,'Linux.Network.Netstat':2,'Linux.Sys.Services':1,'Linux.Sys.Crontab':3,'Linux.Forensics.Journal':2,'Linux.Search.FileFinder':4}
+            return [{'session_id':f['flow_id'],'state':self.state,'total_collected_rows':counts[f['artifact']]}]
         if 'cancel_flow(' in q:self.state='CANCELLED';return [{'Result':{'state':'CANCELLED'}}]
         raise AssertionError(q)
 
@@ -67,10 +71,9 @@ class ProductionTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.sid=str(uuid.uuid4());self.rid=str(uuid.uuid4());self.cid='C.model'
-        self.definitions={x['name']:x for x in json.loads((Path(__file__).parent/'fixtures/linux_artifacts_v0773.json').read_text())}
+        self.definitions={x['name']:x for x in json.loads((Path(__file__).parent/'fixtures/linux_artifacts_v0773.json').read_text()) if x['name'] in b.ARTIFACT_HASHES}
         self.plan={'parameters':{k:{} for k in b.ARTIFACT_HASHES},'timeout_seconds':30,'max_bytes':1048576}
         self.plan['parameters']['Linux.Search.FileFinder']={'SearchFilesGlob':'/MODEL/file','SearchFilesGlobTable':'Glob\n','Upload_File':'Y','Calculate_Hash':'Y'}
-        self.plan['parameters']['Generic.Collectors.File']={'Root':'/','collectionSpec':'Glob\nMODEL/unit\n','MaxFileSize':'1024'}
         self.plan['parameters']['Linux.Forensics.Journal']={'DateAfter':'2026-10-08T00:00:00Z','DateBefore':'2026-10-08T01:00:00Z','AlsoUpload':'N'}
         self.backend=b.LinuxTriageBackend.__new__(b.LinuxTriageBackend)
         self.backend.store=self.root;self.backend.binding={'client_id':self.cid,'vm_uuid':'MODEL','boot_id':'MODEL'}
@@ -137,7 +140,7 @@ class ProductionTests(unittest.TestCase):
 
     def test_actual_parameters_and_resources_in_launch(self):
         out=self.backend.launch(self.sid,self.rid,self.cid,self.plan)
-        self.assertEqual(len(out['flows']),9)
+        self.assertEqual(len(out['flows']),8)
         queries=[q for q,m in self.api.calls if m]
         self.assertTrue(all('timeout=30' in q and 'max_bytes=1048576' in q for q in queries))
         self.assertTrue(any('`SearchFilesGlob`="/MODEL/file"' in q for q in queries))
@@ -223,6 +226,19 @@ class ProductionTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 self.backend.collect(self.sid,self.rid,self.cid,self.plan)
             cancel.assert_not_called()
+
+    def test_missing_reported_source_rows_refuses(self):
+        self.api.state='FINISHED'
+        original=self.api.query
+        def query(q,*a,**kw):
+            rows=original(q,*a,**kw)
+            if 'FROM source(' in q and 'Linux.Sys.Pslist' in q:return []
+            return rows
+        self.api.query=query
+        with self.assertRaises(LinuxDomainError) as error:
+            self.backend.collect(self.sid,self.rid,self.cid,self.plan)
+        self.assertEqual(error.exception.code,'SOURCE_ROWS_MISSING')
+        self.assertFalse((self.root/self.rid/'result.json').exists())
 
     def test_concatenated_cli_arrays(self):
         self.assertEqual(b.parse_arrays(b'[{"x":1}]\n[{"x":2}]'),[{'x':1},{'x':2}])

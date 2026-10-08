@@ -20,13 +20,13 @@ Unknown, ambiguous, non-Linux or unbound targets refuse before mutation.
 `linux_triage_launch` and `linux_triage_collect` take `session_id` and `run_id`
 (canonical UUIDs), explicit `client_id`, and `plan`. The plan has exactly
 `parameters`, `timeout_seconds` (1..120) and `max_bytes` (1..33554432 per flow).
-`parameters` maps all nine pinned artifacts to dictionaries of their real named
+`parameters` maps all eight pinned artifacts to dictionaries of their real named
 string parameters. Defaults stay in the pinned original; file acquisition and
 journal date boundaries must be explicit. These resource values enter the real
 `collect_client` request and returned request values are checked. Backend collection
 quotas may overshoot by an in-flight block; independent result/export limits apply.
 
-The nine full original definition SHA-256 values are pinned in
+The eight full original definition SHA-256 values are pinned in
 `velociraptor_linux_backend.py` for official v0.77.3. The complete live definitions,
 platform preconditions, parameter schemas and raw original text are saved with
 each run. This is not a name-only fingerprint or permission to replace artifacts.
@@ -36,7 +36,7 @@ each run. This is not a name-only fingerprint or permission to replace artifacts
 | Process snapshot and parent facts | Linux.Sys.Pslist |
 | File facts | Linux.Search.FileFinder rows |
 | Network/process association | Linux.Network.Netstat TCP sources |
-| Persistence inventory | Linux.Sys.Services, Linux.Sys.Crontab and explicitly selected system/user service/timer definitions via Generic.Collectors.File |
+| Persistence inventory | Linux.Sys.Services, Linux.Sys.Crontab and explicitly selected system/user service/timer definitions via Linux.Search.FileFinder |
 | System/security logs | Linux.Forensics.Journal with fixed dates, no raw journal upload |
 | Metadata/hash | Linux.Search.FileFinder Calculate_Hash=Y |
 | Targeted acquisition | Linux.Search.FileFinder Upload_File=Y, original upload inventory and API file bytes |
@@ -59,7 +59,7 @@ and block repeated launch under that run ID. Inspect/cancel known owned flows;
 do not silently create another run to hide an unknown launch.
 
 The collect method waits a finite deadline, retrieves real source pages (100 rows,
-5000 per source), records optional empty sources, lists uploads and reads uploaded
+5000 per source), records optional empty sources, reconciles retrieved rows with each flow total, lists uploads and reads uploaded
 bytes through the authenticated server filestore API. Regular uploads are limited
 to 4 MiB each and compared with their source row hash and original size. Sparse or
 ambiguous entries refuse. Results have an independent 32 MiB bound; bundle export
@@ -77,3 +77,5 @@ The old linux_scope_* API only changes memory records. It does not apply, extend
 withdraw, expire or stop real high-granularity collection. Its results explicitly
 report `backend_applied=false`. These effects and native Windows qualification
 remain separate acceptance work. Local tests use API doubles; they are not VM proof.
+
+The pinned plan uses FileFinder for explicit system/user service and timer files. Native v0.77.3 Generic.Collectors.File sent three metadata rows that were not available through either source API form or its expected result-set path; its upload rows remained readable. That artifact is excluded from this plan, with no reduction in the seven evidence classes. Any reported-versus-retrieved row discrepancy now refuses result publication and repeatability. Historical nine-artifact runs remain preserved and do not meet this stronger completeness check.
