@@ -52,7 +52,10 @@ class DeployTests(unittest.TestCase):
 
     def test_success_and_readonly_reentry(self):
         self.assertEqual(self.deploy()['status'], 'READY'); before = list(self.calls)
-        self.assertIsNone(json.loads((self.root/'server.config.yaml').read_text())['Monitoring'])
+        config = json.loads((self.root/'server.config.yaml').read_text())
+        self.assertIsNone(config['Monitoring'])
+        self.assertTrue(config['GUI']['public_url'].endswith('/app/index.html'))
+        self.assertEqual(config['Client']['local_buffer']['filename_linux'], str(self.root/'client-buffer.bin'))
         self.assertEqual(self.deploy()['status'], 'READY')
         self.assertFalse(any('enable' in a for a in self.calls[len(before):]))
         self.assertEqual(stat.S_IMODE((self.root/'server.config.yaml').stat().st_mode), 0o600)

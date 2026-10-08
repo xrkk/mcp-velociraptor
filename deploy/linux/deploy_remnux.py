@@ -86,10 +86,11 @@ def settings(root, datastore):
     return {
         'Client': {'server_urls': ['https://127.0.0.1:8000/'], 'use_self_signed_ssl': True,
                    'writeback_linux': str(root / 'client.writeback.yaml'),
-                   'tempdir_linux': str(root / 'client-temp')},
+                   'tempdir_linux': str(root / 'client-temp'),
+                   'local_buffer': {'filename_linux': str(root / 'client-buffer.bin')}},
         'Frontend': {'hostname': '127.0.0.1', 'bind_address': '127.0.0.1', 'bind_port': 8000},
         'API': {'hostname': '127.0.0.1', 'bind_address': '127.0.0.1', 'bind_port': 8001, 'bind_scheme': 'tcp'},
-        'GUI': {'bind_address': '127.0.0.1', 'bind_port': 8889, 'public_url': 'https://127.0.0.1:8889/'},
+        'GUI': {'bind_address': '127.0.0.1', 'bind_port': 8889, 'public_url': 'https://127.0.0.1:8889/app/index.html'},
         'Datastore': {'location': str(datastore), 'filestore_directory': str(datastore)},
         'Logging': {'output_directory': str(root / 'logs')},
         'Monitoring': None, 'ExtraFrontends': None, 'autocert_cert_cache': None,
@@ -101,7 +102,8 @@ def validate_config(binary, config, expected, client=False):
     value = json.loads(run([binary, '--config', config, 'config', 'show', '--json']))
     for section in (('Client',) if client else ('Client', 'Frontend', 'GUI', 'API', 'Datastore')):
         for k, v in expected[section].items():
-            require(value.get(section, {}).get(k) == v, 'CONFIG_MISMATCH')
+            actual = value.get(section, {}).get(k)
+            require(all(actual.get(a) == b for a, b in v.items()) if isinstance(v, dict) and isinstance(actual, dict) else actual == v, 'CONFIG_MISMATCH')
     require(not value.get('ExtraFrontends') and not value.get('autocert_cert_cache'), 'EXTRA_LISTENER')
     if not client:
         require(value.get('Monitoring') is None, 'EXTRA_LISTENER')
