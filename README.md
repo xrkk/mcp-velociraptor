@@ -14,8 +14,11 @@ routing. `VELOCIRAPTOR_LINUX_DOMAIN=1` selects this Linux-only registry with
 `velociraptor_linux_cli.py --deployment-root <root>` uses the same registered
 handlers without a listener. See [basic triage](deploy/linux/triage.md).
 The basic plan pins eight original artifacts and reconciles source row totals.
-Local tests do not qualify native collections. High-granularity scope records
-remain in-memory bookkeeping; actual scope effects/realtime telemetry are open.
+Local tests do not qualify native collections. `linux_scope_apply/update/query/extend/withdraw/stop/export`
+now use a durable guest-local custom kernel worker with PID/birth filters and bounded
+expiry. Every tool takes an explicit identity `request`; the historical `get` and
+`bind_targets` names alias query/update, with the same new request contract.
+See [scope contract](deploy/linux/scope.md) for requirements, event limits and interrupted cleanup.
 
 Completed Windows-MCP and FakeNet outputs can use the explicit
 [cross-account artifact export](docs/artifact-export-handoff.md) before a Velo

@@ -1,6 +1,7 @@
 # Copyright 2026 Google LLC
 """Linux professional registry and historical in-memory scope records.
 
+Production scope tools use the persistent custom kernel backend.
 Production basic triage uses the injected LinuxTriageBackend and full original
 artifact fingerprints. ScopeState and its hints are bookkeeping only: they do
 not implement realtime collection, scope activation, expiry, withdrawal or stop.
@@ -266,6 +267,7 @@ def compare_triage_runs(run_a: dict, run_b: dict) -> dict:
 
 LINUX_DOMAIN_TOOL_NAMES = (
     'linux_platform_route',
+    'linux_scope_apply', 'linux_scope_update', 'linux_scope_query', 'linux_scope_export',
     'linux_scope_get',
     'linux_scope_bind_targets',
     'linux_scope_extend',
@@ -275,8 +277,6 @@ LINUX_DOMAIN_TOOL_NAMES = (
     'linux_triage_export', 'linux_triage_cancel', 'linux_triage_collect',
     'linux_triage_compare',
 )
-
-_SCOPE_SESSIONS: dict[str, ScopeState] = {}
 
 
 def register_linux_domain_tools(server, *, clients_provider=None, backend=None) -> tuple[str, ...]:
@@ -328,45 +328,40 @@ def register_linux_domain_tools(server, *, clients_provider=None, backend=None) 
                           (triage_compare, 'linux_triage_compare')):
         server.add_tool(handler, name=name, description='Bounded real Linux basic triage; no realtime scope qualification.')
 
-    def _scope(session_id: str) -> ScopeState:
-        scope = _SCOPE_SESSIONS.get(session_id)
-        if scope is None:
-            scope = ScopeState(session_id=session_id)
-            _SCOPE_SESSIONS[session_id] = scope
-        return scope
+    def scoped(action, request):
+        from velociraptor_linux_scope import ScopeBackend
+        return ScopeBackend(professional()).call(action, request)
 
-    def scope_get(session_id: str) -> dict:
-        return _scope(session_id).effective_scope()
+    def scope_apply(request: dict) -> dict:
+        return scoped('apply', request)
 
-    def scope_bind(session_id: str, targets: list[str]) -> dict:
-        return _scope(session_id).bind_targets(targets)
+    def scope_update(request: dict) -> dict:
+        return scoped('update', request)
 
-    def scope_extend(session_id: str, artifacts: list[str], reason: str,
-                     expires_in_seconds: int,
-                     targets: list[str] | None = None) -> dict:
-        return _scope(session_id).extend_temporarily(
-            artifacts, reason=reason, expires_in_seconds=expires_in_seconds)
+    def scope_query(request: dict) -> dict:
+        return scoped('query', request)
 
-    def scope_withdraw(session_id: str) -> dict:
-        return _scope(session_id).withdraw()
+    def scope_export(request: dict) -> dict:
+        return scoped('export', request)
 
-    def scope_stop(session_id: str) -> dict:
-        return _scope(session_id).stop()
+    def scope_extend(request: dict) -> dict:
+        return scoped('extend', request)
 
-    for handler, name, description in (
-            (platform_route, 'linux_platform_route',
-             'Route a client id against the fixed Linux endpoint identity; '
-             'non-Linux targets refuse with WRONG_PLATFORM and zero issued '
-             'mutations.'),
-            (scope_get, 'linux_scope_get',
-             'Return the reviewable high-granularity scope record.'),
-            (scope_bind, 'linux_scope_bind_targets',
-             'Anchor the default scope to the related target set.'),
-            (scope_extend, 'linux_scope_extend',
-             'Temporarily extend artifacts with reason and 1..3600s expiry.'),
-            (scope_withdraw, 'linux_scope_withdraw',
-             'Withdraw all temporary extensions back to defaults.'),
-            (scope_stop, 'linux_scope_stop',
-             'Stop the session scope; further mutations refuse.')):
-        server.add_tool(handler, name=name, description=description)
+    def scope_withdraw(request: dict) -> dict:
+        return scoped('withdraw', request)
+
+    def scope_stop(request: dict) -> dict:
+        return scoped('stop', request)
+
+    server.add_tool(platform_route, name='linux_platform_route', description='Resolve the fixed Linux client.')
+    for handler, names in (
+            (scope_apply, ('linux_scope_apply',)),
+            (scope_update, ('linux_scope_update', 'linux_scope_bind_targets')),
+            (scope_query, ('linux_scope_query', 'linux_scope_get')),
+            (scope_export, ('linux_scope_export',)),
+            (scope_extend, ('linux_scope_extend',)),
+            (scope_withdraw, ('linux_scope_withdraw',)),
+            (scope_stop, ('linux_scope_stop',))):
+        for name in names:
+            server.add_tool(handler, name=name, description='Durable bounded professional kernel scope; explicit identity request required.')
     return LINUX_DOMAIN_TOOL_NAMES
