@@ -108,6 +108,16 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(answer['status'],'UNKNOWN')
         self.assertFalse(answer['backend_applied'])
 
+    def test_repeated_terminal_stop_preserves_exported_originals(self):
+        backend=ScopeBackend(Mock(root=Path('/unused')))
+        state={'status':'STOPPED','probe':None,'worker':None}
+        with patch.object(backend,'_snapshot',return_value={'status':'STOPPED'}) as snapshot, \
+             patch('velociraptor_linux_scope.atomic') as write:
+            answer=backend._recover_stop(Path('/unused'),state)
+            self.assertEqual(answer['status'],'STOPPED')
+            write.assert_not_called()
+            snapshot.assert_called_once()
+
     def test_worker_expiry_runs_without_any_query(self):
         with tempfile.TemporaryDirectory() as d:
             directory=Path(d)

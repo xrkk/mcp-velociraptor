@@ -196,6 +196,8 @@ class ScopeBackend:
         # The kernel deadline and PDEATHSIG already bound interrupted workers.
         # Never signal a merely matching PID/name; verify the original argv too.
         probe = state.get('probe')
+        if state['status'] in TERMINAL and not alive(probe):
+            return self._snapshot(directory)
         if alive(probe):
             argv = (Path('/proc') / str(probe['pid']) / 'cmdline').read_bytes().split(b'\0')[:-1]
             require(argv == [x.encode() for x in state['probe_argv']], 'PROBE_OWNER_UNKNOWN')
