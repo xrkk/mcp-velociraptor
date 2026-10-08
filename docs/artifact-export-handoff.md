@@ -61,7 +61,7 @@ errors; ACL verification alone is not effective service-token read proof.
 
 ## Producer entry points
 
-Windows-MCP `Export-VeloArtifacts.ps1`: explicit absolute Sources/SourceRoot,
+Windows-MCP `Export-VeloArtifacts.ps1`: explicit absolute Files/SourceRoot,
 producer references, completion/quiescence switches, deployment variables and
 an evidence directory. Invoke through PowerShell after FileSystem/application
 writers close. It retains an export manifest and calls the shared exporter.
@@ -73,3 +73,16 @@ nonpartial stopped status, matching selected query/run/version, and selects
 only complete rows under that registered run. It never starts/stops FakeNet,
 changes exit-evidence ACLs or promotes unpublished rows. The shared exporter
 independently verifies the current bytes against FakeNet's declarations.
+
+## Pull failure diagnostics
+
+Worker failures retain `work_root/tasks/<transfer_id>/worker-error-<nonce>.json`.
+MCP operation/preflight failures also append private UTF-8 JSON records to
+`work_root/operation-errors.jsonl`, including the operation, validated identifier
+and digest, exact source path and available errno/Win32 error/native OS message.
+No task is created merely to log a rejected preflight. Responses still expose
+only the bounded error code; raw tool arguments, credentials and file bytes are
+not recorded. The log is limited to 1 MiB; a full or unsafe log is preserved,
+and diagnostic persistence failure falls back to stderr without replacing the
+original protocol error. Archive it through an authorized administrative path
+when needed; do not grant this private log public/source Read.

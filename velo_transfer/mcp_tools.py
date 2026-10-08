@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import logging
 from importlib.resources import files
 import os
 import re
@@ -19,8 +20,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Strict
 
 from velociraptor_dynamic_artifacts import ArtifactRegistryError, _strict_tool_schema
 
-from .errors import TransferContentError
+from .errors import TransferContentError, error_diagnostic
 from .guest_service import GuestTransferService
+from .operation_diagnostics import record_operation_error
 
 
 TRANSFER_TOOL_NAMES = (
@@ -213,9 +215,23 @@ class TransferToolService:
                 result = getattr(service, name)(**arguments)
                 return self._success(result)
             except TransferContentError as exc:
+                self._record_error(name, arguments, exc)
                 return self._failure(exc.code)
-            except Exception:
+            except Exception as exc:
+                self._record_error(name, arguments, exc)
                 return self._failure("internal_error")
+
+    def _record_error(self, name, arguments, exc):
+        logger = logging.getLogger(__name__)
+        # stderr remains a fallback for stdio deployments or failed private
+        # persistence; the MCP response continues to expose only the code.
+        logger.error("transfer_operation_error %s", json.dumps({
+            "operation": name, "error": error_diagnostic(exc)}, ensure_ascii=False))
+        try:
+            record_operation_error(self._service, name, arguments, exc)
+        except Exception as log_error:
+            logger.error("transfer_operation_log_failed %s", json.dumps(
+                error_diagnostic(log_error), ensure_ascii=False))
 
     @staticmethod
     def _success(result):
