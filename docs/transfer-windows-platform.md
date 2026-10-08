@@ -89,6 +89,10 @@ acceptance must run them on Windows, then repeat the mixed administrator/service
 eight-file pull under the real service account and confirm host publication and
 both cleanups.
 
+The [2026-10-08 .149 verification](transfer-source-handoff-verification.md)
+records native ACL acceptance, the corrected CLR-directory checks, the real
+access-denied worker log, and the completed eight-file pull with both cleanups.
+
 ## Primary API references
 
 - Microsoft: [Win32_ComputerSystemProduct.UUID](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystemproduct) is the SMBIOS Type 1 UUID; unavailable UUID can be all zeros. [Win32_OperatingSystem.LastBootUpTime](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-operatingsystem) is the last restart time.

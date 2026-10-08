@@ -204,8 +204,13 @@ $rejected = $false
 try { Run-Handoff 'configure' TASK_ROOT } catch { $rejected = $true }
 if (-not $rejected) { throw 'Outside-policy root accepted.' }
 '''.replace("TASK_SCRIPT", quote(script)).replace("TASK_ROOT", quote(temp))
+            # A caller running PowerShell 7 can pass its incompatible modules
+            # into Windows PowerShell 5.1 through Python's unchanged environment.
+            child_env = os.environ.copy()
+            child_env["PSModulePath"] = str(Path(os.environ["SystemRoot"]) /
+                                          "System32/WindowsPowerShell/v1.0/Modules")
             result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", command],
-                                    capture_output=True, text=True, timeout=60)
+                                    env=child_env, capture_output=True, text=True, timeout=60)
             if result.returncode == 77:
                 self.skipTest("deployed service virtual account not available")
             self.assertEqual(result.returncode, 0, result.stderr)

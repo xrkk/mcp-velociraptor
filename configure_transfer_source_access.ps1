@@ -37,7 +37,8 @@ function Assert-SafeChain {
     $item = Get-SafeItem $Path
     while ($null -ne $item) {
         $null = Get-SafeItem $item.FullName
-        $item = if ($item.PSIsContainer) { $item.Parent } else { $item.Directory }
+        # Parent returns a plain DirectoryInfo without provider-added properties.
+        $item = if ($item -is [IO.DirectoryInfo]) { $item.Parent } else { $item.Directory }
     }
 }
 
@@ -74,12 +75,12 @@ function Test-ServiceGrant {
 
 Assert-SafeChain $PolicyPath
 $policyItem = Get-SafeItem $PolicyPath
-if ($policyItem.PSIsContainer -or $policyItem.Length -gt 1MB) { throw 'Invalid policy file.' }
+if ($policyItem -is [IO.DirectoryInfo] -or $policyItem.Length -gt 1MB) { throw 'Invalid policy file.' }
 $policy = Get-Content -LiteralPath $policyItem.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($policy.schema -cne 'velo.transfer.policy.v1') { throw 'Invalid transfer policy schema.' }
 Assert-SafeChain $SourceRoot
 $root = Get-SafeItem $SourceRoot
-if (-not $root.PSIsContainer -or $null -eq $root.Parent) { throw 'A dedicated output directory is required.' }
+if ($root -isnot [IO.DirectoryInfo] -or $null -eq $root.Parent) { throw 'A dedicated output directory is required.' }
 $approved = @($policy.read_roots | ForEach-Object { [IO.Path]::GetFullPath($_).TrimEnd('\') })
 if ($root.FullName.TrimEnd('\') -notin $approved) { throw 'SourceRoot must be an exact policy read_root.' }
 $work = [IO.Path]::GetFullPath($policy.work_root).TrimEnd('\')
@@ -97,7 +98,7 @@ while ($pending.Count -gt 0) {
     $item = Get-SafeItem ($pending.Pop().FullName)
     $items.Add($item)
     Assert-NoReadDeny (Get-Acl -LiteralPath $item.FullName) $item.FullName
-    if ($item.PSIsContainer) {
+    if ($item -is [IO.DirectoryInfo]) {
         foreach ($child in Get-ChildItem -LiteralPath $item.FullName -Force) {
             $pending.Push((Get-SafeItem $child.FullName))
         }
@@ -115,7 +116,7 @@ foreach ($item in $items) {
         Assert-SafeChain $item.FullName
         $acl = Get-Acl -LiteralPath $item.FullName
         Assert-NoReadDeny $acl $item.FullName
-        if ($item.PSIsContainer) {
+        if ($item -is [IO.DirectoryInfo]) {
             # Traverse/list on directories; Read on files, independently of owner.
             $grants = @(@($DirectoryRead, $CI, $None), @($Read, $OI, $IO))
         } else {
