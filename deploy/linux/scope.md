@@ -56,3 +56,9 @@ stop only signals a PID whose original birth and exact argv still match. It
 records FAILED/collection_stopped, never retroactively reports a normal stop.
 Export requires confirmed termination and fingerprints the closed originals.
 It never qualifies complete causality or a full sample round.
+
+Open lookup may call the filesystem create operation directly. Successful
+`do_filp_open` returns with kernel `FMODE_CREATED` supplement the vfs_create
+hook; O_CREAT opening an existing file does not qualify as a new create event.
+This is supported by the fixed kernel BTF/header and the upstream
+[Linux 6.8 open lookup](https://github.com/torvalds/linux/blob/v6.8/fs/namei.c).

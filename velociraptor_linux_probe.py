@@ -39,6 +39,18 @@ tracepoint:sched:sched_process_exit /{predicate} && tid == pid/ {{
     delete(@until[pid, {birth}]); delete(@origin[pid, {birth}]);
 }}
 """)
+    # open lookup may call the filesystem create operation directly, bypassing
+    # vfs_create. FMODE_CREATED on a successful returned file is a kernel fact;
+    # O_CREAT alone also opens existing files and is not evidence of creation.
+    pieces.append(f"""
+kretfunc:do_filp_open /{predicate}/ {{
+    $f = (struct file*)retval;
+    if ((uint64)$f != 0 && (uint64)$f < (uint64)-4095 && ($f->f_mode & 0x100000)) {{
+        print(("create", {common}, str($f->f_path.dentry->d_name.name),
+               $f->f_path.dentry->d_parent->d_inode->i_ino, $f->f_inode->i_sb->s_dev));
+    }}
+}}
+""")
     # Store entry facts because rename/unlink mutate the dentries before return.
     for operation, function, entry, output, success in (
         ('create', 'vfs_create',

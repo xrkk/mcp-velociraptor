@@ -83,6 +83,9 @@ class ScopeTests(unittest.TestCase):
         self.assertIn('@until[$cpid, $cbirth] = @until[pid,', source)
         self.assertIn('> nsecs && nsecs < 1234568', source)
         self.assertIn('interval:s:1', source)
+        self.assertIn('kretfunc:do_filp_open', source)
+        self.assertIn('$f->f_mode & 0x100000', source)
+        self.assertIn('(uint64)$f < (uint64)-4095', source)
         for name in ('fork', 'exec', 'exit', 'create', 'modify', 'delete', 'rename', 'connect'):
             self.assertIn('"'+name+'"', source)
         with self.assertRaises(ValueError):
