@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from .errors import TransferContentError as Error
+from .errors import source_io_error
 from .manifest import (BLOCK_SIZE, Budget, SCHEMA, _check_collisions, _hash_file,
                        _no_link, canonical_json, check_relative, directory_identity,
                        file_identity, safe_chain, source_root_for, validate_sources)
@@ -117,7 +118,10 @@ def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict
                     hasher = hashlib.sha256()
                     count = 0
                     flags_in = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
-                    source_fd = os.open(source, flags_in)
+                    try:
+                        source_fd = os.open(source, flags_in)
+                    except OSError as exc:
+                        raise source_io_error(source, "open", exc) from exc
                     try:
                         if file_identity(os.fstat(source_fd)) != entry["identity"]:
                             raise Error("source_changed")
@@ -125,7 +129,10 @@ def create_bundle(source_root: str | Path | list[str | Path], sources: list[dict
                             with archive.open(info, "w", force_zip64=True) as outgoing:
                                 while True:
                                     budget.check()
-                                    chunk = incoming.read(BLOCK_SIZE)
+                                    try:
+                                        chunk = incoming.read(BLOCK_SIZE)
+                                    except OSError as exc:
+                                        raise source_io_error(source, "read", exc) from exc
                                     if not chunk:
                                         break
                                     count += len(chunk)

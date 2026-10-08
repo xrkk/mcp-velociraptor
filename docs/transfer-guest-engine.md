@@ -66,6 +66,33 @@ An existing pull manifest can be revalidated and packaged after an interrupted b
 
 Older push `DEST_RELEASED` tombstones written before this field existed return `destination_verification:null`; status cannot manufacture a retroactive post-cleanup observation. A host coordinator must not use such a legacy tombstone as proof of U5 completion. No existing task is migrated or rewritten by this change.
 
+### Worker failure diagnostics
+
+Each caught worker failure writes a private, exclusive
+`work_root/tasks/<transfer_id>/worker-error-<worker_nonce>.json` before attempting
+the task-state writer transaction. The record binds the request digest, job,
+nonce, PID and process birth to the original error. Source `lstat`, `open`,
+`read` and `scandir` failures retain the exact path and operation, OS exception
+type, errno, WinError (when available), and the underlying system error text
+(capped at 4096 characters). Packaging source reads use the same diagnostics.
+Other wrapped OS errors retain their native cause and filename when available.
+Each log is capped at 256 KiB, fsynced and checked with the existing private
+Windows state ACL gate; directory sync runs where supported. It contains no
+file payloads, request body, tokens or environment. Paths may identify evidence,
+so retain it with the protected task metadata rather than model-visible output.
+
+The public response still carries the existing stable error code. Windows
+workers discard stderr, so the retained task file is the failure log to inspect.
+Task error persistence now retries brief `writer_busy` contention for every job
+(up to 100 attempts with 5 ms between retries); diagnostic recording does not
+depend on that writer lock. Log I/O is best effort if policy/work-root access
+itself has failed, and cannot replace the primary task failure. Worker cleanup
+does not delete logs, and a later attempt uses its own nonce. Forced termination
+and the deadline guard's immediate exit cannot produce a caught-error log.
+
+See [cross-account handoff](transfer-windows-platform.md#cross-account-output-handoff)
+for inherited service Read grants and the producer completion sequence.
+
 ### Internal lease after a guest reboot
 
 Only the reserved `guest-internal-lease` envelope may move to the freshly

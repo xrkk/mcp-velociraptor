@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .errors import TransferContentError as Error
+from .errors import source_io_error
 
 BLOCK_SIZE = 1024 * 1024
 SCHEMA = "velo.transfer.manifest.v1"
@@ -50,7 +51,7 @@ def _no_link(path: Path) -> os.stat_result:
     try:
         info = path.lstat()
     except OSError as exc:
-        raise Error("source_unavailable") from exc
+        raise source_io_error(path, "lstat", exc) from exc
     if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
         raise Error("link_or_reparse")
     return info
@@ -124,7 +125,7 @@ def _hash_file(path: Path, root: Path, budget: Budget) -> tuple[dict[str, int], 
     try:
         fd = os.open(path, flags)
     except OSError as exc:
-        raise Error("source_unavailable") from exc
+        raise source_io_error(path, "open", exc) from exc
     try:
         opened = os.fstat(fd)
         if file_identity(opened) != file_identity(before):
@@ -146,6 +147,8 @@ def _hash_file(path: Path, root: Path, budget: Budget) -> tuple[dict[str, int], 
                 file_identity(_no_link(path)) != file_identity(before)):
             raise Error("source_changed")
         return file_identity(before), hasher.hexdigest()
+    except OSError as exc:
+        raise source_io_error(path, "read", exc) from exc
     finally:
         os.close(fd)
 
@@ -240,7 +243,7 @@ def _scan(root: str | Path | list[str | Path], sources: list[dict[str, str]], bu
                             break
                         add(Path(child.path), relative + "/" + child.name, source_root)
             except OSError as exc:
-                raise Error("source_unavailable") from exc
+                raise source_io_error(path, "scandir", exc) from exc
             if file_identity(_no_link(path)) != before:
                 raise Error("source_changed")
 

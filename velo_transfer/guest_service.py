@@ -19,6 +19,7 @@ from pathlib import Path
 
 from .bundle import _hash_path, create_bundle, prepare_staging, unpack_bundle, verify_tree
 from .errors import TransferContentError as Error
+from .errors import error_diagnostic
 from .filesystem import publish_directory
 from .guest_worker import (RootLease, process_birth, read_activation, same_process,
                            terminate_verified)
@@ -784,9 +785,17 @@ class GuestTransferService:
                 lease_closed = True
         except Exception as exc:
             code = exc.code if isinstance(exc, Error) else "worker_failed"
+            # stderr is intentionally disconnected on Windows. Persist the
+            # original failure separately from the protocol response and before
+            # acquiring the status writer lock, which may be briefly busy.
+            try:
+                self._record_worker_error(transfer_id, digest, job, nonce, exc)
+            except Exception:
+                # Diagnostic I/O must not replace the original task failure.
+                pass
             # A status poll can momentarily own the writer lock as this worker
-            # exits. Preserve a post-authorization failure instead of losing it.
-            for attempt in range(100 if job == "release" else 1):
+            # exits. Preserve the original failure for every job.
+            for attempt in range(100):
                 try:
                     store = self._store()
                     with store.writer():
@@ -808,7 +817,7 @@ class GuestTransferService:
                             self._save(store, envelope, state)
                     break
                 except Error as write_exc:
-                    if job != "release" or write_exc.code != "writer_busy" or attempt == 99:
+                    if write_exc.code != "writer_busy" or attempt == 99:
                         break
                     time.sleep(0.005)
                 except Exception:
@@ -828,6 +837,19 @@ class GuestTransferService:
                             if n<=0: break
                             view=view[n:]
                 finally: os.close(_report_fd)
+
+    def _record_worker_error(self, transfer_id, digest, job, nonce, exc):
+        state = self._load(transfer_id, digest)["state"]
+        owner = state["owner"]
+        if (owner is None or owner["nonce"] != nonce or owner["job"] != job or
+                owner["pid"] != os.getpid() or owner["birth"] != process_birth(os.getpid())):
+            raise Error("worker_ownership_mismatch")
+        path = self._task_path(transfer_id) / ("worker-error-" + nonce + ".json")
+        record = {"schema": "velo.transfer.worker-error.v1", "transfer_id": transfer_id,
+                  "request_digest": digest, "job": job, "worker_nonce": nonce,
+                  "pid": owner["pid"], "birth": owner["birth"], "error": error_diagnostic(exc)}
+        self._atomic_sidecar(path, canonical_json(record), 256 * 1024)
+        _sync_directory(path.parent)
 
     def _execute(self, transfer_id, digest, job):
         envelope = self._load(transfer_id, digest)

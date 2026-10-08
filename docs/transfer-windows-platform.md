@@ -41,6 +41,54 @@ Every path component must have a trusted owner and no untrusted *allow* ACE for 
 
 This is a conservative DACL test, not a proof against administrator, owner, same-account hostile mutation, privileges that override DACLs, or ACL races. The content and store still recheck identities at their own action boundaries. Real Windows ACL behavior and power-loss durability require target-side validation.
 
+## Cross-account output handoff
+
+`OWNER RIGHTS` (`S-1-3-4`) applies to the object's owner; an administrator-created
+output therefore needs a grant to the actual pull account, `NT SERVICE\mcp-velociraptor`.
+An owner grant alone does not establish that account's read access. Windows uses
+[inheritable ACEs](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights)
+to pass the service SID grant to new children independently of their owner.
+
+Run the repository's `configure_transfer_source_access.ps1` elevated against a
+dedicated output directory that is an exact `read_roots` entry in the protected
+transfer policy. Use deployment-specific paths in these variables:
+
+```powershell
+./configure_transfer_source_access.ps1 -Mode configure -PolicyPath $PolicyPath -SourceRoot $OutputRoot
+./configure_transfer_source_access.ps1 -Mode verify -PolicyPath $PolicyPath -SourceRoot $OutputRoot
+```
+
+Configure adds service SID Read grants to existing files, including files with
+protected DACLs. Every directory receives list/read/traverse for itself and child
+directories, plus an inherit-only Read grant for child files. New files created
+by an administrator inherit service Read without granting file execution, write,
+delete, ownership or DACL control. Existing broader grants, owners, OWNER RIGHTS,
+and inheritance protection are preserved. Repeating configure is idempotent.
+The script refuses a volume root, a root outside policy, overlap with private
+`work_root` or the policy file, and reparse points in the tree or ancestor chain.
+It checks the existing tree before mutation and conservatively refuses any
+read/traverse deny ACE, including group denies, rather than removing denies.
+Verify reads ACLs without changing them. Its success means the required SID
+grants exist; it does not run with the service token or prove effective access
+against every OS restriction (for example encryption or parent traversal).
+
+For each administrative producer: finish and close output files, keep production
+quiescent, repeat configure/verify, then submit pull BEGIN with the producer
+evidence. This final handoff repairs moved-in files, disabled inheritance, and
+tools that replace the output DACL. If a producer continues creating or replacing
+files after handoff, inheritance alone cannot establish a completed source.
+Configure does not restart the service or change policy roots. The runtime ACL
+verifier remains read-only and continues to enforce its original trust gates.
+
+After `SOURCE_PREPARING/source_unavailable`, use the worker log described in
+[guest recovery](transfer-guest-engine.md#worker-failure-diagnostics) to find the
+exact denied source. Repair the producer handoff and start a new transfer ID;
+the original failed task and its diagnostic remain available. Native ACL tests
+are in `tests/test_transfer_source_handoff.py`; Linux skips them. Deployment
+acceptance must run them on Windows, then repeat the mixed administrator/service
+eight-file pull under the real service account and confirm host publication and
+both cleanups.
+
 ## Primary API references
 
 - Microsoft: [Win32_ComputerSystemProduct.UUID](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystemproduct) is the SMBIOS Type 1 UUID; unavailable UUID can be all zeros. [Win32_OperatingSystem.LastBootUpTime](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-operatingsystem) is the last restart time.
