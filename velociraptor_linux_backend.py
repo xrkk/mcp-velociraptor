@@ -276,12 +276,12 @@ class LinuxTriageBackend:
                 data[artifact][name]=all_rows
             logs=self.api.query('SELECT * FROM flow_logs(client_id='+literal(cid)+',flow_id='+literal(fid)+') LIMIT 5001',directory)
             require(len(logs)<=5000,'LOG_BOUND')
-            log_ref=publish(directory/('logs-'+fid+'.json'),canonical(logs))
+            log_ref=publish(directory/('logs-'+fid+'-'+str(uuid.uuid4())+'.json'),canonical(logs))
             total_bytes+=log_ref['size'];require(total_bytes<=32*1024*1024,'RESULT_BYTE_BOUND')
             products.append(dict(log_ref,kind='logs',artifact=artifact,flow_id=fid,client_id=cid,rows=len(logs)))
             inventory=self.api.query('SELECT * FROM uploads(client_id='+literal(cid)+',flow_id='+literal(fid)+') LIMIT 251',directory)
             require(len(inventory)<251,'FILE_COUNT_BOUND')
-            products.append(dict(publish(directory/('uploads-'+fid+'.json'),canonical(inventory)),kind='inventory',flow_id=fid,client_id=cid))
+            products.append(dict(publish(directory/('uploads-'+fid+'-'+str(uuid.uuid4())+'.json'),canonical(inventory)),kind='inventory',flow_id=fid,client_id=cid))
             for item in inventory:
                 require(item.get('Type','')!='idx' and item.get('type','')!='idx','SPARSE_UNSUPPORTED')
                 size=item.get('file_size');require(type(size)is int and 0<=size<=4*1024*1024 and size==item.get('uploaded_size'),'UPLOAD_SIZE')
@@ -291,8 +291,8 @@ class LinuxTriageBackend:
                 content=bytearray();offset=0
                 while offset<size:
                     length=min(65536,size-offset)
-                    query=('SELECT base64encode(string=read_file(accessor="fs",filename=pathspec(Path='+literal(components)+
-                           ',path_type="linux"),offset='+str(offset)+',length='+str(length)+')) AS Data FROM scope()')
+                    query=('SELECT base64encode(string=read_file(accessor="fs",filename='+literal('fs:/'+ '/'.join(components))+
+                           ',offset='+str(offset)+',length='+str(length)+')) AS Data FROM scope()')
                     rows=self.api.query(query,directory);require(len(rows)==1 and type(rows[0].get('Data'))is str,'DOWNLOAD_RESPONSE')
                     block=base64.b64decode(rows[0]['Data'],validate=True);require(len(block)==length,'DOWNLOAD_SHORT')
                     content.extend(block);offset+=length

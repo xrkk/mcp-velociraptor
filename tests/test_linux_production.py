@@ -52,7 +52,10 @@ class API:
             if f['artifact']!='Linux.Search.FileFinder':return []
             return [{'file_size':10,'uploaded_size':10,'client_path':'/MODEL/file',
                      '_Components':['clients','C.model','collections',f['flow_id'],'uploads','auto','MODEL','file']}]
-        if 'read_file(' in q:return [{'Data':base64.b64encode(b'MODEL FILE').decode()}]
+        if 'read_file(' in q:
+            assert 'filename="fs:/clients/C.model/collections/' in q
+            assert 'pathspec(Path=[' not in q
+            return [{'Data':base64.b64encode(b'MODEL FILE').decode()}]
         if 'FROM flows(' in q:
             f=next(x for x in self.flows if '"'+x['flow_id']+'"' in q)
             return [{'session_id':f['flow_id'],'state':self.state}]
