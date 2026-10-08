@@ -1,5 +1,14 @@
 # Velociraptor Agent POC
 
+Producer outputs use the explicit
+[cross-account artifact export](../docs/artifact-export-handoff.md) before a
+Velo pull; private configuration changes use
+[service-file updates](../docs/service-file-updates.md). These are operator
+workflows outside this historical agent. The
+[implementation checklist](../docs/cross-account-permission-implementation.md)
+records deployment and end-to-end verification. Neither workflow requires
+a VM reboot or snapshot restore.
+
 ## Daily Windows bridge service
 
 The bridge's formal Windows SCM entry is `velociraptor_windows_service.py` in

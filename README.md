@@ -1,5 +1,14 @@
 # Velociraptor MCP
 
+Completed Windows-MCP and FakeNet outputs can use the explicit
+[cross-account artifact export](docs/artifact-export-handoff.md) before a Velo
+pull. Private configuration replacements use the separate
+[service-file update workflow](docs/service-file-updates.md). See the
+[implementation checklist](docs/cross-account-permission-implementation.md)
+for deployment and end-to-end verification status; export success alone does
+not establish transfer COMPLETE. These workflows require no VM reboot or
+snapshot restore.
+
 ## Daily Windows service entry and restart
 
 The formal SCM launch file is `velociraptor_windows_service.py`. It delegates
