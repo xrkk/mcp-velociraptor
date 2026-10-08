@@ -215,7 +215,9 @@ class LinuxTriageBackend:
             require(request.get('artifacts')==[artifact] and request.get('timeout')==plan['timeout_seconds']
                     and request.get('max_upload_bytes')==plan['max_bytes'],'LAUNCH_REQUEST_MISMATCH')
             envs={x['key']:x['value'] for spec in request.get('specs',[]) for x in spec.get('parameters',{}).get('env',[])}
-            require(all(envs.get(k)==v for k,v in parameters.items()),'LAUNCH_PARAMETERS_LOST')
+            schema={p['name']:p for p in definitions[artifact]['parameters']}
+            require(all(envs.get(k)==v or (schema[k]['type']=='bool' and v=='N' and envs.get(k)=='')
+                        for k,v in parameters.items()),'LAUNCH_PARAMETERS_LOST')
         result = {'run_id':run_id,'session_id':session_id,'client_id':client_id,'flows':flows,
                   'fingerprint':sha(canonical(premise)),'premise':premise}
         publish(directory/'launched.json', canonical(result))

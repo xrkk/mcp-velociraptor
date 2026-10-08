@@ -29,7 +29,7 @@ class API:
             if self.bad:return []
             return [{'flow_id':self.flows[-1]['flow_id'],'request':{'artifacts':[name],
                 'timeout':self.plan['timeout_seconds'],'max_upload_bytes':self.plan['max_bytes'],
-                'specs':[{'parameters':{'env':[{'key':k,'value':v} for k,v in self.plan['parameters'][name].items()]}}]}}]
+                'specs':[{'parameters':{'env':[{'key':k,'value':'' if v=='N' else v} for k,v in self.plan['parameters'][name].items()]}}]}}]
         if 'FROM source(' in q:
             name=json.loads(re.search(r'artifact=("[^"]+")',q)[1])
             start=int(re.search(r'start_row=(\d+)',q)[1])
