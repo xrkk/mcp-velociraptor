@@ -155,6 +155,12 @@ class Worker:
             return
         self.state.update(status='DETACHING', backend_applied=False)
         self.transition('detach_started')
+        # Its kernel deadline independently requests exit. A second signal
+        # during bpftrace finalization can skip END and lose closed originals.
+        if now() >= self.premise['deadline_ns']:
+            grace = time.monotonic() + 3
+            while self.child.poll() is None and time.monotonic() < grace:
+                self.drain(.02)
         if self.child.poll() is None:
             self.child.terminate()
         end = time.monotonic() + 8

@@ -108,6 +108,21 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(answer['status'],'UNKNOWN')
         self.assertFalse(answer['backend_applied'])
 
+    def test_deadline_join_does_not_race_kernel_exit_with_second_signal(self):
+        worker=Worker.__new__(Worker)
+        worker.child=Mock(); child=worker.child
+        child.poll.side_effect=[None,0,0,0,0]
+        child.wait.return_value=0
+        worker.premise={'deadline_ns':0}; worker.state={}; worker.done=True; worker.fault=None
+        worker.transition=Mock(); worker.drain=Mock()
+        worker.raw=Mock(); worker.events=Mock(); worker.stderr=Mock()
+        with patch('velociraptor_linux_worker.os.fsync'):
+            worker.stop_probe()
+        child.terminate.assert_not_called()
+        child.kill.assert_not_called()
+        self.assertIsNone(worker.child)
+        self.assertIsNone(worker.fault)
+
     def test_repeated_terminal_stop_preserves_exported_originals(self):
         backend=ScopeBackend(Mock(root=Path('/unused')))
         state={'status':'STOPPED','probe':None,'worker':None}
