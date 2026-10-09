@@ -1,3 +1,17 @@
+## Bounded system service and timer evidence
+
+The scheduler profile may explicitly select `manager_scope="system"` (default
+`"user"`). It verifies PID 1, root peer credentials and `/run/systemd/private`;
+this identifies the manager and never authorizes a root payload. System units
+must explicitly bind numeric `User`/`Group` to the observed ordinary execution
+identity. Existing exact inode/content leases, fresh invocation, effective
+command, cgroup and live process checks still apply. The collector observes
+only one invocation, never installs or starts a definition, and stops only
+its proven owned unit. Service and timer sources remain distinct; timer
+activation facts are required. Qualified running actors enter bounded kernel
+scope with an explicit readiness gap. Missing, replaced, foreign, repeated,
+or unsupported definitions remain unavailable rather than guessed.
+
 # Velociraptor Agent POC
 
 ## Bounded ordinary user service evidence

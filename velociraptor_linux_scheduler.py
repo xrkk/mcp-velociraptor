@@ -1,4 +1,4 @@
-"""Bounded first-invocation user service/timer evidence, not a general scheduler claim.
+"""Bounded first-invocation user/system service/timer evidence, not a general scheduler claim.
 
 Private systemd peer credentials, fanotify inode snapshots under read leases,
 and live process credentials are independent of sample output. The collector
@@ -142,6 +142,10 @@ def mechanism(config):
     return config.get('mechanism', 'timer')
 
 
+def manager_scope(config):
+    return config.get('manager_scope', 'user')
+
+
 def unit_names(config):
     return [config['service']] + ([config['timer']] if mechanism(config) == 'timer' else [])
 
@@ -151,7 +155,7 @@ def artifact_names(config):
 
 
 def source_name(config):
-    return SOURCE if mechanism(config) == 'timer' else 'MalTrace.UserService.v1'
+    return 'MalTrace.' + ('System' if manager_scope(config) == 'system' else 'User') + ('Timer' if mechanism(config) == 'timer' else 'Service') + '.v1'
 
 
 def validate_profile(config):
@@ -162,6 +166,9 @@ def validate_profile(config):
         fields.add('timer')
     if 'mechanism' in config:
         fields.add('mechanism')
+    if 'manager_scope' in config:
+        fields.add('manager_scope')
+    need(manager_scope(config) in ('user', 'system'), 'unsupported manager scope')
     need(set(config) == fields, 'scheduler fields')
     directory = Path(config['directory'])
     need(directory.is_absolute() and directory.name and not directory.is_symlink(), 'scheduler directory')
@@ -171,7 +178,12 @@ def validate_profile(config):
     need(config['service'].endswith('.service') and
          (mode != 'timer' or config['timer'].endswith('.timer')) and
          len(set(artifact_names(config))) == len(artifact_names(config)), 'scheduler names')
-    need(config['manager']['uids'][1] > 0, 'ordinary manager required')
+    manager = config['manager']
+    if manager_scope(config) == 'system':
+        need(manager['pid'] == 1 and manager['uids'] == [0]*4 and manager['gids'] == [0]*4
+             and config['socket'] == '/run/systemd/private', 'system manager identity required')
+    else:
+        need(manager['uids'][1] > 0, 'ordinary manager required')
 
 
 def validate_fresh(units, config):
@@ -401,6 +413,8 @@ class Collector:
                             'XDG_RUNTIME_DIR=' + str(Path(self.config['socket']).parent.parent),
                             'DBUS_SESSION_BUS_ADDRESS=unix:path=' + self.config['socket'],
                             '/usr/bin/systemctl', '--user', 'stop', unit]
+                    if manager_scope(self.config) == 'system':
+                        argv = ['/usr/bin/systemctl', '--system', 'stop', unit]
                     self.record('stop-intent', argv=argv)
                     result = subprocess.run(argv, capture_output=True, text=True, timeout=8)
                     self.record('stop-result', rc=result.returncode, stdout=result.stdout, stderr=result.stderr)
@@ -408,7 +422,7 @@ class Collector:
                 if self.invocation:
                     argv = ['journalctl', '--no-pager', '--output=json',
                             '_SYSTEMD_INVOCATION_ID=' + bytes(self.invocation).hex(),
-                            '_UID=' + str(current['uids'][1])]
+                            '_UID=' + str(next(r['actor']['uids'][1] for r in self.records if r['kind'] == 'invocation-probe'))]
                     result = subprocess.run(argv, capture_output=True, timeout=5)
                     need(result.returncode == 0 and len(result.stdout) <= 1024*1024, 'journal original unavailable')
                     self.record('journal', argv=argv, rc=result.returncode,
@@ -435,7 +449,7 @@ class Collector:
 def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     """Shared complete-chain qualification for online admission and sealed replay.
 
-    Only a complete first timer invocation emits semantic records. Every source
+    Only a complete first service/timer invocation emits semantic records. Every source
     fact remains mapped to raw row numbers; missing/ambiguous facts raise rather
     than silently falling back to names, time proximity, or sample assertions.
     """
@@ -508,8 +522,15 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
         need(all(set(c[s]) == allowed[s] for s in allowed), 'unsupported definition options')
         return c
 
+    service_options = {'Type','ExecStart','Restart','RuntimeMaxSec','StandardOutput','StandardError'}
+    if manager_scope(config) == 'system':
+        service_options |= {'User','Group'}
     s = parse(service[1], {'Unit': {'Description','DefaultDependencies','RefuseManualStart'},
-        'Service': {'Type','ExecStart','Restart','RuntimeMaxSec','StandardOutput','StandardError'}})
+        'Service': service_options})
+    if manager_scope(config) == 'system':
+        need(s['Service']['User'] == str(credentials['uids'][1])
+             and s['Service']['Group'] == str(credentials['gids'][1])
+             and credentials['uids'][1] > 0, 'ordinary system payload identity required')
     mode = mechanism(config)
     need(s['Unit']['DefaultDependencies'] == 'no'
          and s['Unit']['RefuseManualStart'] == ('yes' if mode == 'timer' else 'no')
@@ -585,7 +606,9 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
              for n in unit_names(config)), 'definition use order conflict')
     hashes = [service[0]['sha256']] + ([timer[0]['sha256']] if timer else []) + [payload[0]['sha256']]
     version = sha(json.dumps(hashes, separators=(',', ':')).encode())
-    definition_id = 'user:%d:%s' % (manager['uids'][1], config.get('timer', config['service']))
+    name = config.get('timer', config['service'])
+    definition_id = ('system:' + name if manager_scope(config) == 'system'
+                     else 'user:%d:%s' % (manager['uids'][1], name))
     def instance(a):
         return dict(boot_id=boot, pid=a['pid'], start_time=a['birth'])
     return [dict(kind='artifact', instance=instance(a[1]['actor']), artifact_path=payload[0]['path'],
@@ -669,7 +692,7 @@ class FollowingCollector(Collector):
             need(remaining >= 5, 'insufficient admission window')
             target = dict(pid=actor['pid'], birth=actor['birth'], uid=actor['uids'][1])
             request = dict(self.binding, operation_id=str(uuid.uuid4()), targets=[target],
-                           reason='qualified first user ' + mechanism(self.config) + ' invocation ' + fire['invocation_id'],
+                           reason='qualified first ' + manager_scope(self.config) + ' ' + mechanism(self.config) + ' invocation ' + fire['invocation_id'],
                            expires_in_seconds=math.ceil(remaining) + 5, termination='scope stop or bounded extension expiry')
             self.record('admission-intent', proof=proof, kernel_prefix=prefix, actor=actor,
                         request=request, observation_deadline_ns=until)
