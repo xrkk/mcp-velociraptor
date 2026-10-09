@@ -54,3 +54,24 @@ class SystemSourceTests(unittest.TestCase):
                            lambda r:next(x for x in r if x['kind']=='invocation')['actor'].update(uids=[0]*4)):
                 rows,args=system_fixture(mode);change(rows)
                 with self.subTest(mode=mode,change=change),self.assertRaises(ValueError):source.normalize(rows,**args)
+
+
+class RuntimeFragmentTests(unittest.TestCase):
+    def test_runtime_link_requires_independent_exact_inode_binding(self):
+        for mode in ('service','timer'):
+            rows,args=system_fixture(mode)
+            fire=next(r for r in rows if r['kind']=='invocation')
+            for unit in source.unit_names(args['config']):
+                file=next(r['file'] for r in rows if r['kind']=='closed-write' and r['file']['path'].endswith('/'+unit))
+                fragment='/run/systemd/system/'+unit
+                fire['service' if unit.endswith('.service') else 'timer']['FragmentPath']=fragment
+                rows.insert(-1,dict(kind='fragment-binding',monotonic_ns=11500000,unit=unit,
+                    binding=dict(fragment_path=fragment,target_path=file['path'],link_uid=0,link_inode=1000,
+                                 link_device=2049,target_inode=file['inode'],target_device=file['device'])))
+            self.assertEqual(source.normalize(rows,**args)[1]['definition_id'],'system:one.'+mode)
+            for change in (lambda r:r.remove(next(x for x in r if x['kind']=='fragment-binding')),
+                           lambda r:next(x for x in r if x['kind']=='fragment-binding')['binding'].update(link_uid=1201),
+                           lambda r:next(x for x in r if x['kind']=='fragment-binding')['binding'].update(target_inode=999),
+                           lambda r:next(x for x in r if x['kind']=='fragment-binding')['binding'].update(target_path='/foreign')):
+                altered=copy.deepcopy(rows);change(altered)
+                with self.subTest(mode=mode,change=change),self.assertRaises(ValueError):source.normalize(altered,**args)

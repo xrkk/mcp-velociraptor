@@ -1,3 +1,8 @@
+Runtime system-unit links are accepted only with a separately retained
+root-owned protected `/run/systemd/system/<exact-unit>` link, stable link inode
+and the exact observed target inode/device. A matching name alone is refused;
+direct user-manager fragments retain their existing check.
+
 ## Bounded system service and timer evidence
 
 The scheduler profile may explicitly select `manager_scope="system"` (default

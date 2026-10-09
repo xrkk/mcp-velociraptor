@@ -186,6 +186,30 @@ def validate_profile(config):
         need(manager['uids'][1] > 0, 'ordinary manager required')
 
 
+
+def fragment_binding(fragment, unit, config):
+    target = Path(config['directory']) / unit
+    if fragment == str(target):
+        return None
+    link = Path('/run/systemd/system') / unit
+    need(manager_scope(config) == 'system' and fragment == str(link), 'foreign unit fragment')
+    for parent in (Path('/run'), Path('/run/systemd'), link.parent):
+        st = parent.lstat()
+        need(stat.S_ISDIR(st.st_mode) and st.st_uid == 0 and not st.st_mode & 0o022,
+             'unprotected fragment parent')
+    before = link.lstat()
+    need(stat.S_ISLNK(before.st_mode) and before.st_uid == 0
+         and os.readlink(link) == str(target) and target.resolve() == target,
+         'unbound runtime fragment')
+    value = target.stat()
+    after = link.lstat()
+    need((before.st_ino, before.st_dev, before.st_ctime_ns) ==
+         (after.st_ino, after.st_dev, after.st_ctime_ns), 'runtime fragment changed')
+    return dict(fragment_path=fragment, target_path=str(target), link_uid=before.st_uid,
+                link_inode=before.st_ino, link_device=before.st_dev,
+                target_inode=value.st_ino, target_device=value.st_dev)
+
+
 def validate_fresh(units, config):
     need(set(units) == set(unit_names(config)), 'fresh unit inventory')
     for value in units.values():
@@ -390,6 +414,13 @@ class Collector:
                 ('Persistent','Timer','b'), ('ActivationDetails','Unit','a(ss)')]):
             timer[name] = self.manager.get(c['timer'], interface, name, sig)
             self.record('manager-property', unit=c['timer'], interface=interface, property=name, value=timer[name])
+        for unit, properties in [(c['service'], service)] + ([(c['timer'], timer)] if timer else []):
+            link = fragment_binding(properties['FragmentPath'], unit, c)
+            if link is not None:
+                held = self.leases[unit][1]
+                need(link['target_inode'] == held['inode'] and link['target_device'] == held['device'],
+                     'fragment target version differs')
+                self.record('fragment-binding', unit=unit, binding=link)
         need(process(pid, False) == actor, 'instance changed during manager query')
         self.invocation = invocation
         self.record('invocation', service=service, timer=timer, actor=actor, peer=self.manager.peer)
@@ -408,7 +439,7 @@ class Collector:
                     except OSError as error:
                         need(error.errno in (2, 6, 53), 'cleanup unit unknown')
                         continue
-                    need(fragment == str(self.directory / unit), 'cleanup unit ownership unknown')
+                    fragment_binding(fragment, unit, self.config)
                     argv = ['sudo', '-n', '-u', '#' + str(current['uids'][1]), 'env',
                             'XDG_RUNTIME_DIR=' + str(Path(self.config['socket']).parent.parent),
                             'DBUS_SESSION_BUS_ADDRESS=unix:path=' + self.config['socket'],
@@ -571,9 +602,18 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
         # below supply the association; timing alone never qualifies it.
         trigger_ns = next((r['monotonic_ns'] for _, r in kinds.get('exec-open', [])
                            if key(r['actor']) == key(actor)), 0)
+    def bound_fragment(fragment, unit, file):
+        if fragment == file['path']:
+            return True
+        expected = '/run/systemd/system/' + unit
+        links = [r['binding'] for _, r in kinds.get('fragment-binding', []) if r['unit'] == unit]
+        return (manager_scope(config) == 'system' and fragment == expected and len(links) == 1
+                and links[0]['fragment_path'] == expected and links[0]['target_path'] == file['path']
+                and links[0]['link_uid'] == 0 and type(links[0]['link_inode']) is int and links[0]['link_inode'] > 0
+                and links[0]['target_inode'] == file['inode'] and links[0]['target_device'] == file['device'])
     need(sp['RefuseManualStart'] == (1 if mode == 'timer' else 0) and sp['NRestarts'] == 0
          and sp['DropInPaths'] == [] and (mode != 'timer' or tp['DropInPaths'] == [])
-         and sp['FragmentPath'] == service[0]['path'] and (mode != 'timer' or tp['FragmentPath'] == timer[0]['path'])
+         and bound_fragment(sp['FragmentPath'], config['service'], service[0]) and (mode != 'timer' or bound_fragment(tp['FragmentPath'], config['timer'], timer[0]))
          and len(sp['InvocationID']) == 16 and any(sp['InvocationID'])
          and sp['MainPID'] == actor['pid'] and actor['parent_pid'] == manager['pid']
          and actor['uids'] == credentials['uids'] and actor['gids'] == credentials['gids']
