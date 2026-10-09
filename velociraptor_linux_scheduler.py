@@ -1,4 +1,4 @@
-"""Bounded first-invocation user timer evidence, not a general scheduler claim.
+"""Bounded first-invocation user service/timer evidence, not a general scheduler claim.
 
 Private systemd peer credentials, fanotify inode snapshots under read leases,
 and live process credentials are independent of sample output. The collector
@@ -138,20 +138,44 @@ class PrivateManager:
             self.bus = None
 
 
+def mechanism(config):
+    return config.get('mechanism', 'timer')
+
+
+def unit_names(config):
+    return [config['service']] + ([config['timer']] if mechanism(config) == 'timer' else [])
+
+
+def artifact_names(config):
+    return [config['payload'], *unit_names(config)]
+
+
+def source_name(config):
+    return SOURCE if mechanism(config) == 'timer' else 'MalTrace.UserService.v1'
+
+
 def validate_profile(config):
-    need(set(config) == {'directory', 'service', 'timer', 'payload', 'manager', 'socket', 'window_seconds'}, 'scheduler fields')
+    mode = mechanism(config)
+    need(mode in ('timer', 'service'), 'unsupported scheduler mechanism')
+    fields = {'directory', 'service', 'payload', 'manager', 'socket', 'window_seconds'}
+    if mode == 'timer':
+        fields.add('timer')
+    if 'mechanism' in config:
+        fields.add('mechanism')
+    need(set(config) == fields, 'scheduler fields')
     directory = Path(config['directory'])
     need(directory.is_absolute() and directory.name and not directory.is_symlink(), 'scheduler directory')
     need(type(config['window_seconds']) is int and 1 <= config['window_seconds'] <= 30, 'scheduler deadline')
-    for key in ('service', 'timer', 'payload'):
-        need(re.fullmatch(r'[a-zA-Z0-9_.-]{1,30}', config[key]), 'short flat name required')
-    need(config['service'].endswith('.service') and config['timer'].endswith('.timer')
-         and len({config[k] for k in ('service', 'timer', 'payload')}) == 3, 'scheduler names')
+    for name in artifact_names(config):
+        need(re.fullmatch(r'[a-zA-Z0-9_.-]{1,30}', name), 'short flat name required')
+    need(config['service'].endswith('.service') and
+         (mode != 'timer' or config['timer'].endswith('.timer')) and
+         len(set(artifact_names(config))) == len(artifact_names(config)), 'scheduler names')
     need(config['manager']['uids'][1] > 0, 'ordinary manager required')
 
 
 def validate_fresh(units, config):
-    need(set(units) == {config['service'], config['timer']}, 'fresh unit inventory')
+    need(set(units) == set(unit_names(config)), 'fresh unit inventory')
     for value in units.values():
         need(value['LoadState'] == 'not-found' and value['ActiveState'] == 'inactive'
              and value['FragmentPath'] == '' and value['ActivationDetails'] == []
@@ -187,12 +211,12 @@ class Collector:
         self.deadline = time.monotonic() + 90
         self.invocation = None
         self.last_tick = 0
-        self.record('intent', config=config, binding=binding, root=root, source=SOURCE,
+        self.record('intent', config=config, binding=binding, root=root, source=source_name(config),
                     directory_inode=self.directory_stat.st_ino, directory_device=self.directory_stat.st_dev)
         try:
             self.manager = PrivateManager(config['socket'], config['manager'])
             fresh = {}
-            for name in (config['service'], config['timer']):
+            for name in unit_names(config):
                 # systemd's object lookup may create a not-found stub. Its Id
                 # is not evidence that a definition or invocation existed.
                 fresh[name] = {key: self.manager.get(name, 'Unit', key, signature)
@@ -200,7 +224,7 @@ class Collector:
                         ('FragmentPath','s'), ('ActivationDetails','a(ss)'), ('InvocationID','ay')]}
             validate_fresh(fresh, config)
             self.record('fresh', peer=self.manager.peer,
-                        absent=[config['service'], config['timer']], units=fresh)
+                        absent=unit_names(config), units=fresh)
             libc = C.CDLL(None, use_errno=True)
             libc.fanotify_init.argtypes = [C.c_uint, C.c_uint]
             libc.fanotify_mark.argtypes = [C.c_int, C.c_uint, C.c_uint64, C.c_int, C.c_char_p]
@@ -258,7 +282,7 @@ class Collector:
                         path = os.readlink('/proc/self/fd/' + str(fd))
                         name = Path(path).name
                         need(Path(path).parent == self.directory and name in
-                             {self.config[k] for k in ('service', 'timer', 'payload')}, 'foreign/replaced artifact')
+                             set(artifact_names(self.config)), 'foreign/replaced artifact')
                         if mask & CLOSE_WRITE:
                             need(name not in self.leases, 'second content version')
                             actor = process(pid, image_hash=False)
@@ -349,9 +373,9 @@ class Collector:
                 ('RefuseManualStart','Unit','b'), ('MainPID','Service','u')]:
             service[name] = self.manager.get(c['service'], interface, name, sig)
             self.record('manager-property', unit=c['service'], interface=interface, property=name, value=service[name])
-        for name, interface, sig in [('Unit','Timer','s'), ('LastTriggerUSecMonotonic','Timer','t'),
+        for name, interface, sig in ([] if mechanism(c) == 'service' else [('Unit','Timer','s'), ('LastTriggerUSecMonotonic','Timer','t'),
                 ('TimersMonotonic','Timer','a(stt)'), ('FragmentPath','Unit','s'), ('DropInPaths','Unit','as'),
-                ('Persistent','Timer','b'), ('ActivationDetails','Unit','a(ss)')]:
+                ('Persistent','Timer','b'), ('ActivationDetails','Unit','a(ss)')]):
             timer[name] = self.manager.get(c['timer'], interface, name, sig)
             self.record('manager-property', unit=c['timer'], interface=interface, property=name, value=timer[name])
         need(process(pid, False) == actor, 'instance changed during manager query')
@@ -366,7 +390,7 @@ class Collector:
                 current = process(self.config['manager']['pid'])
                 need(all(current[k] == self.config['manager'][k] for k in
                          ('birth', 'uids', 'gids', 'image', 'image_sha256')), 'cleanup manager drift')
-                for unit in (self.config['timer'], self.config['service']):
+                for unit in reversed(unit_names(self.config)):
                     try:
                         fragment = self.manager.get(unit, 'Unit', 'FragmentPath', 's')
                     except OSError as error:
@@ -424,11 +448,11 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     for name in ('intent', 'fresh', 'ready', 'invocation'):
         need(len(kinds.get(name, [])) == 1, 'missing/duplicate ' + name)
     intent, fresh, fire = [kinds[k][0][1] for k in ('intent', 'fresh', 'invocation')]
-    need(intent['source'] == SOURCE and intent['config'] == config and intent['binding'] == binding
+    need(intent['source'] == source_name(config) and intent['config'] == config and intent['binding'] == binding
          and intent['root'] == root, 'scheduler independent expectation mismatch')
     manager = config['manager']
     validate_fresh(fresh['units'], config)
-    need(fresh['absent'] == [config['service'], config['timer']]
+    need(fresh['absent'] == unit_names(config)
          and fresh['peer'] == fire['peer'] == [manager['pid'], manager['uids'][1], manager['gids'][1]], 'manager/freshness conflict')
     boot = binding['boot_id']
     need(root['boot_id'] == boot, 'scheduler boot conflict')
@@ -454,12 +478,12 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
         return key(actor) in members
 
     closes = kinds.get('closed-write', [])
-    need(len(closes) == 3, 'one version of all three artifacts required')
+    need(len(closes) == len(artifact_names(config)), 'one version of every artifact required')
     files, writes = {}, {}
     for number, row in closes:
         value, actor = row['file'], row['actor']
         name = Path(value['path']).name
-        need(name in {config[k] for k in ('payload', 'service', 'timer')} and name not in files
+        need(name in set(artifact_names(config)) and name not in files
              and value['path'] == str(Path(config['directory']) / name), 'foreign/duplicate artifact')
         raw = base64.b64decode(value['content'], validate=True)
         need(len(raw) == value['size'] and sha(raw) == value['sha256'] and row['lease'] == 'F_RDLCK', 'unbound artifact content')
@@ -472,7 +496,8 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
                  for e in kernel), 'actual content write missing')
         files[name] = (value, raw)
         writes[name] = (number, row)
-    payload, service, timer = [files[config[k]] for k in ('payload', 'service', 'timer')]
+    payload, service = [files[config[k]] for k in ('payload', 'service')]
+    timer = files[config['timer']] if mechanism(config) == 'timer' else None
     need(payload[1].startswith(b'\x7fELF'), 'only native ELF payload supported')
 
     def parse(raw, allowed):
@@ -485,16 +510,21 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
 
     s = parse(service[1], {'Unit': {'Description','DefaultDependencies','RefuseManualStart'},
         'Service': {'Type','ExecStart','Restart','RuntimeMaxSec','StandardOutput','StandardError'}})
-    t = parse(timer[1], {'Unit': {'Description','DefaultDependencies'},
-        'Timer': {'Unit','OnActiveSec','AccuracySec','RemainAfterElapse','Persistent'}})
-    need(s['Unit']['DefaultDependencies'] == t['Unit']['DefaultDependencies'] == 'no'
-         and s['Unit']['RefuseManualStart'] == 'yes' and s['Service']['Type'] == 'exec'
+    mode = mechanism(config)
+    need(s['Unit']['DefaultDependencies'] == 'no'
+         and s['Unit']['RefuseManualStart'] == ('yes' if mode == 'timer' else 'no')
+         and s['Service']['Type'] == 'exec'
          and s['Service']['ExecStart'] == payload[0]['path'] and s['Service']['Restart'] == 'no'
          and re.fullmatch(r'(?:[4-9]|[12][0-9]|30)s', s['Service']['RuntimeMaxSec'])
-         and s['Service']['StandardOutput'] == s['Service']['StandardError'] == 'journal'
-         and t['Timer']['Unit'] == config['service'] and t['Timer']['AccuracySec'] == '1ms'
-         and t['Timer']['RemainAfterElapse'] == 'yes' and t['Timer']['Persistent'] == 'no'
-         and re.fullmatch(r'[1-9]s', t['Timer']['OnActiveSec']), 'unsupported definition semantics')
+         and s['Service']['StandardOutput'] == s['Service']['StandardError'] == 'journal',
+         'unsupported service semantics')
+    if mode == 'timer':
+        t = parse(timer[1], {'Unit': {'Description','DefaultDependencies'},
+            'Timer': {'Unit','OnActiveSec','AccuracySec','RemainAfterElapse','Persistent'}})
+        need(t['Unit']['DefaultDependencies'] == 'no'
+             and t['Timer']['Unit'] == config['service'] and t['Timer']['AccuracySec'] == '1ms'
+             and t['Timer']['RemainAfterElapse'] == 'yes' and t['Timer']['Persistent'] == 'no'
+             and re.fullmatch(r'[1-9]s', t['Timer']['OnActiveSec']), 'unsupported timer semantics')
     loaded = {}
     for number, row in kinds.get('manager-open', []):
         actor, f = row['actor'], row['file']
@@ -502,19 +532,27 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
         name = Path(f['path']).name
         need(name in files and all(f[k] == files[name][0][k] for k in ('path','inode','device','sha256','content','size')), 'loaded definition version mismatch')
         loaded.setdefault(name, number)
-    need(all(config[k] in loaded for k in ('service', 'timer')), 'actual definition load missing')
+    need(all(n in loaded for n in unit_names(config)), 'actual definition load missing')
     sp, tp, actor = fire['service'], fire['timer'], fire['actor']
-    details = dict(sp['ActivationDetails'])
-    need(len(sp['ActivationDetails']) == len(details) == 3 and details['trigger_unit'] == config['timer'], 'real timer fire missing')
-    trigger_ns = int(details['trigger_timer_monotonic_usec']) * 1000
-    need(int(details['trigger_timer_realtime_usec']) > 0 and trigger_ns > 0
-         and tp['LastTriggerUSecMonotonic'] * 1000 == trigger_ns
-         and tp['Unit'] == config['service'] and tp['Persistent'] == 0
-         and tp['ActivationDetails'] == [] and len(tp['TimersMonotonic']) == 1
-         and tp['TimersMonotonic'][0][:2] == ['OnActiveUSec', int(t['Timer']['OnActiveSec'][:-1]) * 1000000], 'timer facts conflict')
-    need(sp['RefuseManualStart'] == 1 and sp['NRestarts'] == 0
-         and sp['DropInPaths'] == tp['DropInPaths'] == []
-         and sp['FragmentPath'] == service[0]['path'] and tp['FragmentPath'] == timer[0]['path']
+    if mode == 'timer':
+        details = dict(sp['ActivationDetails'])
+        need(len(sp['ActivationDetails']) == len(details) == 3 and details['trigger_unit'] == config['timer'], 'real timer fire missing')
+        trigger_ns = int(details['trigger_timer_monotonic_usec']) * 1000
+        need(int(details['trigger_timer_realtime_usec']) > 0 and trigger_ns > 0
+             and tp['LastTriggerUSecMonotonic'] * 1000 == trigger_ns
+             and tp['Unit'] == config['service'] and tp['Persistent'] == 0
+             and tp['ActivationDetails'] == [] and len(tp['TimersMonotonic']) == 1
+             and tp['TimersMonotonic'][0][:2] == ['OnActiveUSec', int(t['Timer']['OnActiveSec'][:-1]) * 1000000], 'timer facts conflict')
+    else:
+        need(sp['ActivationDetails'] == [] and tp == {}, 'foreign timer or activation details')
+        # This is the independent observed exec-open time, not a claimed
+        # scheduler timestamp. The loaded inode, invocation and live actor
+        # below supply the association; timing alone never qualifies it.
+        trigger_ns = next((r['monotonic_ns'] for _, r in kinds.get('exec-open', [])
+                           if key(r['actor']) == key(actor)), 0)
+    need(sp['RefuseManualStart'] == (1 if mode == 'timer' else 0) and sp['NRestarts'] == 0
+         and sp['DropInPaths'] == [] and (mode != 'timer' or tp['DropInPaths'] == [])
+         and sp['FragmentPath'] == service[0]['path'] and (mode != 'timer' or tp['FragmentPath'] == timer[0]['path'])
          and len(sp['InvocationID']) == 16 and any(sp['InvocationID'])
          and sp['MainPID'] == actor['pid'] and actor['parent_pid'] == manager['pid']
          and actor['uids'] == credentials['uids'] and actor['gids'] == credentials['gids']
@@ -530,22 +568,32 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     root_execs = [e for e in kernel if e['kind'] == 'exec' and (e['pid'], e['birth']) == root_key]
     need(len(root_execs) == 1 and ready['monotonic_ns'] < root_execs[0]['monotonic_ns']
          and fire['monotonic_ns'] < ready['deadline_ns'], 'scheduler not ready or expired')
-    need(len(exits) == 1 and fire['monotonic_ns'] <= exits[0]['monotonic_ns'] + config['window_seconds'] * 10**9, 'post-root window expired')
-    need(len(exits) == 1 and exits[0]['monotonic_ns'] < trigger_ns <= opens[0][1]['monotonic_ns'] <= fire['monotonic_ns'] < boundary_ns, 'post-root fire order missing')
+    if mode == 'timer':
+        need(len(exits) == 1 and fire['monotonic_ns'] <= exits[0]['monotonic_ns'] + config['window_seconds'] * 10**9, 'post-root window expired')
+        need(exits[0]['monotonic_ns'] < trigger_ns <= opens[0][1]['monotonic_ns'] <= fire['monotonic_ns'] < boundary_ns, 'post-root fire order missing')
+    else:
+        need(trigger_ns == opens[0][1]['monotonic_ns'] <= fire['monotonic_ns'] < boundary_ns,
+             'service exec order missing')
+        need(len(exits) <= 1 and (not exits or
+             fire['monotonic_ns'] <= exits[0]['monotonic_ns'] + config['window_seconds'] * 10**9),
+             'service window expired')
     a = writes[config['payload']]
-    d = max((writes[config['service']], writes[config['timer']]), key=lambda item: item[1]['monotonic_ns'])
+    d = max((writes[n] for n in unit_names(config)), key=lambda item: item[1]['monotonic_ns'])
     need(a[1]['monotonic_ns'] < d[1]['monotonic_ns'] < trigger_ns
-         and writes[config['service']][1]['actor'] == writes[config['timer']][1]['actor'], 'definition author/order conflict')
-    version = sha(json.dumps([service[0]['sha256'], timer[0]['sha256'], payload[0]['sha256']], separators=(',', ':')).encode())
-    definition_id = 'user:%d:%s' % (manager['uids'][1], config['timer'])
+         and all(writes[n][1]['actor'] == d[1]['actor'] for n in unit_names(config)), 'definition author/order conflict')
+    need(all(writes[n][1]['monotonic_ns'] < rows[loaded[n]-1]['monotonic_ns'] < trigger_ns
+             for n in unit_names(config)), 'definition use order conflict')
+    hashes = [service[0]['sha256']] + ([timer[0]['sha256']] if timer else []) + [payload[0]['sha256']]
+    version = sha(json.dumps(hashes, separators=(',', ':')).encode())
+    definition_id = 'user:%d:%s' % (manager['uids'][1], config.get('timer', config['service']))
     def instance(a):
         return dict(boot_id=boot, pid=a['pid'], start_time=a['birth'])
     return [dict(kind='artifact', instance=instance(a[1]['actor']), artifact_path=payload[0]['path'],
                  artifact_sha256=payload[0]['sha256'], monotonic_ns=a[1]['monotonic_ns'], source_rows=[a[0]]),
             dict(kind='definition', instance=instance(d[1]['actor']), artifact_path=payload[0]['path'],
-                 definition_id=definition_id, definition_mechanism='timer', definition_version=version,
+                 definition_id=definition_id, definition_mechanism=mode, definition_version=version,
                  definition_binds_sha256=payload[0]['sha256'], monotonic_ns=d[1]['monotonic_ns'],
-                 source_rows=[writes[config['service']][0], writes[config['timer']][0], loaded[config['service']], loaded[config['timer']]]),
+                 source_rows=[writes[n][0] for n in unit_names(config)] + [loaded[n] for n in unit_names(config)]),
             dict(kind='scheduler-fire', fired_instance=instance(actor), image=payload[0]['path'],
                  executable_sha256=payload[0]['sha256'], fire_definition_id=definition_id,
                  fire_definition_version=version, monotonic_ns=trigger_ns,
@@ -612,14 +660,16 @@ class FollowingCollector(Collector):
             actor = process(fire['fired_instance']['pid'])
             need(all(actor[k] == fire['execution_identity'][k] for k in fire['execution_identity'])
                  and actor['image_sha256'] == fire['executable_sha256'], 'admission instance drift')
-            root_exit = next(e['monotonic_ns'] for e in kernel if e['kind'] == 'exit'
-                             and (e['pid'], e['birth']) == (self.root['pid'], self.root['start_time']))
-            until = root_exit + self.config['window_seconds'] * 10**9
+            root_exits = [e['monotonic_ns'] for e in kernel if e['kind'] == 'exit'
+                          and (e['pid'], e['birth']) == (self.root['pid'], self.root['start_time'])]
+            anchor = root_exits[0] if root_exits else fire['monotonic_ns']
+            until = min(anchor + self.config['window_seconds'] * 10**9,
+                        next(r['deadline_ns'] for r in rows if r['kind'] == 'ready'))
             remaining = (until - time.monotonic_ns()) / 10**9
             need(remaining >= 5, 'insufficient admission window')
             target = dict(pid=actor['pid'], birth=actor['birth'], uid=actor['uids'][1])
             request = dict(self.binding, operation_id=str(uuid.uuid4()), targets=[target],
-                           reason='qualified first user timer invocation ' + fire['invocation_id'],
+                           reason='qualified first user ' + mechanism(self.config) + ' invocation ' + fire['invocation_id'],
                            expires_in_seconds=math.ceil(remaining) + 5, termination='scope stop or bounded extension expiry')
             self.record('admission-intent', proof=proof, kernel_prefix=prefix, actor=actor,
                         request=request, observation_deadline_ns=until)

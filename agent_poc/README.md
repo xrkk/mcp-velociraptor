@@ -1,5 +1,26 @@
 # Velociraptor Agent POC
 
+## Bounded ordinary user service evidence
+
+The optional professional scheduler profile accepts `mechanism="service"`
+with `directory`, `service`, `payload`, `manager`, `socket` and
+`window_seconds` (1..30), without a `timer` member. The legacy profile without
+`mechanism` remains the first-user-timer contract. Both use the same bounded
+collector and actual `linux_scope_extend` registered handler; collection does
+not start a payload or select an unrelated process by image name.
+
+A service relationship requires a fresh unit and InvocationID, root-chain
+writer events, one observed closed ELF and service version held by read leases,
+the actual manager-loaded definition inode, actual exec-open ELF inode, and
+matching MainPID/birth, complete credentials, ExecStart and cgroup. Service
+fire time is the independently observed exec-open time, not a timer assertion.
+Services may start while the root runs or in its bounded post-exit window.
+An extension only covers events after backend readiness; the initial gap stays
+visible. Missing/changed facts or uncertain admission fail closed, and callers
+retain their existing stop/export obligations. System services/timers and
+cron are not qualified by this source. Local synthetic tests are development
+evidence, distinct from a fixed-VM native lifecycle.
+
 ## Loopback Linux deployment
 
 The offline `deploy/linux/deploy-remnux.sh` entry now takes explicit binary,
