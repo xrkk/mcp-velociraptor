@@ -61,6 +61,38 @@ class CronSourceTests(unittest.TestCase):
             rows,a=fixture();change(rows,a)
             with self.subTest(change=change),self.assertRaises((ValueError,KeyError)):shared.normalize(rows,**a)
 
+    def test_late_identical_table_read_preserves_first_dispatch_proof(self):
+        for schedule in ('calendar', '@reboot'):
+            rows, args = fixture(schedule)
+            online = shared.qualify(rows[:-1], boundary_ns=11500000, **args)
+            late = copy.deepcopy(next(r for r in rows if r['kind'] == 'manager-open'))
+            late['monotonic_ns'] = 11500000
+            rows.insert(-1, late)
+            self.assertEqual(shared.normalize(rows, **args), online)
+            self.assertNotIn(len(rows) - 1, online[1]['source_rows'])
+
+    def test_late_wrong_table_version_or_reader_still_refuses(self):
+        for change in (lambda r: r['file'].update(inode=999),
+                       lambda r: r['file'].update(sha256='f'*64),
+                       lambda r: r['actor'].update(birth='reused'),
+                       lambda r: r['actor'].update(uids=[1201]*4)):
+            rows, args = fixture()
+            late = copy.deepcopy(next(r for r in rows if r['kind'] == 'manager-open'))
+            late['monotonic_ns'] = 11500000
+            change(late)
+            rows.insert(-1, late)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                shared.normalize(rows, **args)
+
+    def test_post_dispatch_load_cannot_replace_missing_initial_load(self):
+        rows, args = fixture()
+        load = next(r for r in rows if r['kind'] == 'manager-open')
+        rows.remove(load)
+        load['monotonic_ns'] = 11500000
+        rows.insert(-1, load)
+        with self.assertRaisesRegex(ValueError, 'cron write/load/exec order'):
+            shared.normalize(rows, **args)
+
     def test_uncontrolled_daemon_profiles_never_pass(self):
         for change in (lambda c:c.update(window_seconds=86),lambda c:c.update(reboot_marker_absent=False),
                        lambda c:c['daemon_argv'].append('--other'),lambda c:c.update(manager_unit_file='/etc/foreign'),

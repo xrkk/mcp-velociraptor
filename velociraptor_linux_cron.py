@@ -215,11 +215,13 @@ def qualify(rows,*,config,binding,root,credentials,kernel,boundary_ns):
          and fire['monotonic_ns']<min(ready['deadline_ns'],exits[0]['monotonic_ns']+c['window_seconds']*10**9),'cron fire outside qualified window')
     a,d=writes[c['payload']],writes[c['crontab']]
     need(a[1]['monotonic_ns']<d[1]['monotonic_ns']<rows[loads[0][0]-1]['monotonic_ns']<trigger,'cron write/load/exec order')
+    # Later daemon rereads remain identity/version-checked above, but cannot
+    # change the source rows proving the already admitted first dispatch.
     version=sha(json.dumps([table[0]['sha256'],payload[0]['sha256']],separators=(',',':')).encode())
     identity='cron:'+c['crontab']+':'+table[0]['path']+':'+c['schedule']
     def instance(a):return dict(boot_id=binding['boot_id'],pid=a['pid'],start_time=a['birth'])
     return [dict(kind='artifact',instance=instance(a[1]['actor']),artifact_path=payload[0]['path'],artifact_sha256=payload[0]['sha256'],monotonic_ns=a[1]['monotonic_ns'],source_rows=[a[0]]),
-            dict(kind='definition',instance=instance(d[1]['actor']),artifact_path=payload[0]['path'],definition_id=identity,definition_mechanism='cron',definition_schedule=c['schedule'],definition_version=version,definition_binds_sha256=payload[0]['sha256'],monotonic_ns=d[1]['monotonic_ns'],source_rows=[d[0],*[n for n,_ in loads]]),
+            dict(kind='definition',instance=instance(d[1]['actor']),artifact_path=payload[0]['path'],definition_id=identity,definition_mechanism='cron',definition_schedule=c['schedule'],definition_version=version,definition_binds_sha256=payload[0]['sha256'],monotonic_ns=d[1]['monotonic_ns'],source_rows=[d[0],*[n for n,r in loads if r['monotonic_ns']<trigger]]),
             dict(kind='scheduler-fire',fired_instance=instance(actor),image=payload[0]['path'],executable_sha256=payload[0]['sha256'],fire_definition_id=identity,fire_definition_version=version,monotonic_ns=trigger,execution_identity=actor,invocation_id='cron:'+str(actor['pid'])+':'+actor['birth'],schedule=c['schedule'],startup_semantics='same-boot managed daemon startup, not a VM boot transition' if c['schedule']=='@reboot' else 'actual one-shot calendar dispatch',source_rows=[kinds['fresh'][0][0],opens[0][0],kinds['cron-invocation'][0][0]])]
 
 
