@@ -1,3 +1,21 @@
+## Bounded ordinary cron reentry
+
+An explicit `mechanism="cron"` profile supports one numeric one-shot calendar
+entry or the pinned crond implementation's actual `@reboot` startup dispatch.
+It requires a separately controlled stopped trusted daemon launcher, protected
+unit/image pins, private empty spool and protected empty log, exact closed ELF
+and table versions, actual daemon reads, exact USER/PID/command dispatch, and
+live ordinary execution credentials/parent/inode. No job is installed or started
+by the collector. Qualified actors use the same one-time formal scope admission.
+Calendar observation is bounded to85s; startup observation to30s; systemd limits
+stay30s. Capture begins after backend readiness and the gap remains explicit.
+The existing cross-boot `@reboot` branch is unchanged: same-boot crond startup is
+reported as cron with an explicit `@reboot` schedule and startup limitation, never
+as a fabricated VM boot transition. Existing startup markers/PID files refuse
+use; only the caller's exact owned files may be cleaned. Unsupported/repeated,
+foreign, replaced, unlogged or root jobs remain unavailable. The collector stops
+only its proven managed daemon unit before sealing source originals.
+
 Runtime system-unit links are accepted only with a separately retained
 root-owned protected `/run/systemd/system/<exact-unit>` link, stable link inode
 and the exact observed target inode/device. A matching name alone is refused;

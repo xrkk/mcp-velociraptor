@@ -147,10 +147,14 @@ def manager_scope(config):
 
 
 def unit_names(config):
+    if mechanism(config) == 'cron':
+        return []
     return [config['service']] + ([config['timer']] if mechanism(config) == 'timer' else [])
 
 
 def artifact_names(config):
+    if mechanism(config) == 'cron':
+        return [config['payload'], config['crontab']]
     return [config['payload'], *unit_names(config)]
 
 
@@ -159,6 +163,9 @@ def source_name(config):
 
 
 def validate_profile(config):
+    if mechanism(config) == 'cron':
+        from velociraptor_linux_cron import validate_profile as validate_cron
+        return validate_cron(config)
     mode = mechanism(config)
     need(mode in ('timer', 'service'), 'unsupported scheduler mechanism')
     fields = {'directory', 'service', 'payload', 'manager', 'socket', 'window_seconds'}
@@ -484,6 +491,10 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     fact remains mapped to raw row numbers; missing/ambiguous facts raise rather
     than silently falling back to names, time proximity, or sample assertions.
     """
+    if mechanism(config) == 'cron':
+        from velociraptor_linux_cron import qualify as qualify_cron
+        return qualify_cron(rows, config=config, binding=binding, root=root, credentials=credentials,
+                            kernel=kernel, boundary_ns=boundary_ns)
     import configparser
     validate_profile(config)
     need(rows and [r['monotonic_ns'] for r in rows] == sorted(r['monotonic_ns'] for r in rows), 'scheduler order')
@@ -666,6 +677,9 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
 
 def normalize(rows, **arguments):
     """Final replay requires actual closure, never a fabricated online close."""
+    if mechanism(arguments['config']) == 'cron':
+        from velociraptor_linux_cron import normalize as normalize_cron
+        return normalize_cron(rows, **arguments)
     ends = [r for r in rows if r['kind'] == 'closed']
     need(len(ends) == 1 and not ends[0]['error'] and not ends[0]['lease_broken'],
          'incomplete or mutable scheduler originals')
@@ -704,7 +718,10 @@ class FollowingCollector(Collector):
 
     def tick(self):
         super().tick()
-        if self.follow_attempted or not any(r['kind'] == 'invocation' for r in self.records):
+        self.admit()
+
+    def admit(self):
+        if self.follow_attempted or not any(r['kind'] in ('invocation', 'cron-invocation') for r in self.records):
             return
         self.follow_attempted = True
         try:
@@ -757,3 +774,10 @@ class FollowingCollector(Collector):
         if not self.closed and not self.follow_attempted:
             self.record('admission-insufficient', error='no complete live invocation before close')
         super().close()
+
+
+def create_collector(config, *arguments):
+    if mechanism(config) == 'cron':
+        from velociraptor_linux_cron import CronCollector
+        return CronCollector(config, *arguments)
+    return FollowingCollector(config, *arguments)
