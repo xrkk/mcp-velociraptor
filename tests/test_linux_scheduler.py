@@ -121,3 +121,102 @@ class LivePropertyBoundaryTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class OnlineFollowTests(unittest.TestCase):
+    def observer(self, mutate=None, call_error=None, process_error=None, live_change=None, source_error=False):
+        from unittest.mock import patch
+        import threading
+        rows, args = fixture()
+        rows = rows[:-1]
+        actor=dict(rows[9]['actor'],image_sha256=rows[3]['file']['sha256'])
+        if mutate:
+            mutate(rows, args)
+        observer = source.FollowingCollector.__new__(source.FollowingCollector)
+        observer.config=args['config']; observer.binding=args['binding']; observer.root=args['root']
+        observer.credentials=args['credentials']; observer.records=rows
+        observer.follow_attempted=False; observer.error=None; observer.lease_broken=source_error
+        observer.finish_event=threading.Event(); observer.lock=threading.Lock()
+        observer.kernel_prefix=lambda:(args['kernel'], dict(path='fixture', size=10, sha256='f'*64))
+        captured=[]
+        def record(kind, **kw):
+            row=dict(kind=kind, monotonic_ns=13000000, **kw); captured.append(row); rows.append(row); return row
+        observer.record=record
+        class Client:
+            def call(self, tool, arguments):
+                captured.append(dict(tool=tool,arguments=arguments))
+                if call_error:raise call_error
+                request=arguments['request']
+                return dict(args['binding'],status='APPLIED',backend_applied=True,generation=2,
+                    extension=dict(request,expires_ns=12000000000),
+                    transitions=[dict(action='applied',generation=2,ready_ns=14000000)])
+        observer.client=Client()
+        if live_change:actor.update(live_change)
+        with patch.object(source.Collector,'tick'), patch.object(source,'process',return_value=actor,side_effect=process_error), \
+             patch.object(source.Path,'read_text',return_value='boot'), \
+             patch.object(source.time,'monotonic_ns',return_value=13000000):
+            observer.tick();observer.tick()
+        return captured
+
+    def test_complete_online_chain_causes_exactly_one_actual_extend_call(self):
+        records=self.observer()
+        calls=[r for r in records if 'tool' in r]
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0]['tool'],'linux_scope_extend')
+        self.assertEqual(calls[0]['arguments']['request']['targets'],[dict(pid=902,birth='91',uid=1201)])
+        self.assertEqual(records[-1]['kind'],'admission-ready')
+        self.assertGreater(records[-1]['fire_to_ready_ns'],0)
+
+    def test_incomplete_wrong_boot_reused_dead_or_same_image_never_calls_scope(self):
+        changes=[lambda r,a:r.pop(3),
+            lambda r,a:a['binding'].update(boot_id='wrong'),
+            lambda r,a:r[8]['actor'].update(birth='reuse'),
+            lambda r,a:r[9]['service'].update(ActivationDetails=[]),
+            lambda r,a:r[9]['actor'].update(parent_pid=10),
+            lambda r,a:a['kernel'].append(dict(a['kernel'][-1],monotonic_ns=5000001))]
+        for change in changes:
+            with self.subTest(change=change):
+                records=self.observer(change)
+                self.assertFalse(any('tool' in r for r in records))
+                self.assertEqual(records[-1]['kind'],'admission-insufficient')
+
+    def test_unknown_extension_is_preserved_and_never_retried(self):
+        records=self.observer(call_error=TimeoutError('unknown extension outcome'))
+        self.assertEqual(sum('tool' in r for r in records),1)
+        self.assertEqual(records[-1]['kind'],'admission-insufficient')
+
+    def test_live_identity_loss_and_source_error_refuse(self):
+        for options in [dict(process_error=FileNotFoundError('dead')),
+                        dict(live_change=dict(birth='reused')),
+                        dict(live_change=dict(uids=[0]*4)), dict(source_error=True)]:
+            with self.subTest(options=options):
+                records=self.observer(**options)
+                self.assertFalse(any('tool' in r for r in records))
+                self.assertEqual(records[-1]['kind'],'admission-insufficient')
+
+    def test_expired_window_cannot_extend_scope(self):
+        records=self.observer(lambda r,a:a['config'].update(window_seconds=1))
+        self.assertFalse(any('tool' in r for r in records))
+        self.assertIn('insufficient admission window',records[-1]['error'])
+
+
+class ExecTransitionTests(unittest.TestCase):
+    def test_empty_argv_during_exec_does_not_consume_first_invocation(self):
+        from unittest.mock import patch
+        rows,args=fixture();observer=source.Collector.__new__(source.Collector)
+        observer.config=args['config'];observer.directory=Path(args['config']['directory'])
+        observer.error=None;observer.last_tick=0;observer.execs=[(rows[8]['actor'],rows[8]['file'])]
+        observer.invocation=None;captured=[]
+        observer.record=lambda kind,**kw:captured.append(dict(kind=kind,**kw))
+        class Manager:
+            peer=rows[9]['peer']
+            def get(self,unit,interface,name,signature):
+                return rows[9]['service' if unit.endswith('.service') else 'timer'][name]
+        observer.manager=Manager()
+        with patch.object(source,'process',return_value=dict(rows[9]['actor'],cmdline=[])):
+            observer.tick()
+        self.assertIsNone(observer.invocation)
+        self.assertEqual([r['kind'] for r in captured],['exec-transition'])
+        observer.last_tick=0
+        with patch.object(source,'process',return_value=rows[9]['actor']):observer.tick()
+        self.assertEqual(sum(r['kind']=='invocation' for r in captured),1)

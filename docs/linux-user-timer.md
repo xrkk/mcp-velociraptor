@@ -25,7 +25,7 @@ successful content write by a live chain instance, three unique versions, actual
 manager-opened definition content, no drop-ins, native timer ActivationDetails,
 a first InvocationID/MainPID and a matching live full credential/image inode
 observation. The supported definitions are narrow: RefuseManualStart=yes,
-Type=exec, one ELF command without arguments, Restart=no, RuntimeMaxSec=4s,
+Type=exec, one ELF command without arguments, Restart=no, RuntimeMaxSec=4-30s,
 journal output, and one OnActiveSec timer (1-9 seconds). Unsupported forms are
 unavailable. This source does not claim general systemd or arbitrary schedulers.
 
@@ -42,9 +42,28 @@ The host recovers raw records (including descriptor snapshots), stop results and
 scoped journal output before derivation/cleanup. Complete chains produce three
 semantic records with raw row mappings. A missing writer, hash, loaded version,
 real trigger, UID, boot or process birth fails. A manual same-image process does
-not become a timer candidate. No direct-kernel target is manually added for the
-scheduled instance: the independent observer supplies its actual exec inode and
-identity; complete descendant telemetry after that point remains unclaimed.
+not become a timer candidate. The production FollowingCollector uses shared `qualify` while the fired process
+is alive, then calls the existing `linux_scope_extend` exactly once. It records
+the complete proof, original kernel prefix hash, full live credentials, target
+PID/birth, bounded expiry and actual generation readiness. The next kernel
+generation follows the fired process and its kernel-observed descendants. Its
+origin is the fired instance, never a fabricated fork from the initial root.
+
+Online admission and final `normalize` share the same complete-chain checks;
+final replay additionally requires actual source closure without errors or lease
+breaks. Missing facts, old/manual same-image invocation, wrong boot, reused or
+dead PID, expiry, source failure and unknown extension outcomes never report
+continuous coverage. Unknown requests are not retried. P04 finally still owns
+formal scope stop/export, including cancellation. The kernel scope deadline is
+autonomous; extension expiry is the remaining observation window plus a bounded
+five-second cleanup allowance (rounded up), capped by the original scope.
+
+There is an explicit fire-to-readiness blind interval. The independently observed
+exec inode/credentials covers identity, not missing kernel actions or zero-loss
+telemetry. Short-lived or unready payloads may be missed. The supported finite
+subset does not guarantee arbitrary scheduler coverage. Every generation and
+action retains its raw reference; the consumer verifies membership and expiry
+before emitting causal edges or investigation candidates.
 
 Run explicit local source tests with `python -m unittest discover -s tests -p
  test_linux_scheduler.py -v`. They are synthetic inputs to the production

@@ -2,7 +2,7 @@
 
 Private systemd peer credentials, fanotify inode snapshots under read leases,
 and live process credentials are independent of sample output. The collector
-never starts a payload and never adds caller-supplied PIDs to kernel scope.
+never starts a payload. Only a complete observed chain can extend kernel scope.
 """
 import base64
 import ctypes as C
@@ -330,6 +330,12 @@ class Collector:
         matches = [(p, f) for p, f in self.execs if (p['pid'], p['birth']) == (pid, actor['birth'])]
         if not matches or actor['image'] != str(self.directory / c['payload']):
             return
+        # /proc/exe can already name the new inode while exec is still
+        # installing argv. Preserve the transient observation and wait for
+        # the selected no-argument command before starting a proof transaction.
+        if actor['cmdline'] != [str(self.directory / c['payload'])]:
+            self.record('exec-transition', actor=actor)
+            return
         invocation = self.manager.get(c['service'], 'Unit', 'InvocationID', 'ay')
         if self.invocation is not None:
             need(invocation == self.invocation, 'second invocation unsupported')
@@ -402,8 +408,8 @@ class Collector:
         self.closed = True
 
 
-def normalize(rows, *, config, binding, root, credentials, kernel):
-    """Recheck closed originals; fixture callers must retain fixture provenance.
+def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
+    """Shared complete-chain qualification for online admission and sealed replay.
 
     Only a complete first timer invocation emits semantic records. Every source
     fact remains mapped to raw row numbers; missing/ambiguous facts raise rather
@@ -415,12 +421,11 @@ def normalize(rows, *, config, binding, root, credentials, kernel):
     kinds = {}
     for i, row in enumerate(rows):
         kinds.setdefault(row['kind'], []).append((i + 1, row))
-    for name in ('intent', 'fresh', 'ready', 'invocation', 'closed'):
+    for name in ('intent', 'fresh', 'ready', 'invocation'):
         need(len(kinds.get(name, [])) == 1, 'missing/duplicate ' + name)
-    intent, fresh, fire, end = [kinds[k][0][1] for k in ('intent', 'fresh', 'invocation', 'closed')]
+    intent, fresh, fire = [kinds[k][0][1] for k in ('intent', 'fresh', 'invocation')]
     need(intent['source'] == SOURCE and intent['config'] == config and intent['binding'] == binding
          and intent['root'] == root, 'scheduler independent expectation mismatch')
-    need(not end['error'] and not end['lease_broken'], 'incomplete or mutable scheduler originals')
     manager = config['manager']
     validate_fresh(fresh['units'], config)
     need(fresh['absent'] == [config['service'], config['timer']]
@@ -485,7 +490,7 @@ def normalize(rows, *, config, binding, root, credentials, kernel):
     need(s['Unit']['DefaultDependencies'] == t['Unit']['DefaultDependencies'] == 'no'
          and s['Unit']['RefuseManualStart'] == 'yes' and s['Service']['Type'] == 'exec'
          and s['Service']['ExecStart'] == payload[0]['path'] and s['Service']['Restart'] == 'no'
-         and s['Service']['RuntimeMaxSec'] == '4s'
+         and re.fullmatch(r'(?:[4-9]|[12][0-9]|30)s', s['Service']['RuntimeMaxSec'])
          and s['Service']['StandardOutput'] == s['Service']['StandardError'] == 'journal'
          and t['Timer']['Unit'] == config['service'] and t['Timer']['AccuracySec'] == '1ms'
          and t['Timer']['RemainAfterElapse'] == 'yes' and t['Timer']['Persistent'] == 'no'
@@ -516,7 +521,7 @@ def normalize(rows, *, config, binding, root, credentials, kernel):
          and actor['groups'] == credentials['groups'], 'invocation/credentials conflict')
     need(len(sp['ExecStart']) == 1 and sp['ExecStart'][0][:3] == [payload[0]['path'], [payload[0]['path']], False], 'effective ExecStart conflict')
     need(sp['ControlGroup'] and any(x.endswith(':' + sp['ControlGroup']) for x in actor['cgroup'].splitlines()), 'service cgroup conflict')
-    need(actor['image'] == payload[0]['path'] and all(actor[k] == payload[0][k] for k in ('inode','device')), 'actual executed inode differs')
+    need(actor['image'] == payload[0]['path'] and actor['cmdline'] == [payload[0]['path']] and all(actor[k] == payload[0][k] for k in ('inode','device')), 'actual executed inode differs')
     opens = [(n, r) for n, r in kinds.get('exec-open', []) if key(r['actor']) == key(actor)]
     need(len(opens) == 1 and all(opens[0][1]['file'][k] == payload[0][k] for k in ('path','inode','device','sha256','content','size'))
          and opens[0][1]['actor']['parent_pid'] == manager['pid'], 'actual exec open missing or replaced')
@@ -526,7 +531,7 @@ def normalize(rows, *, config, binding, root, credentials, kernel):
     need(len(root_execs) == 1 and ready['monotonic_ns'] < root_execs[0]['monotonic_ns']
          and fire['monotonic_ns'] < ready['deadline_ns'], 'scheduler not ready or expired')
     need(len(exits) == 1 and fire['monotonic_ns'] <= exits[0]['monotonic_ns'] + config['window_seconds'] * 10**9, 'post-root window expired')
-    need(len(exits) == 1 and exits[0]['monotonic_ns'] < trigger_ns <= opens[0][1]['monotonic_ns'] <= fire['monotonic_ns'] < end['monotonic_ns'], 'post-root fire order missing')
+    need(len(exits) == 1 and exits[0]['monotonic_ns'] < trigger_ns <= opens[0][1]['monotonic_ns'] <= fire['monotonic_ns'] < boundary_ns, 'post-root fire order missing')
     a = writes[config['payload']]
     d = max((writes[config['service']], writes[config['timer']]), key=lambda item: item[1]['monotonic_ns'])
     need(a[1]['monotonic_ns'] < d[1]['monotonic_ns'] < trigger_ns
@@ -546,3 +551,96 @@ def normalize(rows, *, config, binding, root, credentials, kernel):
                  fire_definition_version=version, monotonic_ns=trigger_ns,
                  execution_identity=actor, invocation_id=bytes(sp['InvocationID']).hex(),
                  source_rows=[kinds['fresh'][0][0], opens[0][0], kinds['invocation'][0][0]])]
+
+
+def normalize(rows, **arguments):
+    """Final replay requires actual closure, never a fabricated online close."""
+    ends = [r for r in rows if r['kind'] == 'closed']
+    need(len(ends) == 1 and not ends[0]['error'] and not ends[0]['lease_broken'],
+         'incomplete or mutable scheduler originals')
+    return qualify(rows, boundary_ns=ends[0]['monotonic_ns'], **arguments)
+
+
+class FollowingCollector(Collector):
+    """One qualified extension, with the existing autonomous scope deadline.
+
+    The extension origin is the fired instance, NOT an invented root fork.
+    All decisions and the real acknowledgment are retained beside raw facts.
+    Scope stop/export remains the caller's existing finally obligation, even
+    for an unknown extension outcome. Failed admission is never retried.
+    """
+    def __init__(self, config, output, binding, root, credentials, client):
+        self.credentials, self.client = credentials, client
+        self.follow_attempted = False
+        super().__init__(config, output, binding, root)
+
+    def kernel_prefix(self):
+        from velociraptor_linux_probe import decode
+        path = self.output.parent / 'generations/1/raw.ndjson'
+        raw = path.read_bytes()
+        need(len(raw) <= 16*1024*1024, 'kernel prefix bound')
+        # A pipe write may end mid-line. Only complete physical records qualify.
+        complete = raw[:raw.rfind(b'\n') + 1]
+        events = []
+        for line in complete.splitlines():
+            if line.strip():
+                event = decode(line, 1)
+                if event['kind'] not in ('ready', 'end'):
+                    events.append(event)
+        need(events and [e['monotonic_ns'] for e in events] ==
+             sorted(e['monotonic_ns'] for e in events), 'kernel prefix order')
+        return events, dict(path=str(path), size=len(complete), sha256=sha(complete))
+
+    def tick(self):
+        super().tick()
+        if self.follow_attempted or not any(r['kind'] == 'invocation' for r in self.records):
+            return
+        self.follow_attempted = True
+        try:
+            import math
+            import uuid
+            need(not self.error and not self.lease_broken and not self.finish_event.is_set(),
+                 'scheduler source unhealthy')
+            need(Path('/proc/sys/kernel/random/boot_id').read_text().strip() == self.binding['boot_id'],
+                 'admission boot conflict')
+            with self.lock:
+                rows = list(self.records)
+            kernel, prefix = self.kernel_prefix()
+            proof = qualify(rows, config=self.config, binding=self.binding, root=self.root,
+                            credentials=self.credentials, kernel=kernel, boundary_ns=time.monotonic_ns())
+            fire = proof[-1]
+            actor = process(fire['fired_instance']['pid'])
+            need(all(actor[k] == fire['execution_identity'][k] for k in fire['execution_identity'])
+                 and actor['image_sha256'] == fire['executable_sha256'], 'admission instance drift')
+            root_exit = next(e['monotonic_ns'] for e in kernel if e['kind'] == 'exit'
+                             and (e['pid'], e['birth']) == (self.root['pid'], self.root['start_time']))
+            until = root_exit + self.config['window_seconds'] * 10**9
+            remaining = (until - time.monotonic_ns()) / 10**9
+            need(remaining >= 5, 'insufficient admission window')
+            target = dict(pid=actor['pid'], birth=actor['birth'], uid=actor['uids'][1])
+            request = dict(self.binding, operation_id=str(uuid.uuid4()), targets=[target],
+                           reason='qualified first user timer invocation ' + fire['invocation_id'],
+                           expires_in_seconds=math.ceil(remaining) + 5, termination='scope stop or bounded extension expiry')
+            self.record('admission-intent', proof=proof, kernel_prefix=prefix, actor=actor,
+                        request=request, observation_deadline_ns=until)
+            need(not self.error and not self.lease_broken, 'source changed before admission')
+            receipt = self.client.call('linux_scope_extend', {'request': request})
+            need(receipt.get('status') == 'APPLIED' and receipt.get('backend_applied') is True
+                 and receipt.get('generation') == 2 and receipt['extension']['targets'] == [target]
+                 and all(receipt[k] == self.binding[k] for k in self.binding), 'extension not ready')
+            applied = [t for t in receipt['transitions'] if t['action'] == 'applied' and t['generation'] == 2]
+            need(len(applied) == 1 and applied[0]['ready_ns'] < receipt['extension']['expires_ns'],
+                 'extension readiness missing or expired')
+            need(not self.error and not self.lease_broken, 'source changed during admission')
+            live = process(actor['pid'])
+            need(live == actor, 'payload exited or changed before readiness acknowledgment')
+            self.record('admission-ready', receipt=receipt, actor=live,
+                        ready_ns=applied[0]['ready_ns'], fire_to_ready_ns=applied[0]['ready_ns']-fire['monotonic_ns'],
+                        coverage='bounded after readiness; initial exec supplied by independent scheduler identity')
+        except Exception as error:
+            self.record('admission-insufficient', error=type(error).__name__ + ':' + str(error))
+
+    def close(self):
+        if not self.closed and not self.follow_attempted:
+            self.record('admission-insufficient', error='no complete live invocation before close')
+        super().close()
