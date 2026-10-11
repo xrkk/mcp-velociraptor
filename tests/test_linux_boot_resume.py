@@ -1,6 +1,8 @@
 """Local seam tests for the boot-resume professional module.
 
 Every native boundary is intercepted; nothing here proves native evidence.
+The complete host-side positive path with the real pinned professional
+decoder and real kernel decoding lives in the MalTrace test suite.
 """
 import base64
 import copy
@@ -8,6 +10,7 @@ import json
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -20,28 +23,36 @@ from velociraptor_linux_backend import sha
 
 VM = '289e4d56-ebaf-5147-96ba-40dfc2a942a3'
 BOOT = '4cbc0f6d-1111-4222-8333-abcdefabcdef'
+BOOT_HEX = uuid.UUID(BOOT).hex
 PID = 4321
 BIRTH = '120000'
 MAIN_START_US = 1_200_000_000
 UID = 996
 GID = 987
 INVOCATION = 'a' * 32
+UNIT = 'mt-gap20.service'
+LINK = '/etc/systemd/system/multi-user.target.wants/' + UNIT
+MANAGER_IMAGE = '/usr/lib/systemd/systemd'
+MANAGER_SHA = 'c' * 64
 PAYLOAD_BYTES = b'benign-resume-fixture-bytes\n'
 PAYLOAD_SHA = sha(PAYLOAD_BYTES)
 FRAGMENT_BYTES = (b'[Unit]\nDescription=fixture\n'
+                  b'RefuseManualStart=yes\n'
                   b'[Service]\nType=simple\nUser=996\nGroup=987\n'
                   b'ExecStart=/opt/mt-gap20-fixture/payload\n'
+                  b'Restart=no\n'
                   b'[Install]\nWantedBy=multi-user.target\n')
 FRAGMENT_SHA = sha(FRAGMENT_BYTES)
+PAYLOAD_INODE, UNIT_INODE, LINK_INODE, DEVICE = 600, 700, 800, 2049
 
 
 def make_profile(**changes):
     profile = dict(
-        unit_name='mt-gap20.service', vm_uuid=VM, boot_id=BOOT,
+        unit_name=UNIT, vm_uuid=VM, boot_id=BOOT,
         expected_uid=UID, payload_path='/opt/mt-gap20-fixture/payload',
         payload_sha256=PAYLOAD_SHA,
-        fragment_path='/etc/systemd/system/mt-gap20.service',
-        fragment_sha256=FRAGMENT_SHA,
+        fragment_path='/etc/systemd/system/' + UNIT,
+        fragment_sha256=FRAGMENT_SHA, enable_link_path=LINK,
         bundle_dir='/opt/mt-gap20-fixture/bundle',
         deployment_root='/opt/velociraptor',
         client_id='C.abcdef012345',
@@ -52,42 +63,44 @@ def make_profile(**changes):
     return profile
 
 
-def make_observation(profile):
+def bundle_observation(profile):
     return {
         'schema': boot.SOURCE, 'kind': 'boot-service-observation',
         'vm_uuid': profile['vm_uuid'], 'boot_id': profile['boot_id'],
         'unit': dict(name=profile['unit_name'],
                      fragment_path=profile['fragment_path'],
                      fragment_sha256=profile['fragment_sha256'],
-                     fragment_identity=dict(device=1, inode=2, size=3),
+                     fragment_identity=dict(device=DEVICE,
+                                            inode=UNIT_INODE,
+                                            size=len(FRAGMENT_BYTES)),
                      fragment_binding=None, invocation_id=INVOCATION,
                      unit_file_state='enabled',
                      started_at_monotonic=str(MAIN_START_US)),
         'payload': dict(path=profile['payload_path'],
-                        sha256=profile['payload_sha256'], size=len(PAYLOAD_BYTES),
-                        identity=dict(device=1, inode=3)),
+                        sha256=profile['payload_sha256'],
+                        size=len(PAYLOAD_BYTES),
+                        identity=dict(device=DEVICE, inode=PAYLOAD_INODE)),
         'actor': dict(pid=PID, birth=BIRTH, uid=UID, gid=GID,
                       exe=profile['payload_path'], exe_sha256=PAYLOAD_SHA,
                       cgroup='/system.slice/' + profile['unit_name'],
                       cmdline=[profile['payload_path']]),
-        'manager': dict(pid=1, birth='1', uids=[0] * 4, gids=[0] * 4,
-                        image='/usr/lib/systemd/systemd',
-                        image_sha256='c' * 64),
+        'manager': dict(socket='/run/systemd/private', peer=[1, 0, 0],
+                        pid1=dict(pid=1, birth='12000', uids=[0] * 4,
+                                  gids=[0] * 4, image=MANAGER_IMAGE,
+                                  image_sha256=MANAGER_SHA)),
         'observed_at': '2026-10-11T00:00:00+00:00', 'window_seconds': 20,
         'execstart': [profile['payload_path']], 'raw_refs': {},
         'limitations': ['fixture'],
     }
 
 
-def show_stdout(profile, *, pid=PID, invocation=INVOCATION, active='active',
-                unit_file_state='enabled'):
+def show_stdout(profile, *, pid=PID, invocation=INVOCATION):
     payload = profile['payload_path']
     values = dict(
         Id=profile['unit_name'], FragmentPath=profile['fragment_path'],
-        DropInPaths='', LoadState='loaded', ActiveState=active,
+        DropInPaths='', LoadState='loaded', ActiveState='active',
         SubState='running', InvocationID=invocation,
-        UnitFileState=unit_file_state, Transient='no',
-        NeedDaemonReload='no',
+        UnitFileState='enabled', Transient='no', NeedDaemonReload='no',
         ExecMainStartTimestampMonotonic=str(MAIN_START_US),
         MainPID=str(pid), ExecMainPID=str(pid), User=str(UID),
         Group=str(GID),
@@ -99,23 +112,37 @@ def show_stdout(profile, *, pid=PID, invocation=INVOCATION, active='active',
                      for key, value in values.items()) + '\n'
 
 
-def journal_raw(profile, *, boot_id=None, unit=None, invocation=INVOCATION,
-                pid=PID, exe=None, stamp='1200500000'):
+def journal_raw(profile, *, boot_id=None, manager=True, payload=True,
+                message_id=resume_mod.UNIT_STARTED_MESSAGE_ID,
+                unit=None, invocation=INVOCATION, main_pid=PID, uid=UID,
+                exe=None, start_stamp=None, main_stamp=None,
+                manager_exe=MANAGER_IMAGE, manager_uid='0', unit_field=None,
+                extra_starts=0):
     unit = unit or profile['unit_name']
     exe = exe or profile['payload_path']
-    entries = [
-        dict(_BOOT_ID=boot_id or profile['boot_id'], _SYSTEMD_UNIT=unit,
-             INVOCATION_ID=invocation, _PID='1',
-             __MONOTONIC_TIMESTAMP=str(MAIN_START_US - 1000),
-             MESSAGE_ID='39f53479d3a045ac8e11786248231fbf'),
-        dict(_BOOT_ID=boot_id or profile['boot_id'], _SYSTEMD_UNIT=unit,
-             INVOCATION_ID=invocation, _PID=str(pid), _EXE=exe,
-             __MONOTONIC_TIMESTAMP=stamp, MESSAGE='MT_GAP20_IDLE_MODE'),
-        dict(_BOOT_ID=boot_id or profile['boot_id'], _SYSTEMD_UNIT=unit,
-             INVOCATION_ID=invocation, _PID='1',
-             __MONOTONIC_TIMESTAMP='1201000000',
-             MESSAGE_ID='39f53479d3a045ac8e11786248231fbf'),
-    ]
+    boot = uuid.UUID(boot_id).hex if boot_id else BOOT_HEX
+    entries = []
+    if manager:
+        entries.append(dict(
+            _BOOT_ID=boot, _PID='1', _UID=manager_uid, _EXE=manager_exe,
+            MESSAGE_ID=message_id, UNIT=unit_field or unit,
+            INVOCATION_ID=invocation,
+            _SYSTEMD_UNIT='init.scope',
+            __MONOTONIC_TIMESTAMP=start_stamp
+            or str(MAIN_START_US + 1000)))
+        for _ in range(extra_starts):
+            entries.append(dict(
+                _BOOT_ID=boot, _PID='1', _UID='0', _EXE=MANAGER_IMAGE,
+                MESSAGE_ID=message_id, UNIT=unit, INVOCATION_ID=invocation,
+                _SYSTEMD_UNIT='init.scope',
+                __MONOTONIC_TIMESTAMP=str(MAIN_START_US + 2000)))
+    if payload:
+        entries.append(dict(
+            _BOOT_ID=boot, _SYSTEMD_UNIT=unit,
+            _SYSTEMD_INVOCATION_ID=invocation, INVOCATION_ID=invocation,
+            _PID=str(main_pid), _UID=str(uid), _EXE=exe,
+            __MONOTONIC_TIMESTAMP=main_stamp or str(MAIN_START_US + 5000),
+            MESSAGE='MT_GAP20_IDLE_MODE'))
     return ('\n'.join(json.dumps(entry) for entry in entries) + '\n').encode()
 
 
@@ -123,39 +150,59 @@ class Harness:
     def __init__(self, review, profile, **overrides):
         self.review = review
         self.profile = profile
-        self.observation = overrides.pop('observation',
-                                         make_observation(profile))
-        self.journal = overrides.pop('journal',
-                                     journal_raw(profile))
+        self.bundle = overrides.pop('bundle',
+                                    bundle_observation(profile))
+        self.journal = overrides.pop('journal', journal_raw(profile))
         self.show = overrides.pop('show', show_stdout(profile))
         self.facts = overrides.pop('facts', self.default_facts())
         self.receipt_changes = overrides.pop('receipt_changes', {})
         self.finish_root = overrides.pop('finish_root', None)
         self.finish_files = overrides.pop('finish_files', {})
         self.calls = []
+        self.manager = dict(pid=1, birth='12000', uids=[0] * 4, gids=[0] * 4,
+                            image=MANAGER_IMAGE, image_sha256=MANAGER_SHA)
 
     def default_facts(self):
         return dict(pid=PID, birth=BIRTH, uids=[UID] * 4, gids=[GID] * 4,
                     groups=[GID], image=self.profile['payload_path'],
-                    device=1, inode=7, image_sha256=PAYLOAD_SHA,
+                    device=DEVICE, inode=PAYLOAD_INODE,
+                    image_sha256=PAYLOAD_SHA,
                     cgroup='/system.slice/' + self.profile['unit_name'],
                     cmdline=[self.profile['payload_path']])
 
     def stable_read(self, path):
         path = str(path)
         if path == self.profile['fragment_path']:
-            data, wanted = FRAGMENT_BYTES, self.profile['fragment_sha256']
+            data, wanted, inode, mode = (FRAGMENT_BYTES, FRAGMENT_SHA,
+                                         UNIT_INODE, 0o644)
         elif path == self.profile['payload_path']:
-            data, wanted = PAYLOAD_BYTES, self.profile['payload_sha256']
+            data, wanted, inode, mode = (PAYLOAD_BYTES, PAYLOAD_SHA,
+                                         PAYLOAD_INODE, 0o555)
         else:
             raise AssertionError('unexpected read %s' % path)
-        return dict(path=path, size=len(data), device=1, inode=9, nlink=1,
-                    uid=0, mode=0o444, sha256=wanted,
+        return dict(path=path, size=len(data), device=DEVICE, inode=inode,
+                    nlink=1, uid=0, mode=mode, sha256=wanted,
                     content=base64.b64encode(data).decode())
+
+    def directory(self, path):
+        return dict(path=str(path), device=DEVICE, inode=77, uid=0, gid=0,
+                    mode=0o755, size=4096)
+
+    def link(self, path):
+        return dict(path=str(path), target=self.profile['fragment_path'],
+                    device=DEVICE, inode=LINK_INODE, uid=0, gid=0,
+                    mode=0o777, size=len(self.profile['fragment_path']))
+
+    def exe_fd(self, pid):
+        return dict(path=self.profile['payload_path'], device=DEVICE,
+                    inode=PAYLOAD_INODE)
 
     def run_command(self, argv, timeout):
         self.calls.append(list(argv))
         if argv[:2] == ['systemctl', 'show']:
+            if len(argv) == 4 and argv[3] == '--property=RefuseManualStart':
+                return dict(argv=list(argv), rc=0,
+                            stdout='RefuseManualStart=yes\n', stderr='')
             return dict(argv=list(argv), rc=0, stdout=self.show, stderr='')
         if argv[:2] == ['systemctl', 'cat']:
             text = '# %s\n%s' % (self.profile['fragment_path'],
@@ -195,7 +242,6 @@ class Harness:
         return Client()
 
     def finish_receipt(self, tool, request):
-        binding = self.profile
         target = dict(pid=PID, birth=BIRTH, uid=UID)
         base = dict(request, status='STOPPED', collection_stopped=True,
                     generation=1, default_targets=[target],
@@ -221,10 +267,7 @@ class Harness:
                                       vm_uuid=self.profile['vm_uuid'],
                                       reads={})),
             patch.object(resume_mod, '_manager_identity',
-                         lambda pid=1: dict(pid=1, birth='1', uids=[0] * 4,
-                                            gids=[0] * 4,
-                                            image='/usr/lib/systemd/systemd',
-                                            image_sha256='c' * 64)),
+                         lambda pid=1: copy.deepcopy(self.manager)),
             patch.object(resume_mod, '_open_manager',
                          lambda socket, expected: SimpleNamespace(
                              peer=[1, 0, 0], close=lambda: None)),
@@ -233,9 +276,14 @@ class Harness:
                          lambda pid: copy.deepcopy(self.facts)),
             patch.object(resume_mod, '_read_exe', lambda pid: PAYLOAD_BYTES),
             patch.object(resume_mod, '_stable_read', self.stable_read),
+            patch.object(resume_mod, '_directory_identity', self.directory),
+            patch.object(resume_mod, '_link_identity', self.link),
+            patch.object(resume_mod, '_exe_fd_identity', self.exe_fd),
             patch.object(resume_mod, '_rederive',
-                         lambda bundle, inner: copy.deepcopy(self.observation)),
+                         lambda bundle, inner: copy.deepcopy(self.bundle)),
             patch.object(resume_mod, '_client', self.client),
+            patch.object(resume_mod, 'normalize_boot_service',
+                         lambda bundle, inner: copy.deepcopy(self.bundle)),
         ]
         if self.finish_root is not None:
             for relative, raw in self.finish_files.items():
@@ -256,6 +304,7 @@ class ProfileTests(unittest.TestCase):
                            ('journal_max_bytes', 10 ** 9),
                            ('session_id', 'not-a-uuid'),
                            ('bundle_dir', 'relative/path'),
+                           ('enable_link_path', '/etc/systemd/system/wants/x'),
                            ('expected_uid', 0), ('window_seconds', 31)):
             with self.subTest(key=key):
                 broken = make_profile(**{key: value})
@@ -264,49 +313,69 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaises(resume_mod.BootResumeError):
             resume_mod.validate_profile(dict(make_profile(), pid=1))
 
+    def test_boot_key_normalizes_uuid_and_hex_losslessly(self):
+        self.assertEqual(resume_mod.boot_key(BOOT), BOOT_HEX)
+        self.assertEqual(resume_mod.boot_key(BOOT_HEX), BOOT_HEX)
+        with self.assertRaises(resume_mod.BootResumeError):
+            resume_mod.boot_key('not-a-boot')
+
 
 class JournalTests(unittest.TestCase):
     def setUp(self):
         self.profile = make_profile()
-        self.observation = make_observation(self.profile)
+        self.observation = bundle_observation(self.profile)
         self.unit = self.observation['unit']
         self.actor = self.observation['actor']
 
-    def check(self, raw, **changes):
-        profile = self.profile
-        unit = dict(self.unit, **changes.pop('unit_changes', {}))
-        actor = dict(self.actor, **changes.pop('actor_changes', {}))
-        return resume_mod.check_journal(raw, profile, unit, actor,
-                                        MAIN_START_US)
+    def check(self, raw):
+        return resume_mod.check_journal(raw, self.profile, self.unit,
+                                        self.actor, MAIN_START_US,
+                                        MANAGER_IMAGE)
 
-    def test_valid_journal_carries_structured_boot_identity(self):
+    def test_valid_journal_requires_both_record_classes(self):
         summary = self.check(journal_raw(self.profile))
-        self.assertEqual(summary['unit_records'], 3)
-        self.assertEqual(summary['main_records'], 1)
+        self.assertEqual(summary['manager_records'], 1)
+        self.assertEqual(summary['payload_records'], 1)
+        self.assertEqual(summary['start_records'], 1)
         self.assertEqual(summary['invocation_ids'], [INVOCATION])
-        self.assertIn('39f53479d3a045ac8e11786248231fbf',
+        self.assertIn(resume_mod.UNIT_STARTED_MESSAGE_ID,
                       summary['message_ids'])
 
-    def test_foreign_or_missing_structured_records_refuse(self):
+    def test_missing_manager_start_records_refuse(self):
+        with self.assertRaisesRegex(resume_mod.BootResumeError,
+                                    'PID1 unit-start record'):
+            self.check(journal_raw(self.profile, manager=False))
+
+    def test_fake_manager_records_refuse(self):
         cases = {
-            'foreign-boot': (journal_raw(self.profile, boot_id=VM), {}),
-            'foreign-invocation': (journal_raw(self.profile,
-                                               invocation='b' * 32), {}),
-            'missing-main-pid': (journal_raw(self.profile, pid=999), {}),
-            'foreign-exe': (journal_raw(self.profile, exe='/bin/false'), {}),
-            'unit-mismatch': (journal_raw(self.profile, unit='other.service'),
-                              {}),
+            'fake-exe': journal_raw(self.profile,
+                                    manager_exe='/bin/false'),
+            'fake-uid': journal_raw(self.profile, manager_uid='996'),
+            'wrong-unit': journal_raw(self.profile, unit_field='other.svc'),
+            'wrong-invocation': journal_raw(self.profile,
+                                            invocation='b' * 32),
+            'wrong-message': journal_raw(self.profile, message_id='f' * 32),
+            'foreign-boot': journal_raw(self.profile,
+                                        boot_id=VM),
+            'old-start': journal_raw(self.profile, start_stamp='1'),
+            'multiple-starts': journal_raw(self.profile, extra_starts=1),
         }
-        for label, (raw, changes) in cases.items():
+        for label, raw in cases.items():
             with self.subTest(label=label):
                 with self.assertRaises(resume_mod.BootResumeError):
-                    self.check(raw, **changes)
+                    self.check(raw)
 
-    def test_oversized_or_backwards_journal_refuses(self):
-        with self.assertRaises(resume_mod.BootResumeError):
-            self.check(b'x' * (self.profile['journal_max_bytes'] + 1))
-        with self.assertRaises(resume_mod.BootResumeError):
-            self.check(journal_raw(self.profile, stamp='10'))
+    def test_payload_field_mutations_refuse(self):
+        cases = {
+            'main-pid': journal_raw(self.profile, main_pid=999),
+            'payload-uid': journal_raw(self.profile, uid=0),
+            'payload-exe': journal_raw(self.profile, exe='/bin/false'),
+            'payload-stamp': journal_raw(self.profile, main_stamp='1'),
+        }
+        for label, raw in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaises(resume_mod.BootResumeError):
+                    self.check(raw)
 
 
 class ResumeFlowTests(unittest.TestCase):
@@ -326,47 +395,76 @@ class ResumeFlowTests(unittest.TestCase):
     def resume(self):
         output = Path(self.tmp.name) / ('resume-%d' % len(
             list(Path(self.tmp.name).iterdir())))
-        with patch.object(resume_mod, 'normalize_boot_service',
-                          lambda bundle, inner: copy.deepcopy(
-                              self.harness.observation)):
-            return resume_mod.resume(self.profile, output)
+        return resume_mod.resume(self.profile, output)
 
-    def test_resume_records_ready_scope_and_sealed_output(self):
+    def test_resume_records_full_identity_and_replays_verbatim(self):
         observation, bundle = self.resume()
         output = Path(bundle['output'])
         self.assertEqual(observation['target'],
                          dict(pid=PID, birth=BIRTH, uid=UID))
+        self.assertEqual(observation['manager']['pid1'],
+                         self.harness.manager)
+        self.assertEqual(observation['manager']['peer'], [1, 0, 0])
+        self.assertEqual(observation['physical']['link']['target'],
+                         self.profile['fragment_path'])
         self.assertEqual(observation['scope']['apply_receipt']['status'],
                          'APPLIED')
-        self.assertEqual(observation['journal']['invocation_ids'],
-                         [INVOCATION])
         records = [json.loads(line) for line in
                    (output / 'raw.ndjson').read_text().splitlines()]
         self.assertEqual([r['kind'] for r in records],
                          resume_mod.RECORD_SEQUENCE)
-        self.assertTrue((output / 'journal.jsonl').is_file())
-        self.assertEqual(stat_mode(output / 'observation.json'), 0o400)
-        self.assertEqual(bundle['manifest']['files'].keys(),
-                         set(resume_mod.RESUME_FILES))
+        replayed = resume_mod.normalize_boot_resume(output, self.profile)
+        self.assertEqual(replayed, observation)
 
-    def test_resume_decodes_and_detects_tampering(self):
+    def test_manager_birth_mutation_hits_independent_bundle_binding(self):
         observation, bundle = self.resume()
         output = Path(bundle['output'])
-        with patch.object(resume_mod, 'normalize_boot_service',
-                          lambda bundle_dir, inner: copy.deepcopy(
-                              self.harness.observation)):
-            replayed = resume_mod.normalize_boot_resume(output, self.profile)
-        self.assertEqual(replayed['target'], observation['target'])
         raw_path = output / 'raw.ndjson'
-        original = raw_path.read_bytes()
+        records = [json.loads(line)
+                   for line in raw_path.read_text().splitlines()]
+        records[2]['identity']['birth'] = '999999'
+        records[-2]['manager']['birth'] = '999999'
         raw_path.chmod(0o600)
-        raw_path.write_bytes(original.replace(b'observation-complete',
-                                              b'observation-completX'))
-        with patch.object(resume_mod, 'normalize_boot_service',
-                          lambda bundle_dir, inner: copy.deepcopy(
-                              self.harness.observation)):
-            with self.assertRaises(resume_mod.BootResumeError):
-                resume_mod.normalize_boot_resume(output, self.profile)
+        raw_path.write_text(''.join(
+            json.dumps(record, separators=(',', ':')) + '\n'
+            for record in records))
+        raw_path.chmod(0o400)
+        manifest_path = output / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files']['raw.ndjson'].update(
+            size=raw_path.stat().st_size, sha256=sha(raw_path.read_bytes()))
+        manifest_path.chmod(0o600)
+        manifest_path.write_text(json.dumps(manifest))
+        manifest_path.chmod(0o400)
+        with self.assertRaisesRegex(
+                resume_mod.BootResumeError,
+                'manager identity differs from the independent sealed boot '
+                'bundle'):
+            resume_mod.normalize_boot_resume(output, self.profile)
+
+    def test_physical_identity_mutation_refuses(self):
+        observation, bundle = self.resume()
+        output = Path(bundle['output'])
+        raw_path = output / 'raw.ndjson'
+        records = [json.loads(line)
+                   for line in raw_path.read_text().splitlines()]
+        for record in records:
+            if record['kind'] == 'enable-link':
+                record['value']['inode'] = 999999
+        raw_path.chmod(0o600)
+        raw_path.write_text(''.join(
+            json.dumps(record, separators=(',', ':')) + '\n'
+            for record in records))
+        raw_path.chmod(0o400)
+        manifest_path = output / 'manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files']['raw.ndjson'].update(
+            size=raw_path.stat().st_size, sha256=sha(raw_path.read_bytes()))
+        manifest_path.chmod(0o600)
+        manifest_path.write_text(json.dumps(manifest))
+        manifest_path.chmod(0o400)
+        with self.assertRaises(resume_mod.BootResumeError):
+            resume_mod.normalize_boot_resume(output, self.profile)
 
     def test_resume_refuses_foreign_identity_and_bad_receipt(self):
         with patch.object(resume_mod, '_kernel_identity',
@@ -384,10 +482,6 @@ class ResumeFlowTests(unittest.TestCase):
             self.resume()
 
 
-def stat_mode(path):
-    return path.stat().st_mode & 0o777
-
-
 class FinishFlowTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -400,14 +494,14 @@ class FinishFlowTests(unittest.TestCase):
         self.files = {
             'premise.json': json.dumps({'birth_basis': {}}).encode(),
             'generations/1/config.json': json.dumps(
-                {'default_targets': [dict(pid=PID, birth=BIRTH, uid=UID)]}
-            ).encode(),
+                {'default_targets': [dict(pid=PID, birth=BIRTH, uid=UID)],
+                 'source_sha256': sha(b'fixture-probe')}).encode(),
             'generations/1/raw.ndjson': (
                 json.dumps(dict(kind='ready', monotonic_ns=1)) + '\n' +
                 json.dumps(dict(kind='exec', monotonic_ns=2)) + '\n' +
                 json.dumps(dict(kind='end', monotonic_ns=3)) + '\n').encode(),
             'generations/1/events.ndjson': b'',
-            'generations/1/probe.bt': b'fixture',
+            'generations/1/probe.bt': b'fixture-probe',
             'snapshots/export.json': b'{"status": "STOPPED"}\n',
         }
         self.harness = Harness(self, self.profile,
@@ -434,24 +528,6 @@ class FinishFlowTests(unittest.TestCase):
         product.write_bytes(raw + b'x')
         with self.assertRaises(resume_mod.BootResumeError):
             resume_mod.normalize_boot_resume_finish(output, self.profile)
-
-    def test_finish_refuses_foreign_boot_or_unconfirmed_stop(self):
-        with patch.object(resume_mod, '_kernel_identity',
-                          lambda: dict(boot_id=VM, vm_uuid=VM, reads={})):
-            with self.assertRaises(resume_mod.BootResumeError):
-                self.finish()
-
-        def broken(tool, request):
-            if tool == 'linux_scope_stop':
-                return dict(self.harness.finish_receipt(tool, request),
-                            collection_stopped=False)
-            return self.harness.finish_receipt(tool, request)
-
-        self.harness.client = lambda deployment_root, binding: SimpleNamespace(
-            call=lambda tool, arguments: broken(tool, arguments['request']))
-        with patch.object(resume_mod, '_client', self.harness.client):
-            with self.assertRaises(resume_mod.BootResumeError):
-                self.finish()
 
 
 if __name__ == '__main__':

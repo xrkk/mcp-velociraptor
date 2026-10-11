@@ -44,18 +44,29 @@ observation: the two functions start/restart/enable nothing either.
   observation, re-checks the live kernel/PID1/manager/systemctl/process and
   fragment/payload originals twice, keeps the fixed-argv
   `journalctl --boot <boot> --unit <unit> --output=json --no-pager` record as
-  a bounded original (oversized journals are refused, never truncated) and
-  applies one professional kernel scope to the exact observed pid/birth/uid.
-  Every request/receipt/raw record is sealed
-  (`raw.ndjson`, `journal.jsonl`, `observation.json`, `manifest.json`).
+  a bounded original (oversized journals are refused, never truncated), keeps
+  the fixed enable-link and parent identities and applies one professional
+  kernel scope to the exact observed pid/birth/uid. Journal verification uses
+  two independent record classes: PID1 manager start records (sender bound to
+  the observed manager image, target UNIT/INVOCATION_ID and the
+  `39f53479d3a045ac8e11786248231fbf` UNIT_STARTED message id) and payload
+  records from the actual ordinary main process; boot ids are compared
+  through their canonical 32-hex form. Every request/receipt/raw record is
+  sealed (`raw.ndjson`, `journal.jsonl`, `observation.json`,
+  `manifest.json`).
 - `finish(profile, output_directory)` stops and exports exactly that scope and
   copies every original; `normalize_boot_resume` /
-  `normalize_boot_resume_finish` replay both directories from the sealed
-  originals only (inventory, directory identity, inode/hash/protection).
+  `normalize_boot_resume_finish` rebuild the COMPLETE canonical observation
+  from the sealed originals (inventory, inode/hash/protection, journal,
+  manager identity bound to the independent sealed boot-service manager) and
+  compare it verbatim. An explicit transport record may replace the
+  same-filesystem directory identity with the guest manifest bytes plus the
+  host pin, never weakening the content/identity chain.
 
-The strict resume profile adds `bundle_dir`, `deployment_root`, the scope
-`client_id`/`session_id`/`owner_id`, `lifetime_seconds`, `journal_max_bytes`
-to the boot-service profile fields. Caller-supplied PID/birth/InvocationID or
+The strict resume profile adds `bundle_dir`, `enable_link_path` (must equal
+`/etc/systemd/system/multi-user.target.wants/<unit>`), `deployment_root`, the
+scope `client_id`/`session_id`/`owner_id`, `lifetime_seconds`,
+`journal_max_bytes` to the boot-service profile fields. Caller-supplied PID/birth/InvocationID or
 verification flags are rejected by schema. The started-by-PID1 service keeps
 its early exec as an explicit `initial_exec_gap`; the module never fabricates
 a kernel exec record. Local seam tests live in

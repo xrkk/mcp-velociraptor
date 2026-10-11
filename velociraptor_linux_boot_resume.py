@@ -9,6 +9,7 @@ exact observed pid/birth/uid. Stop and export close the same scope later.
 """
 from __future__ import annotations
 import base64
+import copy
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,8 @@ from velociraptor_linux_boot_service import (
     process_identity, read_exe, stable_file_read, show_argv, cat_argv,
     parse_show, check_properties, bind_fragment_path, check_process_facts,
     cgroup_binds_unit, fragment_execstart, fragment_user,
-    check_loaded_execstart, bounded_bytes, need, sha)
+    check_loaded_execstart, bounded_bytes, check_records, need, sha)
+from velociraptor_linux_boot_service import SOURCE as BOOT_SERVICE_SOURCE
 from velociraptor_linux_probe import SOURCE_ID
 
 SOURCE = 'MalTrace.SystemBootResume.v1'
@@ -34,18 +36,24 @@ JOURNAL_ARGV = ('journalctl', '--boot', None, '--unit', None,
                 '--output=json', '--no-pager')
 SCOPE_MODULES = ('velociraptor_linux_scope.py', 'velociraptor_linux_worker.py',
                  'velociraptor_linux_probe.py')
+UNIT_STARTED_MESSAGE_ID = '39f53479d3a045ac8e11786248231fbf'
+WANTS_DIR = '/etc/systemd/system/multi-user.target.wants'
+MANUAL_SHOW_PROPERTIES = ('RefuseManualStart',)
 PROFILE_FIELDS = {'unit_name', 'vm_uuid', 'boot_id', 'expected_uid',
                   'payload_path', 'payload_sha256', 'fragment_path',
-                  'fragment_sha256', 'bundle_dir', 'deployment_root',
-                  'client_id', 'session_id', 'owner_id', 'lifetime_seconds',
-                  'window_seconds', 'journal_max_bytes'}
+                  'fragment_sha256', 'enable_link_path', 'bundle_dir',
+                  'deployment_root', 'client_id', 'session_id', 'owner_id',
+                  'lifetime_seconds', 'window_seconds', 'journal_max_bytes'}
 BOOT_FIELDS = {'unit_name', 'vm_uuid', 'boot_id', 'expected_uid',
                'payload_path', 'payload_sha256', 'fragment_path',
                'fragment_sha256', 'window_seconds'}
 RECORD_SEQUENCE = ['intent', 'kernel-identity', 'manager-open', 'bundle',
-                   'unit-show', 'unit-cat', 'fragment', 'payload', 'process',
-                   'journal', 'scope-apply-intent', 'scope-apply-receipt',
-                   'recheck', 'observation-complete']
+                   'unit-show', 'manual-show', 'unit-cat', 'fragment',
+                   'payload', 'enable-link', 'process', 'journal',
+                   'scope-apply-intent', 'scope-apply-receipt', 'recheck',
+                   'observation-complete']
+PHYSICAL_IDENTITY_FIELDS = ('device', 'inode', 'uid', 'gid', 'mode', 'size',
+                            'sha256')
 LIMITATIONS = [
     'the service was started by PID1 before this observation: its early '
     'execution is not captured and remains an explicit initial_exec_gap',
@@ -85,6 +93,25 @@ def _hex64(value):
     return isinstance(value, str) and bool(re.fullmatch(r'[0-9a-f]{64}', value))
 
 
+def boot_key(value):
+    """Lossless canonical comparison key for boot ids.
+
+    journald `_BOOT_ID` is a 32-hex string without hyphens; the kernel
+    exposes the canonical hyphenated UUID. Both are normalized to the same
+    32-hex lowercase form and never compared as raw strings.
+    """
+    _need(isinstance(value, str) and value.strip(),
+          'boot id missing')
+    text = value.strip().lower()
+    if re.fullmatch(r'[0-9a-f]{32}', text):
+        return text
+    try:
+        return uuid.UUID(text).hex
+    except (ValueError, AttributeError, TypeError):
+        raise BootResumeError('boot id is neither a UUID nor 32 hex',
+                              repr(value)) from None
+
+
 def boot_profile(profile):
     return {name: profile[name] for name in BOOT_FIELDS}
 
@@ -98,6 +125,15 @@ def validate_profile(profile):
         validate_boot_profile(inner)
     except BootServiceError as error:
         raise BootResumeError('invalid boot profile', str(error)) from None
+    link = profile['enable_link_path']
+    _need(isinstance(link, str) and os.path.isabs(link)
+          and link == os.path.normpath(link)
+          and '..' not in link.split(os.sep),
+          'enable_link_path must be a canonical absolute path')
+    derived = WANTS_DIR + '/' + profile['unit_name']
+    _need(link == derived,
+          'enable_link_path must derive from the fixed unit',
+          '%r != %r' % (link, derived))
     bundle = profile['bundle_dir']
     _need(isinstance(bundle, str) and os.path.isabs(bundle)
           and bundle == os.path.normpath(bundle)
@@ -223,6 +259,21 @@ def _stable_read(path):
     return stable_file_read(path)
 
 
+def _link_identity(path):
+    return link_identity(path)
+
+
+def _directory_identity(path):
+    return directory_identity(path)
+
+
+def _exe_fd_identity(pid):
+    link = Path('/proc') / str(pid) / 'exe'
+    target = os.readlink(link)
+    st = link.stat()
+    return dict(path=target, device=st.st_dev, inode=st.st_ino)
+
+
 def _rederive(bundle_dir, inner_profile):
     return normalize_boot_service(bundle_dir, inner_profile)
 
@@ -237,70 +288,209 @@ def journal_argv(boot_id, unit_name):
             '--output=json', '--no-pager']
 
 
-def check_journal(raw, profile, unit, actor, main_start_us):
+def manual_show_argv(unit_name):
+    return ['systemctl', 'show', unit_name,
+            '--property=' + ','.join(MANUAL_SHOW_PROPERTIES)]
+
+
+def stat_identity(st):
+    return dict(device=st.st_dev, inode=st.st_ino, uid=st.st_uid,
+                gid=st.st_gid, mode=stat.S_IMODE(st.st_mode),
+                size=st.st_size)
+
+
+def directory_identity(path):
+    """One twice-read directory identity without following any link."""
+    p = Path(path)
+    before = p.lstat()
+    _need(stat.S_ISDIR(before.st_mode) and not stat.S_ISLNK(before.st_mode),
+          'parent is not a real directory', str(p))
+    after = p.lstat()
+    _need((before.st_dev, before.st_ino, before.st_uid, before.st_gid,
+           before.st_mode) == (after.st_dev, after.st_ino, after.st_uid,
+                               after.st_gid, after.st_mode),
+          'parent changed during read', str(p))
+    return dict(path=str(p), **stat_identity(before))
+
+
+def link_identity(path):
+    """One twice-read symlink identity through lstat/readlink only."""
+    p = Path(path)
+    before = p.lstat()
+    _need(stat.S_ISLNK(before.st_mode), 'enable link is not a symlink',
+          str(p))
+    target = os.readlink(p)
+    after = p.lstat()
+    _need((before.st_dev, before.st_ino, before.st_uid, before.st_gid,
+           stat.S_IMODE(before.st_mode), before.st_size, before.st_mtime_ns)
+          == (after.st_dev, after.st_ino, after.st_uid, after.st_gid,
+              stat.S_IMODE(after.st_mode), after.st_size, after.st_mtime_ns),
+          'enable link changed during read', str(p))
+    return dict(path=str(p), target=target, device=before.st_dev,
+                inode=before.st_ino, uid=before.st_uid, gid=before.st_gid,
+                mode=stat.S_IMODE(before.st_mode), size=before.st_size)
+
+
+def file_identity(record):
+    return {key: record[key] for key in
+            ('path', 'device', 'inode', 'uid', 'mode', 'size', 'sha256')}
+
+
+def _manager_records(entries):
+    return [e for e in entries
+            if str(e.get('_PID')) == '1' and str(e.get('_UID')) == '0']
+
+
+def check_journal(raw, profile, unit, actor, main_start_us, manager_image):
     """Structural journald verification against the live observations.
 
-    Only journald's own structured fields are consumed; English message text
-    is never a source of truth. An oversized journal is refused before any
-    decode, never silently truncated.
+    Two independent record classes are required: PID1 manager startup
+    records (sender bound to the independently observed manager image and
+    the target UNIT/INVOCATION_ID/message id) and payload records sent by
+    the actual ordinary main process. Only journald's own structured fields
+    are consumed; English message text is never a source of truth. An
+    oversized journal is refused before any decode, never truncated. Boot
+    ids are compared through their canonical 32-hex form.
     """
     _need(isinstance(raw, bytes) and len(raw) > 0, 'journal record empty')
     _need(len(raw) <= profile['journal_max_bytes'],
           'journal record exceeds the bounded size',
           '%d > %d' % (len(raw), profile['journal_max_bytes']))
-    entries, first_unit, first_main, message_ids = [], None, None, set()
+    boot = boot_key(profile['boot_id'])
+    entries = []
     for line in raw.decode('utf-8', errors='strict').splitlines():
         if not line.strip():
             continue
         value = json.loads(line)
         _need(isinstance(value, dict), 'journal entry not an object')
-        _need(value.get('_BOOT_ID') == profile['boot_id'],
+        _need(value.get('_BOOT_ID') is not None
+              and boot_key(value.get('_BOOT_ID')) == boot,
               'journal entry boot differs')
         entries.append(value)
     _need(entries, 'journal has no entries for the boot')
-    unit_entries = [e for e in entries
-                    if e.get('_SYSTEMD_UNIT') == profile['unit_name']]
-    _need(unit_entries, 'journal lacks the managed unit identity')
-    invocation = {e.get('INVOCATION_ID') for e in unit_entries}
-    _need(invocation == {unit['invocation_id']},
-          'journal invocation ids differ from the live invocation',
-          repr(sorted(x for x in invocation if x is not None)))
-    main = [e for e in unit_entries if e.get('_PID') == str(actor['pid'])]
-    _need(main, 'journal lacks the observed main pid')
-    _need(all(e.get('_BOOT_ID') == profile['boot_id'] for e in main),
-          'journal main entries carry a foreign boot')
-    _need(all(e.get('_EXE') == profile['payload_path'] for e in main),
-          'journal main entries do not carry the payload image')
-    for e in main:
+
+    managers = _manager_records(entries)
+    starts = [e for e in managers
+              if e.get('MESSAGE_ID') == UNIT_STARTED_MESSAGE_ID]
+    _need(starts, 'journal lacks the PID1 unit-start record')
+    _need(len(starts) == 1,
+          'journal carries multiple unit-start records for one invocation')
+    start = starts[0]
+    _need(start.get('UNIT') == profile['unit_name'],
+          'journal start record UNIT differs from the fixed unit')
+    _need(start.get('INVOCATION_ID') == unit['invocation_id'],
+          'journal start record INVOCATION_ID differs from the live unit')
+    _need(start.get('_EXE') == manager_image,
+          'journal start record sender is not the observed manager')
+    if start.get('_SYSTEMD_UNIT') is not None:
+        _need(start.get('_SYSTEMD_UNIT') != profile['unit_name'],
+              'manager record cannot be the business unit sender')
+    stamp = start.get('__MONOTONIC_TIMESTAMP')
+    _need(isinstance(stamp, str) and stamp.isdigit(),
+          'journal start record monotonic timestamp missing')
+    start_us = int(stamp)
+    _need(start_us >= main_start_us,
+          'journal start record predates the native service start')
+
+    payload = [e for e in entries
+               if e.get('_SYSTEMD_UNIT') == profile['unit_name']
+               and str(e.get('_PID')) == str(actor['pid'])]
+    _need(payload, 'journal lacks the observed main pid as a sender')
+    first_main = None
+    for e in payload:
+        _need(str(e.get('_UID')) == str(actor['uid']),
+              'journal payload sender uid differs from the ordinary main')
+        _need(e.get('_EXE') == profile['payload_path'],
+              'journal payload sender image differs from the payload')
+        _need(e.get('_SYSTEMD_INVOCATION_ID') == unit['invocation_id'],
+              'journal payload sender invocation differs from the live unit')
+        if e.get('INVOCATION_ID') is not None:
+            _need(e['INVOCATION_ID'] == unit['invocation_id'],
+                  'journal payload unit invocation differs')
         stamp = e.get('__MONOTONIC_TIMESTAMP')
         _need(isinstance(stamp, str) and stamp.isdigit(),
-              'journal monotonic timestamp missing')
+              'journal payload monotonic timestamp missing')
         value = int(stamp)
-        _need(value >= main_start_us,
-              'journal entry predates the native service start')
+        _need(value >= start_us,
+              'journal payload entry predates the unit-start record')
         if first_main is None or value < first_main:
             first_main = value
-    for e in unit_entries:
-        stamp = e.get('__MONOTONIC_TIMESTAMP')
-        _need(isinstance(stamp, str) and stamp.isdigit(),
-              'journal unit monotonic timestamp missing')
-        if first_unit is None or int(stamp) < first_unit:
-            first_unit = int(stamp)
     birth = int(actor['birth']) * 10 ** 7
     _need(first_main * 1000 >= birth - 10 ** 9,
           'first payload journal entry predates the process birth')
     _need(main_start_us * 1000 <= birth + 5 * 10 ** 9
           and main_start_us * 1000 >= birth - 5 * 10 ** 9,
           'manager start and process birth differ beyond the native bound')
-    for e in unit_entries:
-        if isinstance(e.get('MESSAGE_ID'), str):
-            message_ids.add(e['MESSAGE_ID'])
+    invocation = {e.get('INVOCATION_ID') for e in entries
+                  if e.get('INVOCATION_ID') is not None}
+    for value in invocation:
+        _need(value == unit['invocation_id'],
+              'journal carries a foreign invocation id')
+    message_ids = sorted({e['MESSAGE_ID'] for e in entries
+                          if isinstance(e.get('MESSAGE_ID'), str)})
+    _need(UNIT_STARTED_MESSAGE_ID in message_ids
+          and all(boot_key(e['_BOOT_ID']) == boot for e in entries),
+          'journal structured boot identity differs')
     return dict(rc=0, size=len(raw), sha256=sha(raw), records=len(entries),
-                unit_records=len(unit_entries), main_records=len(main),
-                invocation_ids=sorted(x for x in invocation if x is not None),
-                first_unit_monotonic_us=first_unit,
-                first_main_monotonic_us=first_main,
-                message_ids=sorted(message_ids))
+                manager_records=len(managers), start_records=1,
+                payload_records=len(payload),
+                unit_records=len([e for e in entries
+                                  if e.get('_SYSTEMD_UNIT')
+                                  == profile['unit_name']
+                                  or e.get('UNIT') == profile['unit_name']]),
+                main_records=len(payload),
+                start_monotonic_us=start_us,
+                first_payload_monotonic_us=first_main,
+                invocation_ids=sorted(invocation),
+                message_ids=message_ids)
+
+
+def build_observation_document(*, profile, unit, actor, payload, identity,
+                                peer, target, summary, binding, properties,
+                                execstart, fragment, payload_read, link,
+                                link_parent, unit_parent, payload_parent,
+                                exe_fd, request, receipt, ready_ns,
+                                source_hashes):
+    """The one canonical resume observation shape.
+
+    Both the live producer and the host-side replay build the document
+    through this function, so a complete rebuild can be compared verbatim
+    with the sealed observation instead of checking selected fields.
+    """
+    return dict(
+        schema=SOURCE, kind='boot-resume-observation',
+        vm_uuid=profile['vm_uuid'], boot_id=profile['boot_id'],
+        unit=dict(name=unit['name'], fragment_path=unit['fragment_path'],
+                  fragment_sha256=unit['fragment_sha256'],
+                  fragment_identity=unit['fragment_identity'],
+                  fragment_binding=binding,
+                  invocation_id=unit['invocation_id'],
+                  unit_file_state=unit['unit_file_state'],
+                  main_pid=actor['pid'],
+                  exec_main_start_monotonic_us=int(
+                      properties['ExecMainStartTimestampMonotonic']),
+                  execstart=list(execstart)),
+        payload=dict(path=payload['path'], sha256=payload['sha256'],
+                     size=payload['size'], identity=payload['identity']),
+        physical=dict(unit=file_identity(fragment),
+                      payload=file_identity(payload_read),
+                      link=link, link_parent=link_parent,
+                      unit_parent=unit_parent,
+                      payload_parent=payload_parent, exe_fd=exe_fd,
+                      refuse_manual_start='yes'),
+        actor=dict(pid=actor['pid'], birth=actor['birth'], uid=actor['uid'],
+                   gid=actor['gid'], exe=actor['exe'],
+                   exe_sha256=actor['exe_sha256'], cgroup=actor['cgroup'],
+                   cmdline=list(actor['cmdline'])),
+        manager=dict(socket=MANAGER_SOCKET, peer=list(peer),
+                     pid1={key: identity[key] for key in
+                           ('pid', 'birth', 'uids', 'gids', 'image',
+                            'image_sha256')}),
+        target=dict(target), journal=dict(summary),
+        scope=dict(apply_request=request, apply_receipt=receipt,
+                   generation=1, ready_ns=ready_ns,
+                   source_hashes=dict(source_hashes)),
+        limitations=list(LIMITATIONS))
 
 
 def resume(profile, output_directory):
@@ -371,6 +561,20 @@ def resume(profile, output_directory):
         _need(properties['InvocationID'] == unit['invocation_id'],
               'live invocation differs from the sealed observation')
 
+        manual = _run_command(manual_show_argv(profile['unit_name']),
+                              remaining())
+        raw.write('manual-show', **manual)
+        _need(manual['rc'] == 0, 'systemctl show RefuseManualStart failed')
+        manual_props = {}
+        for line in manual['stdout'].splitlines():
+            if line.strip():
+                _need('=' in line, 'unparsed manual show line', line)
+                key, value = line.split('=', 1)
+                manual_props[key] = value
+        _need(manual_props.get('RefuseManualStart') == 'yes',
+              'loaded RefuseManualStart is not yes',
+              repr(manual_props.get('RefuseManualStart')))
+
         cat = _run_command(cat_argv(profile['unit_name']), remaining())
         raw.write('unit-cat', **cat)
         _need(cat['rc'] == 0, 'systemctl cat failed', str(cat['rc']))
@@ -382,6 +586,12 @@ def resume(profile, output_directory):
         _need(fragment['sha256'] == profile['fragment_sha256']
               == unit['fragment_sha256'], 'fragment hash mismatch')
         fragment_bytes = base64.b64decode(fragment['content'])
+        fragment_lines = fragment_bytes.decode('utf-8',
+                                               errors='strict').splitlines()
+        _need('RefuseManualStart=yes' in fragment_lines,
+              'fragment lacks the fixed RefuseManualStart=yes')
+        _need('WantedBy=multi-user.target' in fragment_lines,
+              'fragment lacks the fixed boot enablement')
         execstart = fragment_execstart(fragment_bytes)
         _need(execstart[0] == profile['payload_path'],
               'fragment ExecStart does not bind the payload')
@@ -393,6 +603,30 @@ def resume(profile, output_directory):
         raw.write('payload', **payload_read)
         _need(payload_read['sha256'] == profile['payload_sha256']
               == payload['sha256'], 'payload hash mismatch')
+
+        link = _link_identity(profile['enable_link_path'])
+        link_parent = _directory_identity(
+            Path(profile['enable_link_path']).parent)
+        unit_parent = _directory_identity(
+            Path(profile['fragment_path']).parent)
+        payload_parent = _directory_identity(
+            Path(profile['payload_path']).parent)
+        exe_fd = _exe_fd_identity(actor['pid'])
+        raw.write('enable-link', value=link, link_parent=link_parent,
+                  unit_parent=unit_parent, payload_parent=payload_parent,
+                  exe_fd=exe_fd)
+        _need(link['target'] == profile['fragment_path'],
+              'enable link target differs from the fixed unit')
+        _need(link['uid'] == 0
+              and not link_parent['mode'] & 0o022
+              and link_parent['uid'] == 0,
+              'enable link or its parent is not root protected')
+        _need(unit_parent['uid'] == 0 and not unit_parent['mode'] & 0o022,
+              'unit parent is not root protected')
+        _need(exe_fd['path'] == profile['payload_path']
+              and (exe_fd['device'], exe_fd['inode'])
+              == (payload_read['device'], payload_read['inode']),
+              'exec fd does not bind the persistent payload inode')
 
         facts = _process_facts(actor['pid'])
         exe_read = bounded_bytes(_read_exe(actor['pid']),
@@ -415,7 +649,8 @@ def resume(profile, output_directory):
         journal_raw = journal['stdout'].encode('utf-8')
         summary = check_journal(journal_raw, profile, unit, actor,
                                 int(properties[
-                                    'ExecMainStartTimestampMonotonic']))
+                                    'ExecMainStartTimestampMonotonic']),
+                                identity['image'])
         summary['argv'] = list(journal['argv'])
         raw.write('journal', **summary)
         _exclusive_file(output / 'journal.jsonl', journal_raw)
@@ -450,6 +685,17 @@ def resume(profile, output_directory):
         show2 = _run_command(show_argv(profile['unit_name']), remaining())
         properties2 = (parse_show(show2['stdout'])
                        if show2['rc'] == 0 else {})
+        manual2 = _run_command(manual_show_argv(profile['unit_name']),
+                               remaining())
+        manual_props2 = {}
+        for line in (manual2.get('stdout') or '').splitlines():
+            if line.strip() and '=' in line:
+                key, value = line.split('=', 1)
+                manual_props2[key] = value
+        fragment2 = _stable_read(profile['fragment_path'])
+        payload2 = _stable_read(profile['payload_path'])
+        link2 = _link_identity(profile['enable_link_path'])
+        exe_fd2 = _exe_fd_identity(actor['pid'])
         raw.write('recheck',
                   process={key: facts2.get(key) for key in PROCESS_FACT_KEYS},
                   manager={key: identity_again[key] for key in
@@ -457,13 +703,23 @@ def resume(profile, output_directory):
                             'image_sha256')},
                   show_rc=show2['rc'],
                   invocation_id=properties2.get('InvocationID'),
-                  main_pid=properties2.get('MainPID'))
+                  main_pid=properties2.get('MainPID'),
+                  manual_rc=manual2['rc'],
+                  refuse_manual_start=manual_props2.get('RefuseManualStart'),
+                  fragment=file_identity(fragment2),
+                  fragment_content_sha256=fragment2['sha256'],
+                  payload=file_identity(payload2),
+                  payload_content_sha256=payload2['sha256'],
+                  link=link2, exe_fd=exe_fd2)
         _need(show2['rc'] == 0
               and properties2.get('InvocationID') == unit['invocation_id']
               and properties2.get('MainPID') == str(actor['pid'])
               and properties2.get('FragmentPath')
               == properties['FragmentPath'],
               'unit recheck drifted')
+        _need(manual2['rc'] == 0
+              and manual_props2.get('RefuseManualStart') == 'yes',
+              'loaded RefuseManualStart recheck drifted')
         for key in ('pid', 'birth', 'uids', 'gids', 'image', 'image_sha256',
                     'cgroup', 'cmdline'):
             _need(facts2.get(key) == facts.get(key),
@@ -474,40 +730,23 @@ def resume(profile, output_directory):
               and identity_again['image'] == identity['image']
               and identity_again['image_sha256'] == identity['image_sha256'],
               'manager recheck drifted')
+        _need(file_identity(fragment2) == file_identity(fragment)
+              and file_identity(payload2) == file_identity(payload_read)
+              and link2 == link and exe_fd2 == exe_fd,
+              'persistent object recheck drifted')
 
         raw.write('observation-complete', observed_at=_now_iso(),
                   records=raw.count)
         raw.close()
         raw = None
-        observation_doc = dict(
-            schema=SOURCE, kind='boot-resume-observation',
-            vm_uuid=profile['vm_uuid'], boot_id=profile['boot_id'],
-            unit=dict(name=unit['name'],
-                      fragment_path=unit['fragment_path'],
-                      fragment_sha256=unit['fragment_sha256'],
-                      fragment_identity=unit['fragment_identity'],
-                      fragment_binding=binding,
-                      invocation_id=unit['invocation_id'],
-                      unit_file_state=unit['unit_file_state'],
-                      main_pid=actor['pid'],
-                      exec_main_start_monotonic_us=int(
-                          properties['ExecMainStartTimestampMonotonic']),
-                      execstart=execstart),
-            payload=dict(path=payload['path'], sha256=payload['sha256'],
-                         size=payload['size'], identity=payload['identity']),
-            actor=dict(pid=actor['pid'], birth=actor['birth'],
-                       uid=actor['uid'], gid=actor['gid'],
-                       exe=actor['exe'], exe_sha256=actor['exe_sha256'],
-                       cgroup=actor['cgroup'], cmdline=actor['cmdline']),
-            manager=dict(pid=1, birth=identity['birth'],
-                         image_sha256=identity['image_sha256'],
-                         peer=peer),
-            target=target,
-            journal=summary,
-            scope=dict(apply_request=request, apply_receipt=receipt,
-                       generation=1, ready_ns=ready_ns,
-                       source_hashes=source_hashes),
-            limitations=list(LIMITATIONS))
+        observation_doc = build_observation_document(
+            profile=profile, unit=unit, actor=actor, payload=payload,
+            identity=identity, peer=peer, target=target, summary=summary,
+            binding=binding, properties=properties, execstart=execstart,
+            fragment=fragment, payload_read=payload_read, link=link,
+            link_parent=link_parent, unit_parent=unit_parent,
+            payload_parent=payload_parent, exe_fd=exe_fd, request=request,
+            receipt=receipt, ready_ns=ready_ns, source_hashes=source_hashes)
         _exclusive_file(output / 'observation.json',
                         _canonical(observation_doc).encode())
         for name in RESUME_FILES:
@@ -638,17 +877,13 @@ def finish(profile, output_directory):
     return finish_doc, dict(output=str(output), manifest=manifest)
 
 
-def _check_manifest(output, manifest, names, label):
+def _check_manifest(output, manifest, names, label, transport_record=None):
     _need(isinstance(manifest, dict) and manifest.get('source') == SOURCE,
           label + ' manifest source differs')
     st = output.lstat()
     _need(stat.S_ISDIR(st.st_mode) and not output.is_symlink(),
           label + ' output replaced')
     directory = manifest.get('directory') or {}
-    _need(directory.get('device') == st.st_dev
-          and directory.get('inode') == st.st_ino
-          and directory.get('mode') == stat.S_IMODE(st.st_mode),
-          label + ' output replaced')
     listing = set(manifest.get('files') or {})
     _need(listing == set(names), label + ' manifest inventory',
           repr(sorted(listing)))
@@ -659,31 +894,117 @@ def _check_manifest(output, manifest, names, label):
               name)
         current = path.stat()
         _need(stat.S_ISREG(current.st_mode), label + ' not regular', name)
-        _need((current.st_ino, current.st_dev)
-              == (entry['inode'], entry['device']),
-              label + ' replaced with same bytes', name)
         _need(current.st_size == entry['size']
               and current.st_nlink == 1
               and stat.S_IMODE(current.st_mode) == entry['mode'] == 0o400,
               label + ' protection changed', name)
         _need(sha(path.read_bytes()) == entry['sha256'],
               label + ' hash mismatch', name)
+    if transport_record is None:
+        _need(directory.get('device') == st.st_dev
+              and directory.get('inode') == st.st_ino
+              and directory.get('mode') == stat.S_IMODE(st.st_mode),
+              label + ' output replaced')
+        for name in sorted(names):
+            entry = manifest['files'][name]
+            current = (output / name).stat()
+            _need((current.st_ino, current.st_dev)
+                  == (entry['inode'], entry['device']),
+                  label + ' replaced with same bytes', name)
+        return
+    # Explicit cross-filesystem transport landing: the guest manifest
+    # bytes and every guest stat identity stay the originals; the host
+    # copy is pinned by content hash, protection and a stable two-read
+    # directory identity instead of the guest device/inode.
+    _need(isinstance(transport_record, dict)
+          and set(transport_record) == {'manifest_sha256', 'directory',
+                                        'files'},
+          label + ' transport record malformed')
+    _need(transport_record['manifest_sha256']
+          == sha(_canonical(manifest).encode()),
+          label + ' guest manifest changed')
+    _need(transport_record['directory'] == directory,
+          label + ' guest directory identity differs')
+    _need(set(transport_record['files']) == set(names),
+          label + ' transport inventory differs')
+    for name in sorted(names):
+        _need(transport_record['files'][name] == manifest['files'][name],
+              label + ' guest file identity differs: ' + name)
+    st_again = output.lstat()
+    _need((st_again.st_dev, st_again.st_ino, st_again.st_mode)
+          == (st.st_dev, st.st_ino, st.st_mode),
+          label + ' host directory changed during read')
 
 
-def normalize_boot_resume(output_directory, expected_profile):
-    """Re-derive the resume observation from its sealed originals.
+def _normalize_bundle(bundle_dir, inner, transport_record=None):
+    """Re-derive the sealed boot-service observation.
+
+    Same-filesystem reads use the accepted boot-service decoder directly.
+    An explicit transport landing verifies the guest manifest and stat
+    identities against the copied files and then re-decodes the records.
+    """
+    if transport_record is None:
+        observation = normalize_boot_service(bundle_dir, inner)
+        _need('decode_trust' not in observation,
+              'sealed bundle channel required')
+        return observation
+    output = Path(bundle_dir)
+    _need((output / 'manifest.json').is_file(), 'bundle manifest missing')
+    manifest = json.loads((output / 'manifest.json').read_bytes())
+    _need(isinstance(manifest, dict)
+          and manifest.get('source') == BOOT_SERVICE_SOURCE
+          and set(manifest.get('files') or {}) == {'raw.ndjson',
+                                                   'observation.json'},
+          'bundle manifest malformed')
+    _need(isinstance(transport_record, dict)
+          and set(transport_record) == {'manifest_sha256', 'directory',
+                                        'files'}
+          and transport_record['manifest_sha256']
+          == sha(_canonical(manifest).encode())
+          and transport_record['directory'] == manifest.get('directory')
+          and transport_record['files'] == manifest.get('files'),
+          'bundle transport record differs from the guest manifest')
+    for name in ('raw.ndjson', 'observation.json'):
+        path = output / name
+        entry = manifest['files'][name]
+        _need(path.is_file() and not path.is_symlink(),
+              'bundle original missing', name)
+        current = path.stat()
+        _need(current.st_size == entry['size'] and current.st_nlink == 1
+              and stat.S_IMODE(current.st_mode) == entry['mode'] == 0o400
+              and sha(path.read_bytes()) == entry['sha256'],
+              'bundle original differs from the guest manifest', name)
+    st = output.lstat()
+    st_again = output.lstat()
+    _need(stat.S_ISDIR(st.st_mode) and not output.is_symlink()
+          and (st.st_dev, st.st_ino, st.st_mode)
+          == (st_again.st_dev, st_again.st_ino, st_again.st_mode),
+          'bundle directory replaced')
+    observation = check_records(_load_records(output / 'raw.ndjson'), inner)
+    stored = json.loads((output / 'observation.json').read_bytes())
+    _need(stored == observation,
+          'bundle observation differs from the sealed raw records')
+    return observation
+
+
+def normalize_boot_resume(output_directory, expected_profile,
+                          transport=None):
+    """Re-derive the COMPLETE resume observation from its sealed originals.
 
     The manifest inventory, directory identity and every file's
-    inode/hash/protection are re-verified; the sealed bundle is re-decoded
-    and all recorded live observations are cross-checked against it. No live
-    access happens here - this is the host-side replay channel.
+    inode/hash/protection are re-verified; the sealed bundle is re-decoded;
+    the manager identity is bound to the independent sealed boot-service
+    manager; the journal is re-checked structurally; and the canonical
+    observation document is rebuilt from the records and compared VERBATIM
+    with the sealed observation. No live access happens here.
     """
     profile = validate_profile(dict(expected_profile))
     inner = boot_profile(profile)
     output = Path(output_directory)
     _need((output / 'manifest.json').is_file(), 'resume output missing')
     manifest = json.loads((output / 'manifest.json').read_text())
-    _check_manifest(output, manifest, RESUME_FILES, 'resume')
+    _check_manifest(output, manifest, RESUME_FILES, 'resume',
+                    None if transport is None else transport.get('resume'))
     records = _load_records(output / 'raw.ndjson')
     observation = json.loads((output / 'observation.json').read_text())
     journal_raw = (output / 'journal.jsonl').read_bytes()
@@ -703,68 +1024,152 @@ def normalize_boot_resume(output_directory, expected_profile):
               'record time moved backwards')
     _need(records[-1]['monotonic_ns'] - records[0]['monotonic_ns']
           <= profile['window_seconds'] * 10 ** 9, 'window exceeded')
+    by_kind = {record['kind']: record for record in records}
     intent = records[0]
     _need(intent.get('source') == SOURCE
           and intent.get('profile') == profile, 'intent profile differs')
-    kernel = records[1]['value']
+    kernel = by_kind['kernel-identity']['value']
     _need(kernel.get('boot_id') == profile['boot_id']
           and kernel.get('vm_uuid') == profile['vm_uuid'],
           'kernel identity differs')
-    manager_record = records[2]
-    _need(list(manager_record.get('peer') or []) == [1, 0, 0],
-          'manager peer differs')
-    _need(manager_record.get('identity', {}).get('uids') == [0] * 4,
-          'manager identity differs')
-    bundle_observation = normalize_boot_service(profile['bundle_dir'], inner)
-    _need('decode_trust' not in bundle_observation,
-          'sealed bundle channel required')
-    _need(records[3].get('observation_sha256')
+
+    identity = copy.deepcopy(by_kind['manager-open'].get('identity') or {})
+    peer = list(by_kind['manager-open'].get('peer') or [])
+    _need(peer == [1, 0, 0], 'manager peer differs')
+    _need(type(identity.get('pid')) is int and identity['pid'] == 1
+          and isinstance(identity.get('birth'), str)
+          and identity['birth'].isdigit()
+          and isinstance(identity.get('uids'), list)
+          and len(identity['uids']) == 4
+          and all(type(x) is int and x == 0 for x in identity['uids'])
+          and isinstance(identity.get('gids'), list)
+          and len(identity['gids']) == 4
+          and all(type(x) is int and x == 0 for x in identity['gids'])
+          and isinstance(identity.get('image'), str)
+          and identity['image'].startswith('/')
+          and _hex64(identity.get('image_sha256')),
+          'manager identity malformed')
+
+    bundle_observation = _normalize_bundle(
+        profile['bundle_dir'], inner,
+        None if transport is None else transport.get('bundle'))
+    _need(by_kind['bundle'].get('observation_sha256')
           == sha(_canonical(bundle_observation).encode()),
           'recorded bundle observation differs from the sealed bundle')
     actor, unit, payload = (bundle_observation['actor'],
                             bundle_observation['unit'],
                             bundle_observation['payload'])
-    show = records[4]
+    sealed_manager = bundle_observation.get('manager') or {}
+    _need(sealed_manager.get('peer') == peer
+          and sealed_manager.get('pid1') == identity,
+          'manager identity differs from the independent sealed boot bundle')
+
+    show = by_kind['unit-show']
     _need(show.get('rc') == 0 and show.get('stdout'), 'show record differs')
     properties = parse_show(show['stdout'])
     main_pid = check_properties(properties, inner)
     _need(main_pid == actor['pid'], 'recorded show pid differs')
     _need(properties['InvocationID'] == unit['invocation_id'],
           'recorded show invocation differs')
-    cat = records[5]
+    manual = by_kind['manual-show']
+    manual_props = {}
+    for line in (manual.get('stdout') or '').splitlines():
+        if line.strip() and '=' in line:
+            key, value = line.split('=', 1)
+            manual_props[key] = value
+    _need(manual.get('rc') == 0
+          and manual_props.get('RefuseManualStart') == 'yes',
+          'recorded RefuseManualStart differs')
+    cat = by_kind['unit-cat']
     _need(cat.get('rc') == 0
           and '# ' + properties['FragmentPath'] in cat.get('stdout', ''),
           'cat record differs')
-    fragment = records[6]
+
+    fragment = by_kind['fragment']
     _need(fragment.get('sha256') == profile['fragment_sha256']
           == unit['fragment_sha256'], 'fragment record differs')
-    payload_record = records[7]
+    _need(fragment.get('device') == unit['fragment_identity'].get('device')
+          and fragment.get('inode') == unit['fragment_identity'].get('inode')
+          and fragment.get('size') == unit['fragment_identity'].get('size'),
+          'fragment record differs from the sealed bundle identity')
+    fragment_bytes = base64.b64decode(fragment['content'])
+    fragment_lines = fragment_bytes.decode('utf-8',
+                                           errors='strict').splitlines()
+    _need('RefuseManualStart=yes' in fragment_lines
+          and 'WantedBy=multi-user.target' in fragment_lines,
+          'recorded fragment lacks the fixed start/enablement shape')
+    execstart = fragment_execstart(fragment_bytes)
+    _need(execstart[0] == profile['payload_path'],
+          'recorded fragment ExecStart does not bind the payload')
+    fragment_user(fragment_bytes, profile['expected_uid'])
+    check_loaded_execstart(properties['ExecStart'], inner,
+                           fragment_argv=execstart)
+    payload_record = by_kind['payload']
     _need(payload_record.get('sha256') == profile['payload_sha256']
           == payload['sha256'], 'payload record differs')
-    process = records[8]
+    _need(payload_record.get('device') == payload['identity'].get('device')
+          and payload_record.get('inode') == payload['identity'].get('inode')
+          and payload_record.get('size') == payload.get('size'),
+          'payload record differs from the sealed bundle identity')
+
+    link_record = by_kind['enable-link']
+    link = link_record.get('value') or {}
+    link_parent = link_record.get('link_parent') or {}
+    unit_parent = link_record.get('unit_parent') or {}
+    payload_parent = link_record.get('payload_parent') or {}
+    exe_fd = link_record.get('exe_fd') or {}
+    _need(link.get('path') == profile['enable_link_path']
+          and link.get('target') == profile['fragment_path']
+          and link.get('uid') == 0
+          and link_parent.get('uid') == 0
+          and not int(link_parent.get('mode') or 0) & 0o022
+          and unit_parent.get('uid') == 0
+          and not int(unit_parent.get('mode') or 0) & 0o022,
+          'recorded enable link/parent differs')
+    _need(exe_fd.get('path') == profile['payload_path']
+          and (exe_fd.get('device'), exe_fd.get('inode'))
+          == (payload_record.get('device'), payload_record.get('inode')),
+          'recorded exec fd does not bind the persistent payload inode')
+
+    process = by_kind['process']
+    facts = copy.deepcopy(process.get('value') or {})
     _need(process.get('pid') == actor['pid']
-          and process.get('value', {}).get('birth') == actor['birth']
-          and process.get('value', {}).get('cmdline') == actor['cmdline']
           and process.get('exe_read_sha256') == payload['sha256'],
           'process record differs from the sealed observation')
-    journal_record = dict(records[9])
+    for key, expected in (
+            ('birth', actor['birth']), ('uids', [actor['uid']] * 4),
+            ('gids', [actor['gid']] * 4), ('image', actor['exe']),
+            ('image_sha256', actor['exe_sha256']),
+            ('cgroup', actor['cgroup']), ('cmdline', actor['cmdline'])):
+        _need(facts.get(key) == expected,
+              'process record differs from the sealed observation: ' + key)
+    _need(type(facts.get('uids')) is list
+          and facts['uids'][:1] == [actor['uid']]
+          and type(facts.get('gids')) is list
+          and facts['gids'][:1] == [actor['gid']],
+          'process credentials are not strict integer slots')
+
+    journal_record = dict(by_kind['journal'])
+    for key in ('index', 'kind', 'monotonic_ns'):
+        journal_record.pop(key, None)
     _need(journal_record.pop('argv', None)
           == journal_argv(profile['boot_id'], profile['unit_name']),
           'journal argv differs')
     summary = dict(journal_record)
     summary['argv'] = journal_argv(profile['boot_id'], profile['unit_name'])
+    fresh_summary = check_journal(
+        journal_raw, profile, unit, actor,
+        int(properties['ExecMainStartTimestampMonotonic']),
+        identity['image'])
+    fresh_summary['argv'] = summary['argv']
+    _need(fresh_summary == summary,
+          'journal record differs from the replayed original')
     _need(sha(journal_raw) == summary['sha256']
           and len(journal_raw) == summary['size'],
           'journal original differs from its record')
-    _need(summary.get('unit_records', 0) > 0
-          and summary.get('main_records', 0) > 0,
-          'journal record incomplete')
-    _need(summary.get('invocation_ids') == [unit['invocation_id']],
-          'journal invocation record differs')
-    check_journal(journal_raw, profile, unit, actor,
-                  int(properties['ExecMainStartTimestampMonotonic']))
-    apply_request = records[10].get('request')
-    receipt = records[11].get('receipt')
+
+    apply_request = by_kind['scope-apply-intent'].get('request')
+    receipt = by_kind['scope-apply-receipt'].get('receipt')
     _need(isinstance(apply_request, dict) and isinstance(receipt, dict),
           'scope records missing')
     scope_binding = dict(session_id=profile['session_id'],
@@ -785,32 +1190,45 @@ def normalize_boot_resume(output_directory, expected_profile):
     for name, value in source_hashes.items():
         _need(receipt.get('source_hashes', {}).get(name) == value,
               'scope receipt source hash differs', name)
-    recheck = records[12]
+    ready_ns = next((row['ready_ns'] for row in receipt['transitions']
+                     if row.get('action') == 'applied'
+                     and type(row.get('ready_ns')) is int), None)
+    _need(ready_ns is not None, 'scope ready marker missing')
+
+    recheck = by_kind['recheck']
     _need(recheck.get('show_rc') == 0
           and recheck.get('invocation_id') == unit['invocation_id']
           and recheck.get('main_pid') == str(actor['pid'])
-          and recheck.get('process', {}).get('birth') == actor['birth']
-          and recheck.get('process', {}).get('cmdline') == actor['cmdline']
-          and recheck.get('manager', {}).get('image_sha256')
-          == records[2]['identity']['image_sha256'],
+          and recheck.get('manual_rc') == 0
+          and recheck.get('refuse_manual_start') == 'yes',
           'recheck record drifted')
-    _need(observation.get('vm_uuid') == profile['vm_uuid']
-          and observation.get('boot_id') == profile['boot_id']
-          and observation.get('target') == target
-          and observation.get('actor', {}).get('pid') == actor['pid']
-          and observation.get('actor', {}).get('birth') == actor['birth']
-          and observation.get('unit', {}).get('invocation_id')
-          == unit['invocation_id']
-          and observation.get('payload', {}).get('sha256')
-          == payload['sha256']
-          and observation.get('journal', {}).get('sha256')
-          == summary['sha256']
-          and observation.get('scope', {}).get('apply_receipt') == receipt,
-          'observation differs from the replayed originals')
+    for key in ('pid', 'birth', 'uids', 'gids', 'image', 'image_sha256',
+                'cgroup', 'cmdline'):
+        _need(recheck.get('process', {}).get(key) == facts.get(key),
+              'recheck process drifted: ' + key)
+    _need(recheck.get('manager') == identity, 'recheck manager drifted')
+    _need(recheck.get('fragment') == file_identity(fragment)
+          and recheck.get('payload') == file_identity(payload_record)
+          and recheck.get('link') == link
+          and recheck.get('exe_fd') == exe_fd,
+          'recheck persistent object drifted')
+
+    rebuilt = build_observation_document(
+        profile=profile, unit=unit, actor=actor, payload=payload,
+        identity=identity, peer=peer, target=target, summary=summary,
+        binding=bind_fragment_path(properties, inner),
+        properties=properties, execstart=execstart, fragment=fragment,
+        payload_read=payload_record, link=link, link_parent=link_parent,
+        unit_parent=unit_parent, payload_parent=payload_parent,
+        exe_fd=exe_fd, request=apply_request, receipt=receipt,
+        ready_ns=ready_ns, source_hashes=source_hashes)
+    _need(rebuilt == observation,
+          'observation differs from the complete replay')
     return observation
 
 
-def normalize_boot_resume_finish(output_directory, expected_profile):
+def normalize_boot_resume_finish(output_directory, expected_profile,
+                                 transport=None):
     """Replay the stop/export originals; every copied product is re-hashed."""
     profile = validate_profile(dict(expected_profile))
     output = Path(output_directory)
@@ -818,7 +1236,8 @@ def normalize_boot_resume_finish(output_directory, expected_profile):
     manifest = json.loads((output / 'manifest.json').read_text())
     names = set(manifest.get('files') or {})
     _need('finish.json' in names, 'finish document missing')
-    _check_manifest(output, manifest, names, 'finish')
+    _check_manifest(output, manifest, names, 'finish',
+                    None if transport is None else transport.get('finish'))
     document = json.loads((output / 'finish.json').read_text())
     _need(isinstance(document, dict)
           and document.get('schema') == SOURCE
