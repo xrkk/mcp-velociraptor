@@ -250,8 +250,10 @@ def parse_loaded_execstart(text):
 
     Supported form: `{ path=P ; argv[]=P t1 t2 ; key=value ; ... }` with at
     most one path segment and exactly one argv[] segment (one supported
-    execution definition). Anything else is refused with a specific code;
-    there is no substring, shlex or shell fallback.
+    execution definition). Known start_time/stop_time metadata may contain
+    spaces inside square brackets; these values never supply command tokens.
+    Other unsupported structures are refused with a specific code; there is
+    no substring, shlex or shell fallback.
     """
     need(isinstance(text, str) and text.startswith('{') and text.endswith('}'),
          'loaded ExecStart structure unsupported', repr(text[:80]))
@@ -273,6 +275,12 @@ def parse_loaded_execstart(text):
             need(argv is None, 'loaded ExecStart structure unsupported',
                  'multiple argv segments')
             argv = _split_quoted(segment[len('argv[]='):])
+        elif segment.startswith(('start_time=', 'stop_time=')):
+            # Human-readable timestamps are opaque metadata, not argv tokens.
+            # Allow their spaces without interpreting extra execution syntax.
+            value = segment.split('=', 1)[1]
+            need(re.fullmatch(r'\[[^\[\]{};"\\\r\n\t]*\]', value) is not None,
+                 'loaded ExecStart structure unsupported', repr(segment[:60]))
         else:
             need('=' in segment and ' ' not in segment
                  and '"' not in segment and '\\' not in segment,

@@ -760,6 +760,72 @@ class BootServiceCollectorTests(unittest.TestCase):
                 ' ; ignore_errors=no', '')
         boot.normalize_boot_service(dict(records=mutated2), profile)
 
+    def test_loaded_time_metadata_collects_and_decodes(self):
+        self.fixture.patch(self)
+        payload = str(self.fixture.payload_path)
+        self.fixture.properties['ExecStart'] = (
+            '{ path=%s ; argv[]=%s --run benign ; ignore_errors=no ;'
+            ' start_time=[Mon 2025-01-06 12:34:56 UTC] ; stop_time=[n/a] ;'
+            ' pid=4242 ; code=(null) ; status=0/0 }' % (payload, payload))
+        observation, bundle = self.collect()
+        self.fixture.sealed = True
+        self.assertEqual(boot.normalize_boot_service(
+            bundle['output'], self.fixture.profile()), observation)
+        self.assertEqual(observation['execstart'],
+                         [payload, '--run', 'benign'])
+
+    def test_loaded_time_metadata_cannot_substitute_command_binding(self):
+        cases = [
+            ('foreign-path', lambda p: (p + '-foreign',
+                                        p + '-foreign --run benign'),
+             'loaded ExecStart path mismatch'),
+            ('foreign-argv-head', lambda p: (p, '/usr/bin/other --run benign'),
+             'loaded ExecStart argv head mismatch'),
+            ('different-argument', lambda p: (p, p + ' --run other'),
+             'loaded ExecStart argv differs from fragment'),
+        ]
+        for name, build, code in cases:
+            with self.subTest(case=name):
+                fixture = Harness()
+                self.addCleanup(fixture.cleanup)
+                fixture.patch(self)
+                path, argv = build(str(fixture.payload_path))
+                fixture.properties['ExecStart'] = (
+                    '{ path=%s ; argv[]=%s ;'
+                    ' start_time=[Mon 2025-01-06 12:34:56 UTC] ;'
+                    ' stop_time=[n/a] ; status=0/0 }' % (path, argv))
+                output = fixture.root / 'time-negative' / 'out'
+                output.parent.mkdir()
+                with self.assertRaises(boot.BootServiceError) as caught:
+                    boot.collect_boot_service(fixture.profile(), output)
+                self.assertEqual(caught.exception.code, code)
+                self.assertFalse((output / 'observation.json').exists())
+                self.assertFalse((output / 'manifest.json').exists())
+
+    def test_loaded_time_metadata_rejects_ambiguous_structures(self):
+        cases = [
+            'start_time=[Mon 2025-01-06 12:34:56 UTC',
+            'stop_time=n/a',
+            'start_time=[nested [time]]',
+            'start_time=[time;path=/usr/bin/other]',
+            'start_time=[time{other}]',
+            'start_time=["quoted time"]',
+            'start_time=[escaped' + chr(92) + ' time]',
+            'start_time=[line' + chr(10) + 'break]',
+            'unknown_time=[Mon 2025-01-06 12:34:56 UTC]',
+            'start_time=[n/a] ; path=/usr/bin/other',
+            'start_time=[n/a] ; argv[]=/usr/bin/other',
+        ]
+        for metadata in cases:
+            with self.subTest(metadata=metadata):
+                text = ('{ path=/usr/bin/benign ;'
+                        ' argv[]=/usr/bin/benign --run benign ; %s }'
+                        % metadata)
+                with self.assertRaises(boot.BootServiceError) as caught:
+                    boot.parse_loaded_execstart(text)
+                self.assertEqual(caught.exception.code,
+                                 'loaded ExecStart structure unsupported')
+
     def test_quoted_loaded_tokens_parse_to_same_argv(self):
         fixture = Harness()
         self.addCleanup(fixture.cleanup)
