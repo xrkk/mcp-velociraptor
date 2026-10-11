@@ -38,7 +38,8 @@ SCOPE_MODULES = ('velociraptor_linux_scope.py', 'velociraptor_linux_worker.py',
                  'velociraptor_linux_probe.py')
 UNIT_STARTED_MESSAGE_ID = '39f53479d3a045ac8e11786248231fbf'
 WANTS_DIR = '/etc/systemd/system/multi-user.target.wants'
-MANUAL_SHOW_PROPERTIES = ('RefuseManualStart',)
+MANUAL_SHOW_PROPERTIES = ('RefuseManualStart', 'After', 'Requires')
+JOURNALD_DEPENDENCY = 'systemd-journald.service'
 PROFILE_FIELDS = {'unit_name', 'vm_uuid', 'boot_id', 'expected_uid',
                   'payload_path', 'payload_sha256', 'fragment_path',
                   'fragment_sha256', 'enable_link_path', 'bundle_dir',
@@ -284,7 +285,14 @@ def _client(deployment_root, binding):
 
 
 def journal_argv(boot_id, unit_name):
-    return ['journalctl', '--boot', boot_id, '--unit', unit_name,
+    """The one unambiguous fixed journal argv.
+
+    `--boot=<32hex>` is the only accepted form: the separate-argument form
+    with the canonical hyphenated UUID is rejected by the real journalctl
+    (`Failed to add match ... invalid argument`). The boot id is normalized
+    losslessly through boot_key and malformed ids are refused.
+    """
+    return ['journalctl', '--boot=' + boot_key(boot_id), '--unit', unit_name,
             '--output=json', '--no-pager']
 
 
@@ -445,12 +453,37 @@ def check_journal(raw, profile, unit, actor, main_start_us, manager_image):
                 message_ids=message_ids)
 
 
+def derive_ordering(manual_props, manual_argv, fragment_lines):
+    """Derive and guard the loaded journald ordering from real originals.
+
+    The ordered captured shape carries After= and Requires= exactly for
+    systemd-journald.service in its fragment; its loaded properties must
+    list the same dependency in both token sets. The legacy shape has
+    neither line and keeps its previous semantics. A partial pair, an
+    arbitrary dependency value or a loaded set without the fixed
+    dependency is refused.
+    """
+    after = sorted(t for t in (manual_props.get('After') or '').split() if t)
+    requires = sorted(t for t in (manual_props.get('Requires') or '').split()
+                      if t)
+    after_line = ('After=' + JOURNALD_DEPENDENCY) in fragment_lines
+    requires_line = ('Requires=' + JOURNALD_DEPENDENCY) in fragment_lines
+    _need(after_line == requires_line,
+          'partial journald ordering in the fragment')
+    if after_line:
+        _need(JOURNALD_DEPENDENCY in after
+              and JOURNALD_DEPENDENCY in requires,
+              'loaded ordering lacks the fixed journald dependency')
+    return dict(required=after_line, after=after, requires=requires,
+                argv=list(manual_argv))
+
+
 def build_observation_document(*, profile, unit, actor, payload, identity,
                                 peer, target, summary, binding, properties,
                                 execstart, fragment, payload_read, link,
                                 link_parent, unit_parent, payload_parent,
                                 exe_fd, request, receipt, ready_ns,
-                                source_hashes):
+                                source_hashes, ordering):
     """The one canonical resume observation shape.
 
     Both the live producer and the host-side replay build the document
@@ -486,6 +519,7 @@ def build_observation_document(*, profile, unit, actor, payload, identity,
                      pid1={key: identity[key] for key in
                            ('pid', 'birth', 'uids', 'gids', 'image',
                             'image_sha256')}),
+        ordering=dict(ordering),
         target=dict(target), journal=dict(summary),
         scope=dict(apply_request=request, apply_receipt=receipt,
                    generation=1, ready_ns=ready_ns,
@@ -570,6 +604,8 @@ def resume(profile, output_directory):
             if line.strip():
                 _need('=' in line, 'unparsed manual show line', line)
                 key, value = line.split('=', 1)
+                _need(key not in manual_props, 'duplicate manual show line',
+                      key)
                 manual_props[key] = value
         _need(manual_props.get('RefuseManualStart') == 'yes',
               'loaded RefuseManualStart is not yes',
@@ -592,6 +628,8 @@ def resume(profile, output_directory):
               'fragment lacks the fixed RefuseManualStart=yes')
         _need('WantedBy=multi-user.target' in fragment_lines,
               'fragment lacks the fixed boot enablement')
+        ordering = derive_ordering(manual_props, manual['argv'],
+                                   fragment_lines)
         execstart = fragment_execstart(fragment_bytes)
         _need(execstart[0] == profile['payload_path'],
               'fragment ExecStart does not bind the payload')
@@ -693,6 +731,11 @@ def resume(profile, output_directory):
                 key, value = line.split('=', 1)
                 manual_props2[key] = value
         fragment2 = _stable_read(profile['fragment_path'])
+        fragment2_lines = base64.b64decode(
+            fragment2['content']).decode('utf-8',
+                                        errors='strict').splitlines()
+        ordering2 = derive_ordering(manual_props2, manual2['argv'],
+                                    fragment2_lines)
         payload2 = _stable_read(profile['payload_path'])
         link2 = _link_identity(profile['enable_link_path'])
         exe_fd2 = _exe_fd_identity(actor['pid'])
@@ -718,8 +761,9 @@ def resume(profile, output_directory):
               == properties['FragmentPath'],
               'unit recheck drifted')
         _need(manual2['rc'] == 0
-              and manual_props2.get('RefuseManualStart') == 'yes',
-              'loaded RefuseManualStart recheck drifted')
+              and manual_props2.get('RefuseManualStart') == 'yes'
+              and ordering2 == ordering,
+              'loaded RefuseManualStart/ordering recheck drifted')
         for key in ('pid', 'birth', 'uids', 'gids', 'image', 'image_sha256',
                     'cgroup', 'cmdline'):
             _need(facts2.get(key) == facts.get(key),
@@ -746,7 +790,8 @@ def resume(profile, output_directory):
             fragment=fragment, payload_read=payload_read, link=link,
             link_parent=link_parent, unit_parent=unit_parent,
             payload_parent=payload_parent, exe_fd=exe_fd, request=request,
-            receipt=receipt, ready_ns=ready_ns, source_hashes=source_hashes)
+            receipt=receipt, ready_ns=ready_ns, source_hashes=source_hashes,
+            ordering=ordering)
         _exclusive_file(output / 'observation.json',
                         _canonical(observation_doc).encode())
         for name in RESUME_FILES:
@@ -1072,13 +1117,14 @@ def normalize_boot_resume(output_directory, expected_profile,
     _need(properties['InvocationID'] == unit['invocation_id'],
           'recorded show invocation differs')
     manual = by_kind['manual-show']
+    _need(manual.get('rc') == 0, 'recorded manual show rc differs')
     manual_props = {}
     for line in (manual.get('stdout') or '').splitlines():
         if line.strip() and '=' in line:
             key, value = line.split('=', 1)
+            _need(key not in manual_props, 'duplicate manual show line', key)
             manual_props[key] = value
-    _need(manual.get('rc') == 0
-          and manual_props.get('RefuseManualStart') == 'yes',
+    _need(manual_props.get('RefuseManualStart') == 'yes',
           'recorded RefuseManualStart differs')
     cat = by_kind['unit-cat']
     _need(cat.get('rc') == 0
@@ -1098,6 +1144,7 @@ def normalize_boot_resume(output_directory, expected_profile,
     _need('RefuseManualStart=yes' in fragment_lines
           and 'WantedBy=multi-user.target' in fragment_lines,
           'recorded fragment lacks the fixed start/enablement shape')
+    ordering = derive_ordering(manual_props, manual['argv'], fragment_lines)
     execstart = fragment_execstart(fragment_bytes)
     _need(execstart[0] == profile['payload_path'],
           'recorded fragment ExecStart does not bind the payload')
@@ -1221,7 +1268,8 @@ def normalize_boot_resume(output_directory, expected_profile,
         payload_read=payload_record, link=link, link_parent=link_parent,
         unit_parent=unit_parent, payload_parent=payload_parent,
         exe_fd=exe_fd, request=apply_request, receipt=receipt,
-        ready_ns=ready_ns, source_hashes=source_hashes)
+        ready_ns=ready_ns, source_hashes=source_hashes,
+        ordering=ordering)
     _need(rebuilt == observation,
           'observation differs from the complete replay')
     return observation

@@ -38,6 +38,8 @@ PAYLOAD_BYTES = b'benign-resume-fixture-bytes\n'
 PAYLOAD_SHA = sha(PAYLOAD_BYTES)
 FRAGMENT_BYTES = (b'[Unit]\nDescription=fixture\n'
                   b'RefuseManualStart=yes\n'
+                  b'After=systemd-journald.service\n'
+                  b'Requires=systemd-journald.service\n'
                   b'[Service]\nType=simple\nUser=996\nGroup=987\n'
                   b'ExecStart=/opt/mt-gap20-fixture/payload\n'
                   b'Restart=no\n'
@@ -200,9 +202,15 @@ class Harness:
     def run_command(self, argv, timeout):
         self.calls.append(list(argv))
         if argv[:2] == ['systemctl', 'show']:
-            if len(argv) == 4 and argv[3] == '--property=RefuseManualStart':
-                return dict(argv=list(argv), rc=0,
-                            stdout='RefuseManualStart=yes\n', stderr='')
+            if len(argv) == 4 and argv[3] == (
+                    '--property=RefuseManualStart,After,Requires'):
+                return dict(
+                    argv=list(argv), rc=0,
+                    stdout='RefuseManualStart=yes\n'
+                           'After=systemd-journald.service '
+                           'systemd-journald.socket\n'
+                           'Requires=systemd-journald.service\n',
+                    stderr='')
             return dict(argv=list(argv), rc=0, stdout=self.show, stderr='')
         if argv[:2] == ['systemctl', 'cat']:
             text = '# %s\n%s' % (self.profile['fragment_path'],
@@ -318,6 +326,46 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(resume_mod.boot_key(BOOT_HEX), BOOT_HEX)
         with self.assertRaises(resume_mod.BootResumeError):
             resume_mod.boot_key('not-a-boot')
+
+
+class JournalArgvTests(unittest.TestCase):
+    def test_journal_argv_is_unambiguous_and_lossless(self):
+        canonical = resume_mod.journal_argv(
+            '4cbc0f6d-1111-4222-8333-abcdefabcdef', 'x.service')
+        hex_form = resume_mod.journal_argv(
+            '4cbc0f6d111142228333abcdefabcdef', 'x.service')
+        self.assertEqual(canonical, hex_form)
+        self.assertEqual(canonical[1],
+                         '--boot=4cbc0f6d111142228333abcdefabcdef')
+        self.assertEqual(canonical[2:], ['--unit', 'x.service',
+                                         '--output=json', '--no-pager'])
+        for broken in ('not-a-boot', '', '4cbc0f6d-1111',
+                       'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'):
+            with self.subTest(broken=broken):
+                with self.assertRaises(resume_mod.BootResumeError):
+                    resume_mod.journal_argv(broken, 'x.service')
+
+    def test_resume_journal_record_uses_the_fixed_argv(self):
+        case = ResumeFlowTests(
+            'test_resume_records_full_identity_and_replays_verbatim')
+        case.setUp()
+        try:
+            observation, bundle = case.resume()
+            output = Path(bundle['output'])
+            records = [json.loads(line) for line in
+                       (output / 'raw.ndjson').read_text().splitlines()]
+            record = next(r for r in records if r['kind'] == 'journal')
+            self.assertEqual(record['argv'],
+                             resume_mod.journal_argv(
+                                 case.profile['boot_id'],
+                                 case.profile['unit_name']))
+            observation_doc = json.loads(
+                (output / 'observation.json').read_text())
+            self.assertTrue(observation_doc['ordering']['required'])
+            self.assertIn('systemd-journald.service',
+                          observation_doc['ordering']['after'])
+        finally:
+            case.doCleanups()
 
 
 class JournalTests(unittest.TestCase):

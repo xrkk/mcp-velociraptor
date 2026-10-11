@@ -119,10 +119,21 @@ expiry. Every tool takes an explicit identity `request`; the historical `get` an
 `bind_targets` names alias query/update, with the same new request contract.
 See [scope contract](../deploy/linux/scope.md) for requirements, event limits and interrupted cleanup.
 `velociraptor_linux_boot_resume.py` re-verifies a sealed boot-service
-observation, keeps the real `journalctl --boot` record as a bounded original
-and admits the exact already-running pid/birth/uid into one professional scope
-without starting or restarting the unit; stop/export preserve every original.
-Local seam tests only - native qualification stays with the host workflow.
+observation, keeps the real journal record as a bounded original and admits
+the exact already-running pid/birth/uid into one professional scope without
+starting or restarting the unit; stop/export preserve every original. Its
+fixed journal argv is `journalctl --boot=<32hex> --unit <unit>
+--output=json --no-pager` (the canonical hyphenated UUID is normalized to
+the same 32-hex form; malformed ids are refused). The resume profile carries
+`enable_link_path` (must equal
+`/etc/systemd/system/multi-user.target.wants/<unit>`) and, for the ordered
+captured installation shape, the loaded `After`/`Requires` proof must list
+`systemd-journald.service` in both token sets; the legacy captured shape
+keeps its exact previous semantics. Cross-filesystem transport of the sealed
+directories uses an explicit `transport` record that keeps the guest
+manifest/SHA/stat identities and only re-pins the host landing. These are
+local product paths - native qualification stays with the host workflow, and
+the R21 PARTIAL result is not native acceptance.
 
 Producer outputs use the explicit
 [cross-account artifact export](../docs/artifact-export-handoff.md) before a

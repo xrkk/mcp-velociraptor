@@ -43,8 +43,10 @@ observation: the two functions start/restart/enable nothing either.
 - `resume(profile, output_directory)` re-derives the sealed boot-service
   observation, re-checks the live kernel/PID1/manager/systemctl/process and
   fragment/payload originals twice, keeps the fixed-argv
-  `journalctl --boot <boot> --unit <unit> --output=json --no-pager` record as
-  a bounded original (oversized journals are refused, never truncated), keeps
+  `journalctl --boot=<32hex> --unit <unit> --output=json --no-pager` record
+  as a bounded original (oversized journals are refused, never truncated;
+  the canonical hyphenated boot UUID is normalized to the same 32-hex form
+  and malformed ids are refused), keeps
   the fixed enable-link and parent identities and applies one professional
   kernel scope to the exact observed pid/birth/uid. Journal verification uses
   two independent record classes: PID1 manager start records (sender bound to
@@ -66,7 +68,14 @@ observation: the two functions start/restart/enable nothing either.
 The strict resume profile adds `bundle_dir`, `enable_link_path` (must equal
 `/etc/systemd/system/multi-user.target.wants/<unit>`), `deployment_root`, the
 scope `client_id`/`session_id`/`owner_id`, `lifetime_seconds`,
-`journal_max_bytes` to the boot-service profile fields. Caller-supplied PID/birth/InvocationID or
+`journal_max_bytes` to the boot-service profile fields. For the ordered
+captured installation shape (`After=`/`Requires=systemd-journald.service`
+fixed pair) the loaded ordering proof must list the same dependency in both
+token sets; the legacy exact unit shape keeps its previous semantics.
+`velociraptor_linux_boot_install.py` accepts exactly these two closed unit
+shapes and records the fixed
+`systemctl show <unit> --property=After,Requires` ordering proof only for the
+ordered shape; legacy frozen originals replay unchanged. Caller-supplied PID/birth/InvocationID or
 verification flags are rejected by schema. The started-by-PID1 service keeps
 its early exec as an explicit `initial_exec_gap`; the module never fabricates
 a kernel exec record. Local seam tests live in

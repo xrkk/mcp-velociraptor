@@ -356,5 +356,142 @@ def _mutate_unit(rows, arguments, old, new):
     result['cat']['stdout'] = '# ' + UNIT_PATH + '\n' + captured.decode() + '\n'
 
 
+
+
+def ordered_fixture():
+    """The legacy fixture re-shaped to the one ordered captured form."""
+    rows, arguments, files, result = fixture()
+    old_raw = base64.b64decode(files['one.service']['content'])
+    text = old_raw.decode().replace(
+        '[Unit]\nDescription=benign captured origin\n',
+        '[Unit]\nDescription=benign captured origin\n'
+        'After=systemd-journald.service\n'
+        'Requires=systemd-journald.service\n')
+    new_raw = text.encode()
+    new_sha = source.sha(new_raw)
+    files['one.service'] = dict(files['one.service'], size=len(new_raw),
+                                sha256=new_sha,
+                                content=base64.b64encode(new_raw).decode())
+    rows[4]['file'] = dict(files['one.service'])
+    rows[5]['source']['service'] = dict(files['one.service'])
+    install_row = next(row for row in rows
+                       if row['kind'] == 'install-result')
+    install_row['destination'].update(size=len(new_raw), sha256=new_sha)
+    install_row['cat']['stdout'] = ('# ' + UNIT_PATH + '\n'
+                                    + new_raw.decode() + '\n')
+    install_row['ordering'] = dict(
+        argv=source.ordering_argv('one.service'), rc=0,
+        stdout='After=systemd-journald.service systemd-journald.socket\n'
+               'Requires=systemd-journald.service\n',
+        stderr='', after=['systemd-journald.service',
+                          'systemd-journald.socket'],
+        requires=['systemd-journald.service'])
+    return rows, arguments, files, install_row
+
+
+class BootInstallOrderedShapeTests(unittest.TestCase):
+    def unit_text(self):
+        _rows, _arguments, files, _result = ordered_fixture()
+        return base64.b64decode(files['one.service']['content'])
+
+    def credentials(self):
+        _rows, arguments, _files, _result = ordered_fixture()
+        return arguments['credentials']
+
+    def test_ordered_shape_parses_and_replays_with_loaded_ordering(self):
+        rows, arguments, files, _result = ordered_fixture()
+        parsed = source.parse_installation_unit(
+            base64.b64decode(files['one.service']['content']),
+            arguments['credentials'], files['payload']['path'])
+        self.assertTrue(parsed['ordering_required'])
+        events = source.normalize(rows, **arguments)
+        self.assertEqual([e['kind'] for e in events],
+                         ['artifact', 'definition'])
+        self.assertEqual(events[1]['install_ref']['unit_sha256'],
+                         files['one.service']['sha256'])
+
+    def test_legacy_shape_still_replays_without_ordering(self):
+        rows, arguments, files, _result = fixture()
+        parsed = source.parse_installation_unit(
+            base64.b64decode(files['one.service']['content']),
+            arguments['credentials'], files['payload']['path'])
+        self.assertFalse(parsed['ordering_required'])
+        events = source.normalize(rows, **arguments)
+        self.assertEqual([e['kind'] for e in events],
+                         ['artifact', 'definition'])
+
+    def test_ordered_shape_parser_negatives(self):
+        raw = self.unit_text()
+        credentials = self.credentials()
+        cases = {
+            'partial-pair': raw.replace(b'Requires=systemd-journald.service\n',
+                                        b''),
+            'wrong-dependency': raw.replace(
+                b'After=systemd-journald.service\n',
+                b'After=other.service\n'),
+            'extra-unit-key': raw.replace(b'RefuseManualStart=yes\n',
+                                          b'RefuseManualStart=yes\n'
+                                          b'Wants=extra.service\n'),
+            'extra-service-key': raw.replace(b'Restart=no\n',
+                                             b'Restart=no\n'
+                                             b'Environment=A=B\n'),
+            'multi-token': raw.replace(
+                b'After=systemd-journald.service\n',
+                b'After=systemd-journald.service basic.target\n'),
+        }
+        for label, broken in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaises(ValueError):
+                    source.parse_installation_unit(broken, credentials,
+                                                   '/opt/t42/origin/payload')
+
+    def test_ordered_shape_requires_the_loaded_ordering_proof(self):
+        def mutate(case):
+            rows, arguments, files, install_row = ordered_fixture()
+            case(rows, install_row)
+            return rows, arguments
+
+        cases = {
+            'missing-proof': (
+                lambda r, result: result.pop('ordering'),
+                'installed loaded ordering proof missing'),
+            'rc-and-argv': (
+                lambda r, result: result['ordering'].update(rc=1),
+                'installed loaded ordering proof argv/rc mismatch'),
+            'wrong-argv': (
+                lambda r, result: result['ordering'].update(
+                    argv=['systemctl', 'show', 'one.service']),
+                'installed loaded ordering proof argv/rc mismatch'),
+            'tokens-differ': (
+                lambda r, result: result['ordering'].update(
+                    after=['other.service']),
+                'installed loaded ordering tokens differ'),
+            'no-journald-token': (
+                lambda r, result: (
+                    result['ordering'].update(
+                        stdout='After=basic.target\n'
+                               'Requires=basic.target\n',
+                        after=['basic.target'],
+                        requires=['basic.target'])),
+                'installed loaded ordering lacks the journald dependency'),
+        }
+        for label, (case, reason) in cases.items():
+            with self.subTest(label=label):
+                rows, arguments = mutate(case)
+                with self.assertRaisesRegex(ValueError, reason):
+                    source.normalize(rows, **arguments)
+
+    def test_legacy_shape_rejects_an_ordering_proof(self):
+        rows, arguments, _files, _result = fixture()
+        install_row = next(row for row in rows
+                           if row['kind'] == 'install-result')
+        install_row['ordering'] = dict(
+            argv=source.ordering_argv('one.service'), rc=0, stdout='',
+            stderr='', after=[], requires=[])
+        with self.assertRaisesRegex(ValueError,
+                                    'legacy installation must not carry'):
+            source.normalize(rows, **arguments)
+
+
 if __name__ == '__main__':
     unittest.main()

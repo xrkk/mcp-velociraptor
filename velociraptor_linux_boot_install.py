@@ -44,6 +44,8 @@ SHOW_INSTALL_PROPERTIES = ('Id', 'FragmentPath', 'DropInPaths', 'LoadState',
                            'UnitFileState', 'Transient', 'NeedDaemonReload',
                            'MainPID', 'ExecMainPID', 'User', 'Group',
                            'ExecStart')
+ORDERING_PROPERTIES = ('After', 'Requires')
+JOURNALD_DEPENDENCY = 'systemd-journald.service'
 INSTALLATION_SECTIONS = {'Unit': {'Description', 'DefaultDependencies',
                                   'RefuseManualStart'},
                          'Service': {'Type', 'User', 'Group', 'ExecStart',
@@ -128,6 +130,11 @@ def unit_names_for(config):
     return [config['service']]
 
 
+def ordering_argv(unit_name):
+    return ['systemctl', 'show', unit_name,
+            '--property=' + ','.join(ORDERING_PROPERTIES)]
+
+
 def parse_installation_unit(raw, credentials, payload_path):
     """Strict fixed-shape unit parse; nothing outside the supported
     installation semantics survives."""
@@ -137,11 +144,21 @@ def parse_installation_unit(raw, credentials, payload_path):
     need(not parser.defaults()
          and set(parser.sections()) == set(INSTALLATION_SECTIONS),
          'unsupported installation unit sections')
-    need(all(set(parser[section]) == INSTALLATION_SECTIONS[section]
-             for section in INSTALLATION_SECTIONS),
-         'unsupported installation unit options')
     unit, service, install = (parser['Unit'], parser['Service'],
                               parser['Install'])
+    legacy_unit = set(INSTALLATION_SECTIONS['Unit'])
+    ordered_unit = legacy_unit | set(ORDERING_PROPERTIES)
+    unit_options = set(unit)
+    need(unit_options in (legacy_unit, ordered_unit),
+         'unsupported installation unit options')
+    need(set(service) == INSTALLATION_SECTIONS['Service']
+         and set(install) == INSTALLATION_SECTIONS['Install'],
+         'unsupported installation unit options')
+    ordering_required = unit_options == ordered_unit
+    if ordering_required:
+        need(unit['After'] == JOURNALD_DEPENDENCY
+             and unit['Requires'] == JOURNALD_DEPENDENCY,
+             'unsupported installation journald ordering')
     need(unit['DefaultDependencies'] == 'no'
          and unit['RefuseManualStart'] == 'yes',
          'unsupported installation unit semantics')
@@ -164,7 +181,10 @@ def parse_installation_unit(raw, credentials, payload_path):
     need(install['WantedBy'] == 'multi-user.target',
          'unsupported enablement target')
     return dict(user=service['User'], group=service['Group'],
-                execstart=tokens[0], wanted_by=install['WantedBy'])
+                execstart=tokens[0], wanted_by=install['WantedBy'],
+                ordering_required=ordering_required,
+                after=unit['After'] if ordering_required else None,
+                requires=unit['Requires'] if ordering_required else None)
 
 
 def verify_captured(rows, *, config, binding, root, credentials, kernel,
@@ -263,6 +283,22 @@ def verify_captured(rows, *, config, binding, root, credentials, kernel,
     return dict(files=files, writes=writes, unit=unit,
                 root_exec_ns=root_execs[0]['monotonic_ns'],
                 root_exit_ns=root_exits[0]['monotonic_ns'])
+
+
+def _parse_ordering(stdout):
+    """Parse the fixed `systemctl show --property=After,Requires` output."""
+    values = {}
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        need('=' in line, 'unparsed ordering show line', line)
+        key, value = line.split('=', 1)
+        need(key in ORDERING_PROPERTIES and key not in values,
+             'unexpected ordering property', key)
+        values[key] = sorted(token for token in value.split() if token)
+    need(set(values) == set(ORDERING_PROPERTIES),
+         'missing ordering property')
+    return dict(after=values['After'], requires=values['Requires'])
 
 
 def _parse_show(stdout):
@@ -419,6 +455,27 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     need('# ' + str(unit_target) in (cat.get('stdout') or '')
          and service_raw.decode() in (cat.get('stdout') or ''),
          'cat does not reproduce the captured unit bytes')
+    ordering = result.get('ordering')
+    if captured['unit']['ordering_required']:
+        need(isinstance(ordering, dict)
+             and set(ordering) == {'argv', 'rc', 'stdout', 'stderr',
+                                   'after', 'requires'},
+             'installed loaded ordering proof missing')
+        need(ordering.get('argv') == ordering_argv(config['service'])
+             and ordering.get('rc') == 0
+             and isinstance(ordering.get('stdout'), str)
+             and isinstance(ordering.get('stderr'), str),
+             'installed loaded ordering proof argv/rc mismatch')
+        derived = _parse_ordering(ordering['stdout'])
+        need(derived == dict(after=ordering['after'],
+                             requires=ordering['requires']),
+             'installed loaded ordering tokens differ')
+        need(JOURNALD_DEPENDENCY in ordering['after']
+             and JOURNALD_DEPENDENCY in ordering['requires'],
+             'installed loaded ordering lacks the journald dependency')
+    else:
+        need('ordering' not in result,
+             'legacy installation must not carry an ordering proof')
     version = sha(json.dumps([service_value['sha256'],
                               captured['files'][config['payload']][0]['sha256']],
                              separators=(',', ':')).encode())
@@ -623,6 +680,23 @@ class InstallationCollector(Collector):
                              capture_output=True, text=True, timeout=20)
         need(show.returncode == 0 and cat.returncode == 0,
              'installed unit proof failed')
+        parsed = parse_installation_unit(service_raw, self.credentials,
+                                         str(self.directory / config['payload']))
+        ordering_record = None
+        if parsed['ordering_required']:
+            ordering = subprocess.run(ordering_argv(config['service']),
+                                      capture_output=True, text=True,
+                                      timeout=20)
+            need(ordering.returncode == 0,
+                 'installed loaded ordering proof failed')
+            derived = _parse_ordering(ordering.stdout)
+            need(JOURNALD_DEPENDENCY in derived['after']
+                 and JOURNALD_DEPENDENCY in derived['requires'],
+                 'installed loaded ordering lacks the journald dependency')
+            ordering_record = dict(argv=ordering_argv(config['service']),
+                                   rc=ordering.returncode,
+                                   stdout=ordering.stdout,
+                                   stderr=ordering.stderr, **derived)
         self.record('install-result',
                     destination=dict(path=str(unit_target),
                                      inode=installed.st_ino,
@@ -643,7 +717,9 @@ class InstallationCollector(Collector):
                               stderr=show.stderr),
                     cat=dict(argv=cat_argv(config['service']),
                              rc=cat.returncode, stdout=cat.stdout,
-                             stderr=cat.stderr))
+                             stderr=cat.stderr),
+                    **({'ordering': ordering_record}
+                       if ordering_record is not None else {}))
         self.install = dict(unit=str(unit_target), link=str(link_target))
 
     def close(self):
