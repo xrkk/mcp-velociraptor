@@ -35,6 +35,32 @@ activation facts are required. Qualified running actors enter bounded kernel
 scope with an explicit readiness gap. Missing, replaced, foreign, repeated,
 or unsupported definitions remain unavailable rather than guessed.
 
+## Boot-resume qualification and scope admission
+
+`velociraptor_linux_boot_resume.py` covers the next step after the late-attach
+observation: the two functions start/restart/enable nothing either.
+
+- `resume(profile, output_directory)` re-derives the sealed boot-service
+  observation, re-checks the live kernel/PID1/manager/systemctl/process and
+  fragment/payload originals twice, keeps the fixed-argv
+  `journalctl --boot <boot> --unit <unit> --output=json --no-pager` record as
+  a bounded original (oversized journals are refused, never truncated) and
+  applies one professional kernel scope to the exact observed pid/birth/uid.
+  Every request/receipt/raw record is sealed
+  (`raw.ndjson`, `journal.jsonl`, `observation.json`, `manifest.json`).
+- `finish(profile, output_directory)` stops and exports exactly that scope and
+  copies every original; `normalize_boot_resume` /
+  `normalize_boot_resume_finish` replay both directories from the sealed
+  originals only (inventory, directory identity, inode/hash/protection).
+
+The strict resume profile adds `bundle_dir`, `deployment_root`, the scope
+`client_id`/`session_id`/`owner_id`, `lifetime_seconds`, `journal_max_bytes`
+to the boot-service profile fields. Caller-supplied PID/birth/InvocationID or
+verification flags are rejected by schema. The started-by-PID1 service keeps
+its early exec as an explicit `initial_exec_gap`; the module never fabricates
+a kernel exec record. Local seam tests live in
+`tests/test_linux_boot_resume.py`; they do not qualify native collections.
+
 ## Read-only boot-service observation (late attach)
 
 `velociraptor_linux_boot_service.py` adds an independent producer for the

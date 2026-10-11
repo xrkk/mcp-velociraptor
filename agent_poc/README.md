@@ -118,6 +118,11 @@ now use a durable guest-local custom kernel worker with PID/birth filters and bo
 expiry. Every tool takes an explicit identity `request`; the historical `get` and
 `bind_targets` names alias query/update, with the same new request contract.
 See [scope contract](../deploy/linux/scope.md) for requirements, event limits and interrupted cleanup.
+`velociraptor_linux_boot_resume.py` re-verifies a sealed boot-service
+observation, keeps the real `journalctl --boot` record as a bounded original
+and admits the exact already-running pid/birth/uid into one professional scope
+without starting or restarting the unit; stop/export preserve every original.
+Local seam tests only - native qualification stays with the host workflow.
 
 Producer outputs use the explicit
 [cross-account artifact export](../docs/artifact-export-handoff.md) before a
