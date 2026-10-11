@@ -35,6 +35,47 @@ activation facts are required. Qualified running actors enter bounded kernel
 scope with an explicit readiness gap. Missing, replaced, foreign, repeated,
 or unsupported definitions remain unavailable rather than guessed.
 
+## Read-only boot-service observation (late attach)
+
+`velociraptor_linux_boot_service.py` adds an independent producer for the
+opposite situation: an ordinary-UID system service that systemd already
+started by itself at boot. The scheduler collector above refuses any
+pre-existing unit, so it cannot describe such an invocation. The new module
+exposes exactly two functions and starts/restarts/enables nothing:
+
+- `collect_boot_service(profile, output_directory)` performs one bounded
+  (profile `window_seconds`, 1..30 s) read-only observation and seals every
+  request/response into an exclusive new output directory
+  (`raw.ndjson`, `observation.json`, `manifest.json`, all immutable files).
+- `normalize_boot_service(raw_bundle, expected_profile)` re-derives the same
+  observation from those originals, re-checking the directory/inode/hash
+  identity and every constraint; it never trusts the stored summary.
+
+The strict profile carries `unit_name` (short flat `.service`), `vm_uuid`,
+`boot_id` (the expected boot), `expected_uid`, canonical `payload_path` /
+`fragment_path`, their lowercase SHA-256 pins and `window_seconds`. Caller
+supplied PID/birth/InvocationID/`verified`/`source_nature` or shell commands
+are rejected by schema. Identity comes only from native reads: kernel
+boot/VM files, the real PID1 peer credentials over `/run/systemd/private`
+(SO_PEERCRED plus live PID1 identity re-check), fixed-argv `systemctl show`
+and `systemctl cat`, `/proc` facts for the live MainPID (birth, UID/GID, exe
+image hash, cgroup, cmdline), and stable single-file reads of the fragment
+and payload (device/inode/size/hash pinned across the read). Only an
+active/running, non-transient, enabled, loaded persistent unit whose
+fragment binds the pinned original (directly or through the protected
+`/etc/systemd/system` link) with matching loaded `User`/`ExecStart` is
+accepted; runtime fragments, unbound drop-ins, pending daemon reloads,
+PID/InvocationID replacement or file substitution during the read fail with
+specific codes.
+
+The output is a `boot-service-observation`: an observation, not a causality
+authority. It never emits a scheduler-fire `verified=true` and its fixed
+limitations state that the prior author/installation origin and any
+execution before readiness are not proven, and that cross-boot autonomy
+still requires an independently sealed A source plus a confirmed host
+bridge. Wiring this producer into a formal scope adapter and the real
+cross-boot chain is future work; local tests are development evidence only.
+
 # Velociraptor MCP
 
 ## Bounded ordinary user service evidence

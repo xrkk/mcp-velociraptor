@@ -35,6 +35,27 @@ activation facts are required. Qualified running actors enter bounded kernel
 scope with an explicit readiness gap. Missing, replaced, foreign, repeated,
 or unsupported definitions remain unavailable rather than guessed.
 
+## Read-only boot-service observation (late attach)
+
+`velociraptor_linux_boot_service.py` provides the missing producer for an
+ordinary-UID system service that systemd already started at boot, which the
+fresh-invocation scheduler collector above refuses by design. It exposes
+`collect_boot_service(profile, output_directory)` and
+`normalize_boot_service(raw_bundle, expected_profile)`: one bounded
+read-only observation (kernel boot/VM identity, real PID1 peer credentials
+over `/run/systemd/private`, fixed-argv `systemctl show`/`cat`, `/proc`
+facts for the live MainPID, stable fragment/payload file reads) and a
+decoder that re-derives the same observation from the sealed originals.
+The strict profile (`unit_name`, `vm_uuid`, `boot_id`, `expected_uid`,
+canonical paths with SHA-256 pins, `window_seconds` 1..30) accepts no
+caller-supplied PID/birth/InvocationID/`verified`/`source_nature`. Output
+is a `boot-service-observation` with fixed limitations: prior
+author/installation origin and pre-readiness execution are not proven, and
+cross-boot autonomy still requires an independently sealed A source plus a
+confirmed host bridge. It is not yet wired into any agent workflow or scope
+adapter; that integration and the real native chain remain future work, and
+local tests are development evidence only.
+
 # Velociraptor Agent POC
 
 ## Bounded ordinary user service evidence
