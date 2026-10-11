@@ -98,9 +98,12 @@ def validate_profile(config):
     need(config['mechanism'] == 'boot-install', 'boot-install mechanism required')
     need(config['manager_scope'] == 'system', 'system manager scope required')
     manager = config['manager']
-    need(isinstance(manager, dict) and manager.get('pid') == 1
+    need(isinstance(manager, dict) and type(manager.get('pid')) is int and manager['pid'] == 1
+         and all(isinstance(manager.get(k), list) and len(manager[k]) == 4
+                 and all(type(v) is int and v == 0 for v in manager[k])
+                 for k in ('uids', 'gids'))
          and manager.get('uids') == [0] * 4 and manager.get('gids') == [0] * 4
-         and isinstance(manager.get('birth'), str) and manager['birth'].isdigit(),
+         and isinstance(manager.get('birth'), str) and manager['birth'].isdigit() and int(manager['birth']) > 0,
          'system manager identity required')
     need(config['socket'] == '/run/systemd/private', 'system manager socket required')
     directory = Path(config['directory'])
@@ -144,6 +147,13 @@ def parse_installation_unit(raw, credentials, payload_path):
          'unsupported installation unit semantics')
     need(service['Type'] == 'simple' and service['Restart'] == 'no',
          'unsupported installation service semantics')
+    need(all(isinstance(credentials.get(k), list) and len(credentials[k]) == 4
+             and all(type(v) is int and 0 < v < 2**32 - 1
+                     for v in credentials[k]) for k in ('uids', 'gids'))
+         and isinstance(credentials.get('groups'), list)
+         and all(type(v) is int and 0 <= v < 2**32 - 1
+                 for v in credentials['groups']),
+         'ordinary installation identity required')
     need(service['User'] == str(credentials['uids'][1])
          and service['Group'] == str(credentials['gids'][1])
          and credentials['uids'][1] > 0 and credentials['gids'][1] > 0,
@@ -357,6 +367,10 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
     need(isinstance(identity, dict) and identity.get('pid') == 1
          and identity.get('uids') == [0] * 4 and identity.get('gids') == [0] * 4,
          'installer is not the pid1 root manager')
+    need(all(identity.get(k) == manager.get(k) for k in
+             ('pid', 'birth', 'uids', 'gids', 'groups', 'image',
+              'image_sha256', 'device', 'inode', 'cgroup', 'cmdline')),
+         'install manager identity conflict')
     source = intent.get('source') or {}
     for label in ('payload', 'service'):
         held = captured['files'][config[label]][0]

@@ -127,6 +127,31 @@ class BootInstallProfileTests(unittest.TestCase):
                     source.validate_profile(config)
 
 
+class BootInstallIdentityTypeTests(unittest.TestCase):
+    def test_manager_numeric_aliases_are_not_kernel_identity(self):
+        for field, value in (('pid', True), ('uids', [False] * 4),
+                             ('gids', [False] * 4), ('birth', '0')):
+            with self.subTest(field=field):
+                _, arguments, _, _ = fixture()
+                arguments['config']['manager'][field] = value
+                with self.assertRaisesRegex(ValueError, 'system manager identity required'):
+                    source.validate_profile(arguments['config'])
+
+    def test_non_integer_and_root_author_credentials_are_refused(self):
+        rows, arguments, _, _ = fixture()
+        import copy
+        raw = base64.b64decode(rows[4]['file']['content'])
+        for field, value in (('uids', [True] * 4), ('gids', [True] * 4),
+                             ('uids', [0] * 4), ('uids', [1201.0] * 4),
+                             ('gids', [2**32 - 1] * 4), ('groups', [True])):
+            credentials = copy.deepcopy(arguments['credentials'])
+            credentials[field] = value
+            with self.subTest(field=field, value=value):
+                with self.assertRaisesRegex(ValueError, 'ordinary installation identity required'):
+                    source.parse_installation_unit(raw, credentials,
+                                                   '/opt/t42/origin/payload')
+
+
 class BootInstallSourceTests(unittest.TestCase):
     def test_captured_origin_and_one_trusted_installation_replay(self):
         rows, arguments, files, _result = fixture()
@@ -207,6 +232,15 @@ class BootInstallSourceTests(unittest.TestCase):
             'wrong-install-authority': (
                 lambda r, a: r[5]['manager'].update(uids=[1201] * 4),
                 'installer is not the pid1 root manager'),
+            'install-manager-birth-drift': (
+                lambda r, a: r[5]['manager'].update(birth='999'),
+                'install manager identity conflict'),
+            'install-manager-image-drift': (
+                lambda r, a: r[5]['manager'].update(image='/foreign/manager'),
+                'install manager identity conflict'),
+            'install-manager-image-hash-drift': (
+                lambda r, a: r[5]['manager'].update(image_sha256='c' * 64),
+                'install manager identity conflict'),
             'foreign-install-peer': (
                 lambda r, a: r[5].update(peer=[901, 1201, 2201]),
                 'foreign install peer'),
