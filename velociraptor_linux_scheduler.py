@@ -149,6 +149,8 @@ def manager_scope(config):
 def unit_names(config):
     if mechanism(config) == 'cron':
         return []
+    if mechanism(config) == 'boot-install':
+        return [config['service']]
     return [config['service']] + ([config['timer']] if mechanism(config) == 'timer' else [])
 
 
@@ -159,6 +161,9 @@ def artifact_names(config):
 
 
 def source_name(config):
+    if mechanism(config) == 'boot-install':
+        from velociraptor_linux_boot_install import SOURCE
+        return SOURCE
     return 'MalTrace.' + ('System' if manager_scope(config) == 'system' else 'User') + ('Timer' if mechanism(config) == 'timer' else 'Service') + '.v1'
 
 
@@ -166,6 +171,9 @@ def validate_profile(config):
     if mechanism(config) == 'cron':
         from velociraptor_linux_cron import validate_profile as validate_cron
         return validate_cron(config)
+    if mechanism(config) == 'boot-install':
+        from velociraptor_linux_boot_install import validate_profile as validate_install
+        return validate_install(config)
     mode = mechanism(config)
     need(mode in ('timer', 'service'), 'unsupported scheduler mechanism')
     fields = {'directory', 'service', 'payload', 'manager', 'socket', 'window_seconds'}
@@ -495,6 +503,10 @@ def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
         from velociraptor_linux_cron import qualify as qualify_cron
         return qualify_cron(rows, config=config, binding=binding, root=root, credentials=credentials,
                             kernel=kernel, boundary_ns=boundary_ns)
+    if mechanism(config) == 'boot-install':
+        from velociraptor_linux_boot_install import qualify as qualify_install
+        return qualify_install(rows, config=config, binding=binding, root=root, credentials=credentials,
+                               kernel=kernel, boundary_ns=boundary_ns)
     import configparser
     validate_profile(config)
     need(rows and [r['monotonic_ns'] for r in rows] == sorted(r['monotonic_ns'] for r in rows), 'scheduler order')
@@ -680,6 +692,9 @@ def normalize(rows, **arguments):
     if mechanism(arguments['config']) == 'cron':
         from velociraptor_linux_cron import normalize as normalize_cron
         return normalize_cron(rows, **arguments)
+    if mechanism(arguments['config']) == 'boot-install':
+        from velociraptor_linux_boot_install import normalize as normalize_install
+        return normalize_install(rows, **arguments)
     ends = [r for r in rows if r['kind'] == 'closed']
     need(len(ends) == 1 and not ends[0]['error'] and not ends[0]['lease_broken'],
          'incomplete or mutable scheduler originals')
@@ -780,4 +795,7 @@ def create_collector(config, *arguments):
     if mechanism(config) == 'cron':
         from velociraptor_linux_cron import CronCollector
         return CronCollector(config, *arguments)
+    if mechanism(config) == 'boot-install':
+        from velociraptor_linux_boot_install import InstallationCollector
+        return InstallationCollector(config, *arguments)
     return FollowingCollector(config, *arguments)

@@ -1574,3 +1574,18 @@ wire errors and truncated maintenance bodies without upgrading coverage or
 publishing BOUND. Attempt numbers require authentic available source originals;
 a missing approved cut remains UNCLASSIFIED. An independently verified native
 source can establish a wire-error classification without rewriting that packet.
+
+## Captured ordinary origin plus one trusted installation (boot-install)
+
+`velociraptor_linux_boot_install.py` records how a unit came to exist: the
+scheduler routes `mechanism="boot-install"` (system manager profile) to an
+`InstallationCollector` that watches a new empty directory while the
+ordinary sample writes a native ELF payload and one fixed-shape
+installation unit, then - only after the captured originals, the author and
+the actual root exit pass kernel-prefix verification - performs exactly one
+trusted installation (exclusive `/etc/systemd/system` unit copy, one
+enablement symlink, one `daemon-reload`, `show`/`cat` proof of
+enabled-inactive with no invocation; never a start). `normalize`
+re-derives the artifact/definition rows and the separate installer record
+from the sealed originals; no invocation, scheduler-fire or autonomy
+verdict is produced. Not yet wired into any agent workflow.

@@ -1671,3 +1671,46 @@ wire errors and truncated maintenance bodies without upgrading coverage or
 publishing BOUND. Attempt numbers require authentic available source originals;
 a missing approved cut remains UNCLASSIFIED. An independently verified native
 source can establish a wire-error classification without rewriting that packet.
+
+## Captured ordinary origin plus one trusted installation (boot-install)
+
+`velociraptor_linux_boot_install.py` closes the origin gap between the two
+producers above: it records HOW a unit came to exist. One fixed benign shape
+is supported - `mechanism="boot-install"` with `manager_scope="system"` on
+the existing scheduler profile fields (`directory`, `service`, `payload`,
+`manager` PID1 root facts, `/run/systemd/private`, `window_seconds`). The
+scheduler entry points route this mode (`validate_profile`, `qualify`,
+`normalize`, `create_collector`, `unit_names`, `source_name`); the old
+`timer`/`service`/`cron` branches are untouched.
+
+`InstallationCollector` reuses the shared fanotify drain, held read leases
+and snapshots: it watches a NEW empty directory while the ordinary sample
+(root of the kernel scope) writes a native ELF `payload` and exactly one
+installation unit (fixed sections/options: `Type=simple`, ordinary
+`User`/`Group`, single-token `ExecStart` binding the captured payload,
+`Restart=no`, `RefuseManualStart=yes`, `WantedBy=multi-user.target`). It
+never probes an invocation, never extends the kernel scope and never emits
+a scheduler-fire. After both captured CLOSE_WRITE originals, the ordinary
+author and the ACTUAL root exit pass the independent kernel-prefix
+verification (write order payload-before-definition, writer == the sample
+root with matching UID/GID/groups, matching kernel modify records), it
+performs exactly ONE trusted management action: an exclusive
+`/etc/systemd/system/<service>` copy from the held stable descriptor bytes
+(root:root 0644), root-0555 protection of the captured payload and
+directory, one exclusive `multi-user.target.wants` enablement symlink, one
+fixed `systemctl daemon-reload`, and fixed `systemctl show`/`cat` proof
+that the unit actually loaded enabled-and-inactive with no InvocationID.
+The unit is never started, restarted or executed. Repeated installs,
+existing unit/link targets, mutated content/identity, failed or unknown
+management actions and non-fresh units are refused with specific errors.
+
+`qualify`/`normalize` re-derive everything from the closed raw originals
+and the exported kernel prefix only. Output is one `artifact` plus one
+`definition` row (mechanism `boot-install`, definition id
+`system:<service>`, version bound to both captured SHA-256 hashes) with an
+`install_ref` carrying the persistent unit/link identity, the reload result
+and the raw line numbers; the ordinary sample stays the recorded author and
+the PID1 root manager is recorded separately as the installer. Fixed
+limitations keep early execution, any invocation and cross-boot autonomy
+unproven. These fixtures are local-only and never certify native
+execution.
