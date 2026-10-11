@@ -205,6 +205,104 @@ def validate_profile(profile):
     return dict(profile)
 
 
+def _split_quoted(text):
+    """Split an argv[] segment of the fixed systemctl show format.
+
+    Only plain tokens and complete double-quoted tokens are interpretable;
+    embedded quotes, escapes or unterminated quoting are refused instead of
+    guessed. No shell is ever involved.
+    """
+    tokens = []
+    index, length = 0, len(text)
+    while index < length:
+        while index < length and text[index] == ' ':
+            index += 1
+        if index >= length:
+            break
+        if text[index] == '"':
+            end = text.find('"', index + 1)
+            need(end != -1, 'loaded ExecStart structure unsupported',
+                 'unterminated quoted token')
+            inner = text[index + 1:end]
+            need('"' not in inner and '\\' not in inner,
+                 'loaded ExecStart structure unsupported',
+                 'uninterpretable quoting')
+            tokens.append(inner)
+            index = end + 1
+            need(index >= length or text[index] == ' ',
+                 'loaded ExecStart structure unsupported',
+                 'uninterpretable quoting')
+        else:
+            end = text.find(' ', index)
+            if end == -1:
+                end = length
+            token = text[index:end]
+            need('"' not in token and '\\' not in token,
+                 'loaded ExecStart structure unsupported',
+                 'uninterpretable token')
+            tokens.append(token)
+            index = end
+    return tokens
+
+
+def parse_loaded_execstart(text):
+    """Parse the fixed `systemctl show` ExecStart structure exactly.
+
+    Supported form: `{ path=P ; argv[]=P t1 t2 ; key=value ; ... }` with at
+    most one path segment and exactly one argv[] segment (one supported
+    execution definition). Anything else is refused with a specific code;
+    there is no substring, shlex or shell fallback.
+    """
+    need(isinstance(text, str) and text.startswith('{') and text.endswith('}'),
+         'loaded ExecStart structure unsupported', repr(text[:80]))
+    segments = [segment.strip() for segment in text[1:-1].split(' ; ')]
+    need(len(segments) >= 2, 'loaded ExecStart structure unsupported',
+         repr(text[:80]))
+    path = None
+    argv = None
+    for segment in segments:
+        if segment.startswith('path='):
+            need(path is None, 'loaded ExecStart structure unsupported',
+                 'multiple path segments')
+            path = segment[len('path='):]
+            if len(path) >= 2 and path.startswith('"') and path.endswith('"'):
+                path = path[1:-1]
+            need(path and '"' not in path and '\\' not in path,
+                 'loaded ExecStart structure unsupported', repr(path))
+        elif segment.startswith('argv[]='):
+            need(argv is None, 'loaded ExecStart structure unsupported',
+                 'multiple argv segments')
+            argv = _split_quoted(segment[len('argv[]='):])
+        else:
+            need('=' in segment and ' ' not in segment
+                 and '"' not in segment and '\\' not in segment,
+                 'loaded ExecStart structure unsupported', repr(segment[:60]))
+    need(path is not None, 'loaded ExecStart structure unsupported',
+         'missing path segment')
+    need(argv is not None, 'loaded ExecStart structure unsupported',
+         'missing argv segment')
+    return path, argv
+
+
+def check_loaded_execstart(loaded_text, profile, fragment_argv=None):
+    """Exact binding of the real loaded execution definition.
+
+    The loaded path must equal the pinned payload path, the loaded argv must
+    start with that same path, and once the fragment has been parsed the
+    complete loaded argv must equal the fragment's real ExecStart argv.
+    """
+    path, argv = parse_loaded_execstart(loaded_text)
+    need(path == profile['payload_path'], 'loaded ExecStart path mismatch',
+         path)
+    need(argv and argv[0] == path, 'loaded ExecStart argv head mismatch',
+         repr(argv[:1]))
+    if fragment_argv is not None:
+        need(argv == fragment_argv,
+             'loaded ExecStart argv differs from fragment',
+             '%r vs %r' % (argv, fragment_argv))
+    return path, argv
+
+
 def parse_show(stdout):
     properties = {}
     for line in stdout.splitlines():
@@ -338,8 +436,7 @@ def check_properties(properties, profile):
          'loaded User mismatch', properties['User'])
     need(re.fullmatch(r'\d+', properties['ExecMainStartTimestampMonotonic']),
          'no native start time', properties['ExecMainStartTimestampMonotonic'])
-    need(profile['payload_path'] in properties['ExecStart'],
-         'loaded ExecStart mismatch', properties['ExecStart'])
+    check_loaded_execstart(properties['ExecStart'], profile)
     return int(main_pid)
 
 
@@ -453,9 +550,8 @@ def check_records(records, profile):
     need(execstart and execstart[0] == profile['payload_path'],
          'fragment ExecStart does not bind payload', repr(execstart[:1]))
     fragment_user(fragment_bytes, profile['expected_uid'])
-    for token in execstart[1:]:
-        need(token in properties['ExecStart'] or token in cat['stdout'],
-             'fragment arguments absent from loaded definition', token)
+    check_loaded_execstart(properties['ExecStart'], profile,
+                           fragment_argv=execstart)
 
     payload = records[6]
     need(payload['path'] == profile['payload_path'], 'payload path mismatch',
@@ -679,6 +775,8 @@ def collect_boot_service(profile, output_directory):
         need(execstart[0] == profile['payload_path'],
              'fragment ExecStart does not bind payload')
         fragment_user(fragment_bytes, profile['expected_uid'])
+        check_loaded_execstart(properties['ExecStart'], profile,
+                               fragment_argv=execstart)
 
         payload = stable_file_read(profile['payload_path'])
         raw.write('payload', **payload)

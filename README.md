@@ -76,6 +76,18 @@ still requires an independently sealed A source plus a confirmed host
 bridge. Wiring this producer into a formal scope adapter and the real
 cross-boot chain is future work; local tests are development evidence only.
 
+The loaded `ExecStart` from `systemctl show` is bound structurally, never by
+substring: the fixed `{ path=P ; argv[]=P t1 t2 ; key=value ... }` form is
+parsed exactly (plain and fully double-quoted tokens only; escapes,
+multiple path/argv segments, missing structure or unterminated quoting are
+refused), the loaded path must equal the pinned payload path, the loaded
+argv must start with that path, and the complete loaded argv must equal the
+fragment's real `ExecStart` argv once parsed — a near command such as
+`<payload>-foreign`, a correct path with different arguments, or arguments
+that only appear in `systemctl cat` output are all refused. `systemctl cat`
+is preserved as a raw original only and no longer supplements loaded
+argument equality.
+
 Strictness and original-evidence rules (hardened after independent
 controller probing): a runtime `/run/...` definition is refused even when it
 matches the profile path character-for-character; the observed cgroup must

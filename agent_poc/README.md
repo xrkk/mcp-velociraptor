@@ -68,7 +68,13 @@ non-decreasing integers under the shared profile window, and the manifest
 must inventory exactly the sealed files with inode/hash/protection pinned.
 The decoder replays the fragment-link binding only from collection-time raw
 evidence, and a plain in-memory records mapping decodes only as a marked
-low-trust fixture; authoritative sealing remains future P04 work.
+low-trust fixture; authoritative sealing remains future P04 work. The
+loaded `ExecStart` is parsed structurally from the fixed `systemctl show`
+format and bound exactly: loaded path equal to the pinned payload path,
+loaded argv head equal to that path, and the complete loaded argv equal to
+the fragment's real `ExecStart` argv — near commands and text that only
+appears in `systemctl cat` are refused; malformed, duplicated or
+uninterpretable structures are refused rather than guessed.
 
 # Velociraptor Agent POC
 

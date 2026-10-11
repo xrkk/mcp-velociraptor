@@ -647,7 +647,7 @@ class BootServiceCollectorTests(unittest.TestCase):
              'drop-ins unbound'),
             (dict(User='0'), 'loaded User mismatch'),
             (dict(ExecStart='{ path=/usr/bin/other ; argv[]=/usr/bin/other }'),
-             'loaded ExecStart mismatch'),
+             'loaded ExecStart path mismatch'),
             (dict(LoadState='not-found'), 'unit not loaded'),
             (dict(ActiveState='inactive'), 'unit not active'),
             (dict(SubState='exited'), 'unit substate not running'),
@@ -662,6 +662,116 @@ class BootServiceCollectorTests(unittest.TestCase):
                 output.parent.mkdir(exist_ok=True)
                 with self.assertRaisesRegex(ValueError, code):
                     boot.collect_boot_service(fixture.profile(), output)
+
+    def test_loaded_execstart_structural_binding(self):
+        """The real loaded path/argv[] structure must bind exactly; near
+        commands, payload substrings and cat text never substitute."""
+        with self.subTest(case='positive'):
+            fixture = Harness()
+            self.addCleanup(fixture.cleanup)
+            fixture.patch(self)
+            payload = str(fixture.payload_path)
+            fixture.properties['ExecStart'] = (
+                '{ path=%s ; argv[]=%s --run benign ; ignore_errors=no ;'
+                ' status=0 }' % (payload, payload))
+            output = fixture.root / 'loaded-pos' / 'out'
+            output.parent.mkdir(exist_ok=True)
+            observation, _ = boot.collect_boot_service(fixture.profile(),
+                                                       output)
+            self.assertEqual(observation['execstart'],
+                             [payload, '--run', 'benign'])
+        templates = [
+            ('foreign-suffix',
+             lambda p: '{ path=%s-foreign ; argv[]=%s-foreign --run benign ;'
+                       ' ignore_errors=no ; status=0 }' % (p, p),
+             'loaded ExecStart path mismatch'),
+            ('other-path-with-payload-argument',
+             lambda p: '{ path=/usr/bin/other ; argv[]=/usr/bin/other %s'
+                       ' --run benign ; status=0 }' % (p,),
+             'loaded ExecStart path mismatch'),
+            ('argv-head-different',
+             lambda p: '{ path=%s ; argv[]=/usr/bin/other --run benign ;'
+                       ' status=0 }' % (p,),
+             'loaded ExecStart argv head mismatch'),
+            ('argument-differs',
+             lambda p: '{ path=%s ; argv[]=%s --run malicious ; status=0 }'
+                       % (p, p),
+             'loaded ExecStart argv differs from fragment'),
+            ('multiple-argv-segments',
+             lambda p: '{ path=%s ; argv[]=%s --run benign ; argv[]=%s ;'
+                       ' status=0 }' % (p, p, p),
+             'loaded ExecStart structure unsupported'),
+            ('missing-path-segment',
+             lambda p: '{ argv[]=%s --run benign ; status=0 }' % (p,),
+             'loaded ExecStart structure unsupported'),
+            ('missing-argv-segment',
+             lambda p: '{ path=%s ; status=0 }' % (p,),
+             'loaded ExecStart structure unsupported'),
+            ('unterminated-quote',
+             lambda p: '{ path=%s ; argv[]="%s --run benign ; status=0 }'
+                       % (p, p),
+             'loaded ExecStart structure unsupported'),
+            ('not-a-structure',
+             lambda p: '%s --run benign' % (p,),
+             'loaded ExecStart structure unsupported'),
+        ]
+        for name, build, code in templates:
+            with self.subTest(case=name):
+                fixture = Harness()
+                self.addCleanup(fixture.cleanup)
+                fixture.patch(self)
+                fixture.properties['ExecStart'] = build(str(fixture.payload_path))
+                output = fixture.root / ('loaded-%s' % name) / 'out'
+                output.parent.mkdir(exist_ok=True)
+                with self.assertRaisesRegex(ValueError, code):
+                    boot.collect_boot_service(fixture.profile(), output)
+
+    def test_fragment_argument_missing_from_loaded_refused(self):
+        self.fixture.patch(self)
+        payload = str(self.fixture.payload_path)
+        text = FRAGMENT_TEXT.format(payload=payload) \
+            .replace('ExecStart=%s --run benign\n' % payload,
+                     'ExecStart=%s --run benign --extra\n' % payload)
+        facts = self.fixture.facts()
+        facts['cmdline'] = [payload, '--run', 'benign', '--extra']
+        self.fixture.process_facts = [facts, copy.deepcopy(facts)]
+        self.fixture.fragment_path.write_text(text)
+        self.fixture.fragment_text = text
+        profile = self.fixture.profile(
+            fragment_sha256=boot.sha(text.encode()))
+        with self.assertRaisesRegex(ValueError,
+                                    'loaded ExecStart argv differs'):
+            self.collect(profile=profile)
+
+    def test_decoder_rejects_duplicate_loaded_definitions(self):
+        self.fixture.patch(self)
+        observation, bundle = self.collect()
+        records = self.records_of(bundle)
+        profile = self.fixture.profile()
+        payload = str(self.fixture.payload_path)
+        mutated = copy.deepcopy(records)
+        mutated[3]['stdout'] += 'ExecStart={ path=%s ; argv[]=%s }\n' % (
+            payload, payload)
+        with self.assertRaisesRegex(ValueError, 'duplicate property'):
+            boot.normalize_boot_service(dict(records=mutated), profile)
+        mutated2 = copy.deepcopy(records)
+        for index in (3, 8):
+            mutated2[index]['stdout'] = mutated2[index]['stdout'].replace(
+                ' ; ignore_errors=no', '')
+        boot.normalize_boot_service(dict(records=mutated2), profile)
+
+    def test_quoted_loaded_tokens_parse_to_same_argv(self):
+        fixture = Harness()
+        self.addCleanup(fixture.cleanup)
+        payload = str(fixture.payload_path)
+        fixture.properties['ExecStart'] = (
+            '{ path="%s" ; argv[]="%s" --run "benign" ; status=0 }'
+            % (payload, payload))
+        fixture.patch(self)
+        output = fixture.root / 'quoted' / 'out'
+        output.parent.mkdir(exist_ok=True)
+        observation, _ = boot.collect_boot_service(fixture.profile(), output)
+        self.assertEqual(observation['execstart'], [payload, '--run', 'benign'])
 
     def test_fragment_link_binding_core(self):
         link_parent = self.fixture.root / 'units'
