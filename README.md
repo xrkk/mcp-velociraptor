@@ -63,7 +63,8 @@ observation: the two functions start/restart/enable nothing either.
   manager identity bound to the independent sealed boot-service manager) and
   compare it verbatim. An explicit transport record may replace the
   same-filesystem directory identity with the guest manifest bytes plus the
-  host pin, never weakening the content/identity chain.
+  host pin (the host bundle directory is passed explicitly in transport
+  mode), never weakening the content/identity chain.
 
 The strict resume profile adds `bundle_dir`, `enable_link_path` (must equal
 `/etc/systemd/system/multi-user.target.wants/<unit>`), `deployment_root`, the

@@ -1033,7 +1033,7 @@ def _normalize_bundle(bundle_dir, inner, transport_record=None):
 
 
 def normalize_boot_resume(output_directory, expected_profile,
-                          transport=None):
+                          transport=None, bundle_host_dir=None):
     """Re-derive the COMPLETE resume observation from its sealed originals.
 
     The manifest inventory, directory identity and every file's
@@ -1095,8 +1095,14 @@ def normalize_boot_resume(output_directory, expected_profile,
           and _hex64(identity.get('image_sha256')),
           'manager identity malformed')
 
+    bundle_root = profile['bundle_dir']
+    if transport is not None:
+        _need(isinstance(bundle_host_dir, str)
+              and os.path.isabs(bundle_host_dir),
+              'transport requires the host bundle directory')
+        bundle_root = bundle_host_dir
     bundle_observation = _normalize_bundle(
-        profile['bundle_dir'], inner,
+        bundle_root, inner,
         None if transport is None else transport.get('bundle'))
     _need(by_kind['bundle'].get('observation_sha256')
           == sha(_canonical(bundle_observation).encode()),
