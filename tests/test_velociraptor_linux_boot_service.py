@@ -3,7 +3,8 @@
 No VM, no real systemd private socket, no network and no sample execution:
 every native seam is replaced with auditable static benign bytes and
 temporary directories. Payload self-description must never be adopted; the
-observation is derived only from the mocked manager/proc/kernel reads.
+observation is derived only from the mocked manager/proc/kernel reads, and
+the decoder replays only from the sealed originals.
 """
 import base64
 import copy
@@ -11,8 +12,6 @@ import itertools
 import json
 import os
 import shutil
-import stat
-import tempfile
 import unittest
 import uuid
 from pathlib import Path
@@ -45,7 +44,9 @@ class Harness:
     """Static benign fixture patched over every native seam."""
 
     def __init__(self):
-        self.root = Path(tempfile.mkdtemp(prefix='boot-service-fixture-'))
+        self.root = Path(os.environ.get('BOOT_SERVICE_TMPDIR', None)
+                         or __import__('tempfile').mkdtemp(
+                             prefix='boot-service-fixture-'))
         self.payload_path = self.root / 'benign-payload'
         self.fragment_path = self.root / 'maltrace-boot.service'
         # The payload bytes deliberately embed forged self-description that
@@ -74,7 +75,7 @@ class Harness:
             % (self.payload_path, self.payload_path),
             ControlGroup='/system.slice/maltrace-boot.service')
         self.show_outputs = [None, None]
-        self.process_births = [self.birth, self.birth]
+        self.process_facts = [None, None]
         self.kernel = None
         self.peer = (1, 0, 0)
         self.manager_identity_value = dict(
@@ -82,9 +83,9 @@ class Harness:
             image='/usr/lib/systemd/systemd', image_sha256=boot.sha(b'systemd'),
             parent_pid=0, groups=[0], device=0, inode=0,
             cgroup='0::/init.scope', cmdline=['/usr/lib/systemd/systemd'])
-        self.process_value = None
         self.manager = FakeManager(self.peer)
         self.clock = itertools.count(1_000_000_000, 100_000_000)
+        self.sealed = False
 
     def profile(self, **overrides):
         value = dict(unit_name='maltrace-boot.service',
@@ -99,13 +100,6 @@ class Harness:
         value.update(overrides)
         return value
 
-    def show_text(self, which=0):
-        override = self.show_outputs[which]
-        properties = dict(self.properties)
-        if override:
-            properties.update(override)
-        return ''.join('%s=%s\n' % item for item in sorted(properties.items()))
-
     def facts(self, birth=None):
         birth = birth or self.birth
         return dict(pid=self.main_pid, birth=birth, parent_pid=1,
@@ -116,30 +110,25 @@ class Harness:
                     cgroup='0::/system.slice/maltrace-boot.service',
                     cmdline=[str(self.payload_path), '--run', 'benign'])
 
-    def run_command(self, argv, timeout):
-        if argv == boot.show_argv('maltrace-boot.service'):
-            which = 0 if self.show_outputs[0] is not None \
-                or self.show_outputs[1] is None else 0
-            return {'argv': list(argv), 'rc': 0,
-                    'stdout': self.show_text(0), 'stderr': ''}
-        if argv == boot.cat_argv('maltrace-boot.service'):
-            return {'argv': list(argv), 'rc': 0,
-                    'stdout': '# %s\n%s' % (self.properties['FragmentPath'],
-                                            self.fragment_text), 'stderr': ''}
-        raise AssertionError('unexpected native command %r' % (argv,))
-
     def patch(self, test):
         kernel = self.kernel or dict(
             boot_id=self.profile()['boot_id'],
             vm_uuid=self.profile()['vm_uuid'], reads={})
         show_calls = [0]
+        process_calls = [0]
+        fixture = self
+
+        def blocked(*args, **kwargs):
+            raise AssertionError('native reads are sealed after export')
 
         def run_command(argv, timeout):
+            if fixture.sealed:
+                raise AssertionError('native reads are sealed after export')
             if argv == boot.show_argv('maltrace-boot.service'):
                 which = min(show_calls[0], 1)
                 show_calls[0] += 1
-                override = self.show_outputs[which]
-                properties = dict(self.properties)
+                properties = dict(fixture.properties)
+                override = fixture.show_outputs[which]
                 if override:
                     properties.update(override)
                 return {'argv': list(argv), 'rc': 0,
@@ -147,45 +136,42 @@ class Harness:
                                           in sorted(properties.items())),
                         'stderr': ''}
             if argv == boot.cat_argv('maltrace-boot.service'):
-                return self.run_command(argv, timeout)
+                return {'argv': list(argv), 'rc': 0,
+                        'stdout': '# %s\n%s' % (
+                            fixture.properties['FragmentPath'],
+                            fixture.fragment_text), 'stderr': ''}
             raise AssertionError('unexpected native command %r' % (argv,))
 
-        process_calls = [0]
-
         def process_identity(pid):
-            index = min(process_calls[0], len(self.process_births) - 1)
+            if fixture.sealed:
+                raise AssertionError('native reads are sealed after export')
+            index = min(process_calls[0], 1)
             process_calls[0] += 1
-            birth = self.process_births[index]
-            if isinstance(birth, Exception):
-                raise birth
-            return self.facts(birth)
+            facts = fixture.process_facts[index] or fixture.facts()
+            if isinstance(facts, Exception):
+                raise facts
+            return copy.deepcopy(facts)
 
         patches = [
             mock.patch.object(boot, 'read_kernel_identity',
                               mock.Mock(return_value=kernel)),
             mock.patch.object(boot, 'manager_identity',
                               mock.Mock(return_value=copy.deepcopy(
-                                  self.manager_identity_value))),
+                                  fixture.manager_identity_value))),
             mock.patch.object(boot, 'open_manager',
-                              mock.Mock(return_value=self.manager)),
-            mock.patch.object(boot, 'run_command', mock.Mock(
-                side_effect=run_command)),
+                              mock.Mock(return_value=fixture.manager)),
+            mock.patch.object(boot, 'run_command',
+                              mock.Mock(side_effect=run_command)),
             mock.patch.object(boot, 'process_identity', mock.Mock(
                 side_effect=process_identity)),
             mock.patch.object(boot, 'read_exe',
-                              mock.Mock(return_value=self.payload_bytes)),
+                              mock.Mock(return_value=fixture.payload_bytes)),
             mock.patch.object(boot, '_now_mono',
-                              mock.Mock(side_effect=lambda: next(self.clock))),
+                              mock.Mock(side_effect=lambda: next(fixture.clock))),
         ]
         for patch in patches:
             patch.start()
             test.addCleanup(patch.stop)
-
-    def output(self, name):
-        path = self.root / name
-        need_dir = self.root / (name + '-parent')
-        need_dir.mkdir(exist_ok=True)
-        return path
 
     def cleanup(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -204,6 +190,12 @@ class BootServiceCollectorTests(unittest.TestCase):
         return boot.collect_boot_service(
             profile or self.fixture.profile(), output)
 
+    def records_of(self, bundle):
+        return [json.loads(line) for line in
+                Path(bundle['output'], 'raw.ndjson').read_text().splitlines()
+                if line.strip()]
+
+    # -- success ----------------------------------------------------------
     def test_success_ignores_payload_self_description(self):
         self.fixture.patch(self)
         observation, bundle = self.collect()
@@ -221,42 +213,42 @@ class BootServiceCollectorTests(unittest.TestCase):
         self.assertIn('prior author/installation origin not proven',
                       ' '.join(observation['limitations']))
         self.assertTrue(self.fixture.manager.closed)
-        # decoder re-derives the same observation from the sealed directory
         decoded = boot.normalize_boot_service(
             bundle['output'], self.fixture.profile())
         self.assertEqual(decoded, observation)
-        again = boot.normalize_boot_service(
-            dict(records=self.records_of(bundle)), self.fixture.profile())
-        self.assertEqual(again, observation)
-
-    def records_of(self, bundle):
-        return [json.loads(line) for line in
-                Path(bundle['output'], 'raw.ndjson').read_text().splitlines()
-                if line.strip()]
+        records = self.records_of(bundle)
+        self.assertEqual([r['kind'] for r in records],
+                         boot.RECORD_SEQUENCE)
+        marked = boot.normalize_boot_service(
+            dict(records=records), self.fixture.profile())
+        self.assertEqual(marked['decode_trust'], 'fixture-records-only')
+        del marked['decode_trust']
+        self.assertEqual(marked['limitations'][-1],
+                         'decoded from in-memory records; not the sealed '
+                         'original channel')
+        trimmed = dict(marked, limitations=observation['limitations'])
+        self.assertEqual(trimmed, observation)
 
     def test_decoder_detects_same_byte_replacement_and_tampering(self):
         self.fixture.patch(self)
-        # a copied directory is a different directory object entirely
         observation, bundle = self.collect()
         output = Path(bundle['output'])
         copied = output.parent / 'copy'
         shutil.copytree(output, copied)
         with self.assertRaisesRegex(ValueError, 'output replaced'):
             boot.normalize_boot_service(copied, self.fixture.profile())
-        # tampered bytes with the inode kept fail the hash check
         os.chmod(output / 'observation.json', 0o600)
         (output / 'observation.json').write_text('tampered')
         os.chmod(output / 'observation.json', 0o400)
-        with self.assertRaisesRegex(ValueError, 'raw hash mismatch'):
+        with self.assertRaisesRegex(ValueError,
+                                    'raw size mismatch|raw hash mismatch'):
             boot.normalize_boot_service(output, self.fixture.profile())
-        # a missing manifest is a missing original
         _, bundle2 = self.collect()
         output2 = Path(bundle2['output'])
         os.chmod(output2 / 'manifest.json', 0o600)
         (output2 / 'manifest.json').unlink()
         with self.assertRaisesRegex(ValueError, 'raw missing'):
             boot.normalize_boot_service(output2, self.fixture.profile())
-        # same bytes in a new inode are still a replacement
         _, bundle3 = self.collect()
         output3 = Path(bundle3['output'])
         raw_path = output3 / 'raw.ndjson'
@@ -268,8 +260,14 @@ class BootServiceCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,
                                     'original replaced with same bytes'):
             boot.normalize_boot_service(output3, self.fixture.profile())
+        _, bundle4 = self.collect()
+        output4 = Path(bundle4['output'])
+        os.chmod(output4 / 'raw.ndjson', 0o600)
+        with self.assertRaisesRegex(ValueError, 'raw protection changed'):
+            boot.normalize_boot_service(output4, self.fixture.profile())
 
-    def test_wrong_boot_wrong_vm_and_reversed_expectation(self):
+    # -- identity ---------------------------------------------------------
+    def test_wrong_boot_wrong_vm(self):
         self.fixture.patch(self)
         profile = self.fixture.profile()
         with mock.patch.object(boot, 'read_kernel_identity',
@@ -298,25 +296,33 @@ class BootServiceCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'manager not pid1 root'):
             self.collect()
 
-    def test_pid_reuse_and_exit_during_read_leave_partial_evidence_only(self):
-        self.fixture.patch(self)
-        self.fixture.process_births = [self.fixture.birth, '999999']
-        output = self.fixture.root / 'p1' / 'out'
-        output.parent.mkdir(exist_ok=True)
-        with self.assertRaisesRegex(ValueError, 'pid reused or replaced'):
-            boot.collect_boot_service(self.fixture.profile(), output)
-        self.assertTrue((output / 'raw.ndjson').is_file())
-        self.assertFalse((output / 'observation.json').exists())
-        self.assertFalse((output / 'manifest.json').exists())
-        rows = [json.loads(line) for line in
-                (output / 'raw.ndjson').read_text().splitlines() if line.strip()]
-        self.assertEqual(rows[-1]['kind'], 'collection-error')
-        self.assertTrue(self.fixture.manager.closed)
+    # -- process drift ----------------------------------------------------
+    def test_recheck_process_drift_refused(self):
+        for field, value in (('uids', [0] * 4), ('gids', [0] * 4),
+                             ('image', '/usr/bin/other'),
+                             ('image_sha256', boot.sha(b'other')),
+                             ('inode', 12345), ('device', 1),
+                             ('cgroup', '0::/other.slice/x'),
+                             ('cmdline', ['/usr/bin/other'])):
+            with self.subTest(field=field):
+                fixture = Harness()
+                self.addCleanup(fixture.cleanup)
+                fixture.patch(self)
+                second = dict(fixture.facts())
+                second[field] = value
+                fixture.process_facts = [fixture.facts(), second]
+                output = fixture.root / ('drift-%s' % field) / 'out'
+                output.parent.mkdir(exist_ok=True)
+                with self.assertRaisesRegex(ValueError,
+                                            'process identity drifted'):
+                    boot.collect_boot_service(fixture.profile(), output)
+                self.assertFalse((output / 'observation.json').exists())
+                self.assertFalse((output / 'manifest.json').exists())
 
-        self.setUp()
+    def test_process_exit_during_read_leaves_partial_evidence_only(self):
         self.fixture.patch(self)
-        self.fixture.process_births = [self.fixture.birth,
-                                       FileNotFoundError('gone')]
+        self.fixture.process_facts = [self.fixture.facts(),
+                                      FileNotFoundError('gone')]
         output = self.fixture.root / 'p2' / 'out'
         output.parent.mkdir(exist_ok=True)
         with self.assertRaisesRegex(FileNotFoundError, 'gone'):
@@ -325,6 +331,7 @@ class BootServiceCollectorTests(unittest.TestCase):
                 (output / 'raw.ndjson').read_text().splitlines() if line.strip()]
         self.assertEqual(rows[-1]['kind'], 'collection-error')
         self.assertFalse((output / 'observation.json').exists())
+        self.assertTrue(self.fixture.manager.closed)
 
     def test_uid_conflicts_refused(self):
         for uids in ([0] * 4, [1300] * 4, [1201, 0, 1201, 1201]):
@@ -332,28 +339,303 @@ class BootServiceCollectorTests(unittest.TestCase):
                 fixture = Harness()
                 self.addCleanup(fixture.cleanup)
                 fixture.patch(self)
-                original_facts = fixture.facts
-                fixture.facts = lambda birth=None, u=uids: dict(
-                    original_facts(birth), uids=u, gids=u)
+                facts = fixture.facts()
+                facts.update(uids=uids, gids=uids)
+                fixture.process_facts = [facts, copy.deepcopy(facts)]
                 output = fixture.root / ('uid-%r-parent' % (uids,)) / 'out'
                 output.parent.mkdir(exist_ok=True)
                 with self.assertRaisesRegex(
-                        ValueError,
-                        'uid mismatch|root identity refused'):
+                        ValueError, 'uid mismatch|root identity refused'):
                     boot.collect_boot_service(fixture.profile(), output)
 
-    def test_invocation_and_mainpid_changes_refused(self):
+    # -- unit recheck -----------------------------------------------------
+    def test_unit_recheck_drift_refused(self):
+        for field, value in (('InvocationID', 'b' * 32), ('MainPID', '5252'),
+                             ('User', '0'), ('ExecStart', '{ path=/o }'),
+                             ('FragmentPath', '/etc/systemd/system/other'),
+                             ('ActiveState', 'inactive')):
+            with self.subTest(field=field):
+                fixture = Harness()
+                self.addCleanup(fixture.cleanup)
+                fixture.patch(self)
+                fixture.show_outputs = [None, {field: value}]
+                output = fixture.root / ('show2-%s' % field) / 'out'
+                output.parent.mkdir(exist_ok=True)
+                with self.assertRaisesRegex(ValueError,
+                                            'unit recheck drifted'):
+                    boot.collect_boot_service(fixture.profile(), output)
+
+    # -- cgroup binding ---------------------------------------------------
+    def test_near_cgroup_and_manager_disagreement_refused(self):
+        for cgroup, code in (
+                ('0::/system.slice/maltrace-boot.service-foreign',
+                 'cgroup does not bind the unit'),
+                ('0::/system.slice/maltrace-boot.service.d/x',
+                 'cgroup does not bind the unit'),
+                ('0::/user.slice/maltrace-boot.service',
+                 'manager ControlGroup disagrees')):
+            with self.subTest(cgroup=cgroup):
+                fixture = Harness()
+                self.addCleanup(fixture.cleanup)
+                fixture.patch(self)
+                facts = fixture.facts()
+                facts['cgroup'] = cgroup
+                fixture.process_facts = [facts, copy.deepcopy(facts)]
+                output = fixture.root / 'cg' / 'out'
+                output.parent.mkdir(exist_ok=True)
+                with self.assertRaisesRegex(ValueError, code):
+                    boot.collect_boot_service(fixture.profile(), output)
+
+    def test_manager_control_group_must_agree(self):
         self.fixture.patch(self)
-        self.fixture.show_outputs = [None, dict(InvocationID='b' * 32)]
-        with self.assertRaisesRegex(ValueError, 'invocation changed'):
-            self.collect()
-        self.setUp()
-        self.fixture.patch(self)
-        self.fixture.show_outputs = [None, dict(MainPID='5252')]
-        with self.assertRaisesRegex(ValueError, 'main pid changed'):
+        override = dict(ControlGroup='/system.slice/other.service')
+        self.fixture.show_outputs = [override, override]
+        with self.assertRaisesRegex(ValueError,
+                                    'manager ControlGroup disagrees'):
             self.collect()
 
-    def test_fragment_and_loaded_definition_conflicts(self):
+    # -- runtime fragment -------------------------------------------------
+    def test_direct_runtime_fragment_refused(self):
+        self.fixture.patch(self)
+        original = boot.stable_file_read
+        runtime_fragment = '/run/systemd/system/maltrace-boot.service'
+        profile = self.fixture.profile(fragment_path=runtime_fragment,
+                                       fragment_sha256=boot.sha(
+                                           self.fixture.fragment_text.encode()))
+
+        def read(path):
+            if path == runtime_fragment:
+                return dict(original(self.fixture.fragment_path),
+                            path=path)
+            return original(path)
+
+        with mock.patch.object(boot, 'stable_file_read', side_effect=read):
+            self.fixture.properties['FragmentPath'] = runtime_fragment
+            with self.assertRaisesRegex(ValueError, 'runtime fragment'):
+                self.collect(profile=profile)
+        self.setUp()
+        self.fixture.patch(self)
+        self.fixture.properties['FragmentPath'] = \
+            '/run/systemd/system/maltrace-boot.service'
+        with self.assertRaisesRegex(ValueError, 'runtime fragment refused'):
+            self.collect()
+
+    # -- raw exe bytes ----------------------------------------------------
+    def test_decoder_rejects_exe_bytes_conflict(self):
+        self.fixture.patch(self)
+        observation, bundle = self.collect()
+        records = self.records_of(bundle)
+        profile = self.fixture.profile()
+        mutated = copy.deepcopy(records)
+        mutated[7]['exe_read_sha256'] = boot.sha(b'different')
+        with self.assertRaisesRegex(ValueError, 'exec image hash mismatch'):
+            boot.normalize_boot_service(dict(records=mutated), profile)
+        mutated2 = copy.deepcopy(records)
+        mutated2[7]['exe_read_content'] = base64.b64encode(b'other').decode()
+        with self.assertRaisesRegex(ValueError,
+                                    'exe read bytes contradict hash'):
+            boot.normalize_boot_service(dict(records=mutated2), profile)
+        mutated3 = copy.deepcopy(records)
+        mutated3[7]['exe_read_size'] = 7
+        with self.assertRaisesRegex(ValueError,
+                                    'exec image size mismatch'):
+            boot.normalize_boot_service(dict(records=mutated3), profile)
+
+    def test_exec_image_must_match_payload_bytes(self):
+        self.fixture.patch(self)
+        with mock.patch.object(
+                boot, 'read_exe',
+                mock.Mock(return_value=b'different image bytes')):
+            with self.assertRaisesRegex(ValueError, 'exec image hash mismatch'):
+                self.collect()
+        self.setUp()
+        self.fixture.patch(self)
+        facts = self.fixture.facts()
+        facts['image'] = '/usr/bin/other'
+        self.fixture.process_facts = [facts, copy.deepcopy(facts)]
+        with self.assertRaisesRegex(ValueError, 'exec image mismatch'):
+            self.collect()
+
+    def test_oversized_evidence_file_refused_explicitly(self):
+        self.fixture.patch(self)
+        big = self.fixture.root / 'big-payload'
+        big.write_bytes(b'x' * (boot.INLINE_LIMIT + 1))
+        text = FRAGMENT_TEXT.format(payload=big)
+        fragment = self.fixture.root / 'big.service'
+        fragment.write_text(text)
+        self.fixture.properties['FragmentPath'] = str(fragment)
+        self.fixture.properties['ExecStart'] = (
+            '{ path=%s ; argv[]=%s --run benign ; ignore_errors=no ; status=0 }'
+            % (big, big))
+        profile = self.fixture.profile(
+            payload_path=str(big), fragment_path=str(fragment),
+            payload_sha256=boot.sha(big.read_bytes()),
+            fragment_sha256=boot.sha(text.encode()))
+        with self.assertRaisesRegex(ValueError,
+                                    'evidence file exceeds bounded inline size'):
+            self.collect(profile=profile)
+
+    # -- monotonic --------------------------------------------------------
+    def test_decoder_rejects_reversed_or_invalid_monotonic(self):
+        self.fixture.patch(self)
+        observation, bundle = self.collect()
+        records = self.records_of(bundle)
+        profile = self.fixture.profile()
+        mutated = copy.deepcopy(records)
+        mutated[-1]['monotonic_ns'] = mutated[0]['monotonic_ns'] - 1
+        with self.assertRaisesRegex(ValueError,
+                                    'monotonic time moved backwards'):
+            boot.normalize_boot_service(dict(records=mutated), profile)
+        mutated2 = copy.deepcopy(records)
+        mutated2[4]['monotonic_ns'] = mutated2[3]['monotonic_ns'] - 1
+        with self.assertRaisesRegex(ValueError,
+                                    'monotonic time moved backwards'):
+            boot.normalize_boot_service(dict(records=mutated2), profile)
+        for bad in (None, True, '12', -5):
+            mutated3 = copy.deepcopy(records)
+            mutated3[2]['monotonic_ns'] = bad
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(ValueError,
+                                            'monotonic time missing or invalid'):
+                    boot.normalize_boot_service(dict(records=mutated3), profile)
+
+    def test_window_bound_enforced_on_recorded_evidence(self):
+        self.fixture.patch(self)
+        self.fixture.clock = itertools.count(1_000_000_000, 4_000_000_000)
+        output = self.fixture.root / 'win' / 'out'
+        output.parent.mkdir(exist_ok=True)
+        with self.assertRaisesRegex(ValueError, 'window exceeded'):
+            boot.collect_boot_service(self.fixture.profile(), output)
+
+    # -- manifest inventory -----------------------------------------------
+    def test_manifest_inventory_must_be_exact(self):
+        self.fixture.patch(self)
+        observation, bundle = self.collect()
+        output = Path(bundle['output'])
+        os.chmod(output / 'manifest.json', 0o600)
+        manifest = json.loads((output / 'manifest.json').read_text())
+        manifest['files'] = {}
+        (output / 'manifest.json').write_text(json.dumps(manifest))
+        os.chmod(output / 'manifest.json', 0o400)
+        with self.assertRaisesRegex(ValueError, 'manifest inventory'):
+            boot.normalize_boot_service(output, self.fixture.profile())
+        _, bundle2 = self.collect()
+        output2 = Path(bundle2['output'])
+        (output2 / 'extra.txt').write_text('x')
+        with self.assertRaisesRegex(ValueError, 'manifest inventory'):
+            boot.normalize_boot_service(output2, self.fixture.profile())
+        _, bundle3 = self.collect()
+        output3 = Path(bundle3['output'])
+        os.chmod(output3 / 'manifest.json', 0o600)
+        manifest3 = json.loads((output3 / 'manifest.json').read_text())
+        del manifest3['files']['observation.json']
+        (output3 / 'manifest.json').write_text(json.dumps(manifest3))
+        os.chmod(output3 / 'manifest.json', 0o400)
+        with self.assertRaisesRegex(ValueError, 'manifest inventory'):
+            boot.normalize_boot_service(output3, self.fixture.profile())
+
+    # -- fragment binding -------------------------------------------------
+    def test_etc_link_positive_and_sealed_replay(self):
+        fixture = Harness()
+        self.addCleanup(fixture.cleanup)
+        units = fixture.root / 'etc-systemd-system'
+        units.mkdir()
+        os.chmod(units, 0o755)
+        link = units / 'maltrace-boot.service'
+        os.symlink(fixture.fragment_path, link)
+        fixture.properties['FragmentPath'] = str(link)
+        fixture.patch(self)
+        owner = os.getuid()
+        (fixture.root / 'link').mkdir(exist_ok=True)
+        with mock.patch.object(boot, 'ETC_UNITS', units), \
+                mock.patch.object(boot, 'FRAGMENT_PARENTS', (units,)), \
+                mock.patch.object(boot, 'FRAGMENT_LINK_OWNER', owner):
+            observation, bundle = boot.collect_boot_service(
+                fixture.profile(), fixture.root / 'link' / 'out')
+        self.assertIsNotNone(observation['unit']['fragment_binding'])
+        self.assertEqual(observation['unit']['fragment_binding']['link_target'],
+                         str(fixture.fragment_path))
+        # after export, seal every native read: the decoder must still
+        # re-derive the observation from the sealed originals alone
+        fixture.sealed = True
+        decoded = boot.normalize_boot_service(bundle['output'],
+                                              fixture.profile())
+        self.assertEqual(decoded, observation)
+        records = self.records_of(bundle)
+        for mutation, code in (
+                (lambda binding: binding.update(link_target='/foreign'),
+                 'escapes or unbound'),
+                (lambda binding: binding.update(link_uid=owner + 999),
+                 'fragment link not protected'),
+                (lambda binding: binding.update(target_inode=1),
+                 'does not pin the original'),
+                (lambda binding: binding.clear(),
+                 'fragment binding link path mismatch'),
+                (lambda binding: None, 'binding evidence missing'),
+        ):
+            mutated = copy.deepcopy(records)
+            if code == 'binding evidence missing':
+                mutated[5]['binding'] = None
+            else:
+                mutation(mutated[5]['binding'])
+            with self.subTest(code=code):
+                with self.assertRaisesRegex(ValueError, code):
+                    boot.normalize_boot_service(dict(records=mutated),
+                                                fixture.profile())
+
+    # -- profile ----------------------------------------------------------
+    def test_profile_hash_and_execstart_binding_refused(self):
+        self.fixture.patch(self)
+        with self.assertRaisesRegex(ValueError, 'fragment hash mismatch'):
+            self.collect(profile=self.fixture.profile(
+                fragment_sha256=boot.sha(b'other')))
+        with self.assertRaisesRegex(ValueError, 'payload hash mismatch'):
+            self.collect(profile=self.fixture.profile(
+                payload_sha256=boot.sha(b'other')))
+        fragment = self.fixture.fragment_path
+        text = FRAGMENT_TEXT.format(payload=self.fixture.payload_path) \
+            .replace('User=1201\n', 'User=0\n')
+        fragment.write_text(text)
+        with self.assertRaisesRegex(ValueError,
+                                    'fragment User mismatch|ordinary User'):
+            self.collect(profile=self.fixture.profile(
+                fragment_sha256=boot.sha(text.encode())))
+        other = self.fixture.root / 'other-payload'
+        other.write_bytes(b'other benign payload\n')
+        text2 = FRAGMENT_TEXT.format(payload=other)
+        self.fixture.fragment_path.write_text(text2)
+        with self.assertRaisesRegex(ValueError, 'does not bind payload'):
+            self.collect(profile=self.fixture.profile(
+                fragment_sha256=boot.sha(text2.encode())))
+
+    def test_profile_validation_rejects_caller_supplied_identity(self):
+        base = self.fixture.profile()
+        for change in (
+                lambda profile: profile.update(verified=True),
+                lambda profile: profile.update(source_nature='real'),
+                lambda profile: profile.update(pid=1234),
+                lambda profile: profile.update(birth='7'),
+                lambda profile: profile.update(invocation_id='a' * 32),
+                lambda profile: profile.pop('window_seconds'),
+                lambda profile: profile.update(window_seconds=31),
+                lambda profile: profile.update(window_seconds=True),
+                lambda profile: profile.update(expected_uid=0),
+                lambda profile: profile.update(expected_uid=True),
+                lambda profile: profile.update(
+                    payload_path=self.fixture.fragment_path),
+                lambda profile: profile.update(vm_uuid='NOT-A-UUID'),
+                lambda profile: profile.update(unit_name='../escape.service'),
+                lambda profile: profile.update(
+                    fragment_path='/run/systemd/system/maltrace-boot.service'),
+        ):
+            profile = copy.deepcopy(base)
+            change(profile)
+            with self.subTest(change=change):
+                with self.assertRaises(ValueError):
+                    boot.validate_profile(profile)
+        self.assertTrue(boot.validate_profile(copy.deepcopy(base)))
+
+    def test_loaded_definition_conflicts(self):
         cases = [
             (dict(FragmentPath='/run/systemd/system/maltrace-boot.service'),
              'runtime fragment refused'),
@@ -381,96 +663,6 @@ class BootServiceCollectorTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, code):
                     boot.collect_boot_service(fixture.profile(), output)
 
-    def test_profile_hash_and_execstart_binding_refused(self):
-        self.fixture.patch(self)
-        with self.assertRaisesRegex(ValueError, 'fragment hash mismatch'):
-            self.collect(profile=self.fixture.profile(
-                fragment_sha256=boot.sha(b'other')))
-        with self.assertRaisesRegex(ValueError, 'payload hash mismatch'):
-            self.collect(profile=self.fixture.profile(
-                payload_sha256=boot.sha(b'other')))
-        fragment = self.fixture.fragment_path
-        text = self.fragment_text_without_user()
-        fragment.write_text(text)
-        with self.assertRaisesRegex(ValueError,
-                                    'fragment User mismatch|ordinary User'):
-            self.collect(profile=self.fixture.profile(
-                fragment_sha256=boot.sha(text.encode())))
-        other = self.fixture.root / 'other-payload'
-        other.write_bytes(b'other benign payload\n')
-        text2 = FRAGMENT_TEXT.format(payload=other)
-        self.fixture.fragment_path.write_text(text2)
-        with self.assertRaisesRegex(ValueError,
-                                    'does not bind payload'):
-            self.collect(profile=self.fixture.profile(
-                fragment_sha256=boot.sha(text2.encode())))
-
-    def fragment_text_without_user(self):
-        return self.fixture.fragment_text.replace('User=1201\n', 'User=0\n')
-
-    def test_profile_validation_rejects_caller_supplied_identity(self):
-        base = self.fixture.profile()
-        for change in (
-                lambda profile: profile.update(verified=True),
-                lambda profile: profile.update(source_nature='real'),
-                lambda profile: profile.update(pid=1234),
-                lambda profile: profile.update(birth='7'),
-                lambda profile: profile.update(invocation_id='a' * 32),
-                lambda profile: profile.pop('window_seconds'),
-                lambda profile: profile.update(window_seconds=31),
-                lambda profile: profile.update(window_seconds=True),
-                lambda profile: profile.update(expected_uid=0),
-                lambda profile: profile.update(expected_uid=True),
-                lambda profile: profile.update(
-                    payload_path=self.fixture.fragment_path),
-                lambda profile: profile.update(vm_uuid='NOT-A-UUID'),
-                lambda profile: profile.update(unit_name='../escape.service'),
-        ):
-            profile = copy.deepcopy(base)
-            change(profile)
-            with self.subTest(change=change):
-                with self.assertRaises(ValueError):
-                    boot.validate_profile(profile)
-        self.assertTrue(boot.validate_profile(copy.deepcopy(base)))
-
-    def test_window_bound_enforced_on_recorded_evidence(self):
-        self.fixture.patch(self)
-        self.fixture.clock = itertools.count(1_000_000_000, 4_000_000_000)
-        output = self.fixture.root / 'win' / 'out'
-        output.parent.mkdir(exist_ok=True)
-        with self.assertRaisesRegex(ValueError, 'window exceeded'):
-            boot.collect_boot_service(self.fixture.profile(), output)
-
-    def test_decoder_rejects_mutated_record_sequences(self):
-        self.fixture.patch(self)
-        observation, bundle = self.collect()
-        records = self.records_of(bundle)
-        profile = self.fixture.profile()
-        boot.normalize_boot_service(dict(records=records), profile)
-        for mutation, code in (
-                (lambda rows: rows.pop(3), 'raw record sequence'),
-                (lambda rows: rows[1].update(
-                    value=dict(rows[1]['value'],
-                               boot_id=str(uuid.uuid4()))),
-                 'wrong boot identity'),
-                (lambda rows: rows[2].update(peer=[901, 0, 0]),
-                 'foreign manager peer'),
-                (lambda rows: rows[7].update(pid=5252),
-                 'observed pid is not the main pid'),
-                (lambda rows: rows[8].update(InvocationID='c' * 32),
-                 'invocation changed'),
-                (lambda rows: rows[5].update(sha256=boot.sha(b'x')),
-                 'fragment hash mismatch'),
-                (lambda rows: rows[6].update(device=999), None),
-                (lambda rows: rows[7]['value'].update(
-                    cgroup='0::/user.slice/other'), 'cgroup mismatch'),
-        ):
-            mutated = copy.deepcopy(records)
-            mutation(mutated)
-            with self.subTest(code=code):
-                with self.assertRaises(ValueError):
-                    boot.normalize_boot_service(dict(records=mutated), profile)
-
     def test_fragment_link_binding_core(self):
         link_parent = self.fixture.root / 'units'
         link_parent.mkdir()
@@ -482,11 +674,7 @@ class BootServiceCollectorTests(unittest.TestCase):
         owner = os.getuid()
         binding = boot.validate_fragment_link(link, original, owner)
         self.assertEqual(binding['link_target'], str(original))
-        for change, code in (
-                (lambda: os.symlink(self.fixture.root / 'nowhere', link),
-                 'escapes or unbound'),
-        ):
-            pass
+        self.assertEqual(binding['target_inode'], original.stat().st_ino)
         foreign = link_parent / 'foreign.service'
         os.symlink(self.fixture.root, foreign)
         with self.assertRaisesRegex(ValueError, 'escapes or unbound'):
@@ -498,20 +686,31 @@ class BootServiceCollectorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'fragment link not protected'):
             boot.validate_fragment_link(plain, original, owner)
 
-    def test_exec_image_must_match_payload_bytes(self):
+    def test_decoder_rejects_mutated_record_sequences(self):
         self.fixture.patch(self)
-        with mock.patch.object(
-                boot, 'read_exe',
-                mock.Mock(return_value=b'different image bytes')):
-            with self.assertRaisesRegex(ValueError, 'exec image hash mismatch'):
-                self.collect()
-        self.setUp()
-        self.fixture.patch(self)
-        with mock.patch.object(boot, 'process_identity', mock.Mock(
-                return_value=dict(self.fixture.facts(),
-                                  image='/usr/bin/other'))):
-            with self.assertRaisesRegex(ValueError, 'exec image mismatch'):
-                self.collect()
+        observation, bundle = self.collect()
+        records = self.records_of(bundle)
+        profile = self.fixture.profile()
+        boot.normalize_boot_service(dict(records=copy.deepcopy(records)),
+                                    profile)
+        for mutation in (
+                lambda rows: rows.pop(3),
+                lambda rows: rows[1].update(
+                    value=dict(rows[1]['value'], boot_id=str(uuid.uuid4()))),
+                lambda rows: rows[2].update(peer=[901, 0, 0]),
+                lambda rows: rows[7].update(pid=5252),
+                lambda rows: rows[8].update(stdout='garbage'),
+                lambda rows: rows[9]['value'].update(birth='1'),
+                lambda rows: rows[5].update(sha256=boot.sha(b'x')),
+                lambda rows: rows[5].update(content=base64.b64encode(
+                    b'x').decode()),
+                lambda rows: rows[6].update(device=999),
+        ):
+            mutated = copy.deepcopy(records)
+            mutation(mutated)
+            with self.subTest(mutation=mutation):
+                with self.assertRaises(ValueError):
+                    boot.normalize_boot_service(dict(records=mutated), profile)
 
 
 if __name__ == '__main__':

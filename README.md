@@ -76,6 +76,30 @@ still requires an independently sealed A source plus a confirmed host
 bridge. Wiring this producer into a formal scope adapter and the real
 cross-boot chain is future work; local tests are development evidence only.
 
+Strictness and original-evidence rules (hardened after independent
+controller probing): a runtime `/run/...` definition is refused even when it
+matches the profile path character-for-character; the observed cgroup must
+contain the unit as a complete path component and must equal the manager's
+own `ControlGroup`; the loaded `ExecStart` must actually bind the payload
+path. The unit is read twice (both full `systemctl show` responses preserved
+and re-verified field-by-field) and the live process is read twice with the
+complete identity (pid/birth/UIDs/GIDs/exe device+inode+SHA/cmdline/cgroup)
+compared; any drift, including a same-PID/same-birth change of UID, image or
+cgroup, refuses the observation and leaves only partial raw evidence.
+Fragment, payload and the `/proc/<pid>/exe` image bytes are all sealed into
+the raw records (files above 16 MiB are refused explicitly instead of being
+downgraded), and stable reads pin the opened descriptor's fstat before and
+after. Record timestamps are strict non-decreasing integers bounded by the
+profile window, which also bounds every sub-read through a shared remaining
+budget. The manifest must inventory exactly the three sealed files (any
+missing, extra or replaced entry — even with identical bytes — is refused)
+and the decoder replays the `/etc` fragment-link binding purely from the
+collection-time raw evidence, never by re-reading the collection host. A
+plain in-memory records mapping is accepted only as a low-trust fixture
+decode and is marked as such; native or causal qualification requires the
+sealed original directory, with authoritative sealing expected from the
+future P04 store integration.
+
 # Velociraptor MCP
 
 ## Bounded ordinary user service evidence

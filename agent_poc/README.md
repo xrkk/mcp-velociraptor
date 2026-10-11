@@ -56,6 +56,20 @@ confirmed host bridge. It is not yet wired into any agent workflow or scope
 adapter; that integration and the real native chain remain future work, and
 local tests are development evidence only.
 
+After independent controller probing the producer is strict about what it
+accepts: runtime `/run` definitions are refused even on an exact path match,
+the observed cgroup must bind the unit as a complete path component and
+agree with the manager's `ControlGroup`, the unit and the live process are
+each read twice with full identities preserved in the raw records and
+compared (same-PID UID/image/cgroup drift refuses the observation), the
+fragment, payload and `/proc/<pid>/exe` bytes are all sealed into raw with
+explicit refusal of oversized inputs, record timestamps are strict
+non-decreasing integers under the shared profile window, and the manifest
+must inventory exactly the sealed files with inode/hash/protection pinned.
+The decoder replays the fragment-link binding only from collection-time raw
+evidence, and a plain in-memory records mapping decodes only as a marked
+low-trust fixture; authoritative sealing remains future P04 work.
+
 # Velociraptor Agent POC
 
 ## Bounded ordinary user service evidence
