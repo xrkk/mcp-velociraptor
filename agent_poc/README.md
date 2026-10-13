@@ -1605,3 +1605,17 @@ enabled-inactive with no invocation; never a start). `normalize`
 re-derives the artifact/definition rows and the separate installer record
 from the sealed originals; no invocation, scheduler-fire or autonomy
 verdict is produced. Not yet wired into any agent workflow.
+
+The legacy no-argument payload command is unchanged. A second closed command
+form is derived only from the captured unit bytes:
+`<payload> --scenario scheduled --run-id <ASCII id, 1..64> --root
+<payload-directory>/case --schedule-source systemd`, optionally followed by
+`--schedule-ready-file <payload-directory>/ready`. Arbitrary flags, wrappers,
+foreign case/readiness paths and caller-profile `argv` remain refused. The
+actual loaded `ExecStart` must equal the complete captured argument list; a
+matching payload path alone cannot qualify different arguments. The existing
+ordinary author, root-manager installer, held inode/content, one-install,
+enabled-inactive and sealed replay requirements all remain mandatory. This
+argument binding is local product support, not permission to start the unit or
+proof of fixture readiness, scheduler-fire or cross-boot autonomy; those need
+the corresponding controlled payload and separate runtime qualification.

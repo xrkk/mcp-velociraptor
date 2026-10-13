@@ -493,5 +493,93 @@ class BootInstallOrderedShapeTests(unittest.TestCase):
             source.normalize(rows, **arguments)
 
 
+
+class BootInstallCapturedFixtureArgumentsTests(unittest.TestCase):
+    payload = '/opt/t42/origin/payload'
+
+    def arguments(self, ready=False):
+        args = [self.payload, '--scenario', 'scheduled', '--run-id',
+                'scheduled-1', '--root', '/opt/t42/origin/case',
+                '--schedule-source', 'systemd']
+        if ready:
+            args += ['--schedule-ready-file', '/opt/t42/origin/ready']
+        return args
+
+    def coherent(self, tokens, ordered=False):
+        rows, arguments, files, result = (ordered_fixture() if ordered else fixture())
+        _mutate_unit(rows, arguments, ('ExecStart=' + self.payload + '\n').encode(),
+                     ('ExecStart=' + ' '.join(tokens) + '\n').encode())
+        result = next(row for row in rows if row['kind'] == 'install-result')
+        result['show']['stdout'] = result['show']['stdout'].replace(
+            'argv[]=' + self.payload + ' ;', 'argv[]=' + ' '.join(tokens) + ' ;')
+        return rows, arguments, result
+
+    def test_legacy_unit_result_remains_exact_and_unchanged(self):
+        rows, arguments, files, _ = fixture()
+        parsed = source.parse_installation_unit(base64.b64decode(files['one.service']['content']),
+                                                arguments['credentials'], self.payload)
+        self.assertEqual(parsed, dict(user='1201', group='2201', execstart=self.payload,
+                                      wanted_by='multi-user.target', ordering_required=False,
+                                      after=None, requires=None))
+        self.assertEqual(len(source.normalize(rows, **arguments)), 2)
+
+    def test_captured_scheduled_and_ready_args_replay_both_unit_shapes(self):
+        for ordered in (False, True):
+            for ready in (False, True):
+                with self.subTest(ordered=ordered, ready=ready):
+                    tokens = self.arguments(ready)
+                    rows, arguments, result = self.coherent(tokens, ordered)
+                    captured = source.verify_captured(rows, **arguments, boundary_ns=8000000)
+                    self.assertEqual(captured['unit']['execstart_argv'], tokens)
+                    events = source.normalize(rows, **arguments)
+                    self.assertEqual([row['kind'] for row in events], ['artifact', 'definition'])
+                    self.assertEqual(events[1]['install_ref']['unit_sha256'],
+                                     result['destination']['sha256'])
+
+    def test_specific_argument_guards_with_coherent_originals(self):
+        cases = [
+            (4, 'bad%id', 'scheduled fixture run-id unsupported'),
+            (4, 'bad$id', 'scheduled fixture run-id unsupported'),
+            (6, '/opt/foreign/case', 'scheduled fixture case must belong'),
+            (6, '/opt/t42/origin/../case', 'scheduled fixture case must belong'),
+            (8, 'cron', 'installation ExecStart must bind'),
+            (3, '--unknown', 'installation ExecStart must bind'),
+        ]
+        for offset, replacement, reason in cases:
+            tokens = self.arguments()
+            tokens[offset] = replacement
+            rows, arguments, _ = self.coherent(tokens)
+            with self.subTest(offset=offset, replacement=replacement):
+                with self.assertRaisesRegex(ValueError, reason):
+                    source.normalize(rows, **arguments)
+        for offset, replacement in [(9, '--other'), (10, '/opt/foreign/ready')]:
+            tokens = self.arguments(True)
+            tokens[offset] = replacement
+            rows, arguments, _ = self.coherent(tokens)
+            with self.assertRaisesRegex(ValueError, 'scheduled fixture readiness must belong'):
+                source.normalize(rows, **arguments)
+
+    def test_loaded_command_must_equal_the_actual_captured_args(self):
+        rows, arguments, result = self.coherent(self.arguments(True))
+        result['show']['stdout'] = result['show']['stdout'].replace(
+            '--run-id scheduled-1', '--run-id other-run')
+        with self.assertRaisesRegex(ValueError, 'loaded ExecStart differs from captured'):
+            source.normalize(rows, **arguments)
+
+    def test_missing_and_extra_tokens_are_not_generic_argv_support(self):
+        for tokens in [self.arguments()[:-1], self.arguments() + ['--extra', 'value'],
+                       self.arguments() + ['--schedule-source', 'systemd'],
+                       [self.payload, '--run', 'benign']]:
+            rows, arguments, _ = self.coherent(tokens)
+            with self.assertRaisesRegex(ValueError, 'installation ExecStart must bind|scheduled fixture readiness'):
+                source.normalize(rows, **arguments)
+
+    def test_caller_argv_still_cannot_replace_captured_unit_evidence(self):
+        rows, arguments, _ = self.coherent(self.arguments())
+        arguments['config']['argv'] = self.arguments()
+        with self.assertRaisesRegex(ValueError, 'caller supplied forbidden field'):
+            source.normalize(rows, **arguments)
+
+
 if __name__ == '__main__':
     unittest.main()

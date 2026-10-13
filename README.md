@@ -1734,7 +1734,8 @@ scheduler entry points route this mode (`validate_profile`, `qualify`,
 and snapshots: it watches a NEW empty directory while the ordinary sample
 (root of the kernel scope) writes a native ELF `payload` and exactly one
 installation unit (fixed sections/options: `Type=simple`, ordinary
-`User`/`Group`, single-token `ExecStart` binding the captured payload,
+`User`/`Group`, legacy single-token or closed scheduled-fixture `ExecStart`
+binding the captured payload,
 `Restart=no`, `RefuseManualStart=yes`, `WantedBy=multi-user.target`). It
 never probes an invocation, never extends the kernel scope and never emits
 a scheduler-fire. After both captured CLOSE_WRITE originals, the ordinary
@@ -1761,3 +1762,17 @@ the PID1 root manager is recorded separately as the installer. Fixed
 limitations keep early execution, any invocation and cross-boot autonomy
 unproven. These fixtures are local-only and never certify native
 execution.
+
+The legacy no-argument payload command is unchanged. A second closed command
+form is derived only from the captured unit bytes:
+`<payload> --scenario scheduled --run-id <ASCII id, 1..64> --root
+<payload-directory>/case --schedule-source systemd`, optionally followed by
+`--schedule-ready-file <payload-directory>/ready`. Arbitrary flags, wrappers,
+foreign case/readiness paths and caller-profile `argv` remain refused. The
+actual loaded `ExecStart` must equal the complete captured argument list; a
+matching payload path alone cannot qualify different arguments. The existing
+ordinary author, root-manager installer, held inode/content, one-install,
+enabled-inactive and sealed replay requirements all remain mandatory. This
+argument binding is local product support, not permission to start the unit or
+proof of fixture readiness, scheduler-fire or cross-boot autonomy; those need
+the corresponding controlled payload and separate runtime qualification.

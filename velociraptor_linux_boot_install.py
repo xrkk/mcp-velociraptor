@@ -2,8 +2,8 @@
 
 The scheduler collector proves a fresh first invocation; the boot-service
 producer observes an already-running invocation. Neither can answer how a
-unit came to exist. This module closes that origin gap for one fixed
-benign shape: an ordinary sample writes a native ELF payload and exactly
+unit came to exist. This module closes that origin gap for the closed
+benign unit and command forms: an ordinary sample writes a native ELF payload and exactly
 one installation unit into a new empty directory under real fanotify
 CLOSE_WRITE with held read leases, and only after the captured originals,
 the ordinary author and the actual root exit pass the independent
@@ -135,6 +135,33 @@ def ordering_argv(unit_name):
             '--property=' + ','.join(ORDERING_PROPERTIES)]
 
 
+def _captured_execstart(tokens, payload_path):
+    """One legacy command or the closed, captured scheduled-fixture form.
+
+    Arguments come only from the observed unit bytes. No profile/caller argv
+    is accepted, and no arbitrary flags, command wrappers or root paths are
+    added to the installation contract.
+    """
+    if tokens == [payload_path]:
+        return tokens
+    need(len(tokens) in (9, 11)
+         and tokens[:3] == [payload_path, '--scenario', 'scheduled']
+         and tokens[3] == '--run-id' and tokens[5] == '--root'
+         and tokens[7:9] == ['--schedule-source', 'systemd'],
+         'installation ExecStart must bind the captured payload without arguments '
+         'or the closed scheduled fixture arguments')
+    need(re.fullmatch(r'[A-Za-z0-9_-]{1,64}', tokens[4]) is not None,
+         'scheduled fixture run-id unsupported')
+    parent = Path(payload_path).parent
+    need(tokens[6] == str(parent / 'case'),
+         'scheduled fixture case must belong to the captured payload directory')
+    if len(tokens) == 11:
+        need(tokens[9] == '--schedule-ready-file'
+             and tokens[10] == str(parent / 'ready'),
+             'scheduled fixture readiness must belong to the captured payload directory')
+    return tokens
+
+
 def parse_installation_unit(raw, credentials, payload_path):
     """Strict fixed-shape unit parse; nothing outside the supported
     installation semantics survives."""
@@ -175,16 +202,17 @@ def parse_installation_unit(raw, credentials, payload_path):
          and service['Group'] == str(credentials['gids'][1])
          and credentials['uids'][1] > 0 and credentials['gids'][1] > 0,
          'ordinary installation identity required')
-    tokens = shlex.split(service['ExecStart'])
-    need(tokens == [payload_path],
-         'installation ExecStart must bind the captured payload without arguments')
+    tokens = _captured_execstart(shlex.split(service['ExecStart']), payload_path)
     need(install['WantedBy'] == 'multi-user.target',
          'unsupported enablement target')
-    return dict(user=service['User'], group=service['Group'],
-                execstart=tokens[0], wanted_by=install['WantedBy'],
-                ordering_required=ordering_required,
-                after=unit['After'] if ordering_required else None,
-                requires=unit['Requires'] if ordering_required else None)
+    result = dict(user=service['User'], group=service['Group'],
+                  execstart=tokens[0], wanted_by=install['WantedBy'],
+                  ordering_required=ordering_required,
+                  after=unit['After'] if ordering_required else None,
+                  requires=unit['Requires'] if ordering_required else None)
+    if len(tokens) > 1:
+        result['execstart_argv'] = list(tokens)
+    return result
 
 
 def verify_captured(rows, *, config, binding, root, credentials, kernel,
@@ -370,8 +398,11 @@ def check_installed_show(properties, profile, captured):
          and properties['Group'] == captured['unit']['group'],
          'loaded ordinary identity mismatch')
     path, argv = _parse_loaded_execstart(properties['ExecStart'])
-    need(path == payload_path and argv == [payload_path],
-         'loaded ExecStart must bind the captured payload without arguments')
+    expected = captured['unit'].get('execstart_argv', [payload_path])
+    need(path == payload_path and argv == expected,
+         ('loaded ExecStart differs from captured scheduled fixture argv'
+          if len(expected) > 1 else
+          'loaded ExecStart must bind the captured payload without arguments'))
 
 
 def qualify(rows, *, config, binding, root, credentials, kernel, boundary_ns):
